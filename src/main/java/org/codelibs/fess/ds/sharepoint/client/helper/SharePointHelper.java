@@ -18,14 +18,10 @@ public class SharePointHelper {
         this.client = client;
     }
 
-    public String buildDocLibFileWebLink(String serverRelativeUrl) {
-        final String path;
-        if (serverRelativeUrl.startsWith("/")) {
-            path = serverRelativeUrl.substring(1);
-        } else {
-            path = serverRelativeUrl;
-        }
-        return client.getUrl() + encodeRelativeUrl(path);
+    public String buildDocLibFileWebLink(final String serverRelativeUrl, final String parentUrl) {
+        return client.getSiteUrl() + "Shared%20Documents/Forms/AllItems.aspx?id=" +
+                URLEncoder.encode(serverRelativeUrl, StandardCharsets.UTF_8) +
+                "&parent=" + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
     }
 
     public String encodeRelativeUrl(final String url) {

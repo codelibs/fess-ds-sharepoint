@@ -1,6 +1,7 @@
 package org.codelibs.fess.ds.sharepoint.crawl;
 
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
@@ -15,11 +16,13 @@ public class SiteCrawl extends SharePointCrawl {
 
     private final String siteName;
     private final int numberPerPage;
+    private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
 
-    public SiteCrawl(SharePointClient client, String siteName, int numberPerPage) {
+    public SiteCrawl(SharePointClient client, String siteName, int numberPerPage, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);
         this.siteName = siteName;
         this.numberPerPage = numberPerPage;
+        this.sharePointGroupCache = sharePointGroupCache;
     }
 
     @Override
@@ -32,9 +35,9 @@ public class SiteCrawl extends SharePointCrawl {
             if (list.isNoCrawl()) {
                 return;
             }
-            crawlingQueue.offer(new ListCrawl(client, list.getId(), null, numberPerPage));
+            crawlingQueue.offer(new ListCrawl(client, list.getId(), null, numberPerPage, sharePointGroupCache));
         });
-        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + siteName + "/Shared Documents"));
+        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + siteName + "/Shared Documents", sharePointGroupCache));
         return null;
     }
 }

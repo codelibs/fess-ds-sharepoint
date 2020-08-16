@@ -4,11 +4,14 @@ import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfiles.GetFilesResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFoldersResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem.GetDoclibListItemResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
@@ -16,10 +19,12 @@ public class FolderCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(FolderCrawl.class);
 
     private final String serverRelativeUrl;
+    private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
 
-    public FolderCrawl(SharePointClient client, String serverRelativeUrl) {
+    public FolderCrawl(SharePointClient client, String serverRelativeUrl, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
+        this.sharePointGroupCache = sharePointGroupCache;
     }
 
     @Override
@@ -38,7 +43,7 @@ public class FolderCrawl extends SharePointCrawl {
                     .setServerRelativeUrl(serverRelativeUrl)
                     .execute();
             getFoldersResponse.getFolders().forEach(subFolder -> {
-                crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl()));
+                crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl(), sharePointGroupCache));
             });
 
             GetFilesResponse getFilesResponse = client.api().doclib()
@@ -46,7 +51,9 @@ public class FolderCrawl extends SharePointCrawl {
                     .setServerRelativeUrl(serverRelativeUrl)
                     .execute();
             getFilesResponse.getFiles().forEach(file -> {
-                crawlingQueue.offer(new FileCrawl(client, file.getFileName(), client.helper().buildDocLibFileWebLink(file.getServerRelativeUrl()), file.getServerRelativeUrl(), file.getCreated(), file.getModified()));
+                final GetDoclibListItemResponse getDoclibListItemResponse = client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
+                final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), sharePointGroupCache);
+                crawlingQueue.offer(new FileCrawl(client, file.getFileName(), client.helper().buildDocLibFileWebLink(file.getServerRelativeUrl(), serverRelativeUrl), file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
             });
         }
         return null;

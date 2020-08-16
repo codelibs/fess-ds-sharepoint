@@ -2,6 +2,8 @@ package org.codelibs.fess.ds.sharepoint.client.api.doclib.getfiles;
 
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -11,6 +13,8 @@ import java.util.List;
 import java.util.Map;
 
 public class GetFilesResponse implements SharePointApiResponse {
+    private static final Logger logger = LoggerFactory.getLogger(GetFilesResponse.class);
+
     private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     private final List<DocLibFile> files = new ArrayList<>();
@@ -34,7 +38,7 @@ public class GetFilesResponse implements SharePointApiResponse {
                 docLibFile.created = sdf.parse(result.get("TimeCreated").toString());
                 docLibFile.modified = sdf.parse(result.get("TimeLastModified").toString());
             } catch (ParseException e) {
-                //TODO error
+                logger.warn("Failed to parse date.", e);
             }
             response.files.add(docLibFile);
         });

@@ -13,10 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
 public class FileCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(FileCrawl.class);
@@ -26,16 +23,18 @@ public class FileCrawl extends SharePointCrawl {
     private final String serverRelativeUrl;
     private final Date created;
     private final Date modified;
+    private final List<String> roles;
 
     private final String defaultExtractorName = "tikaExtractor";
 
-    public FileCrawl(SharePointClient client, String fileName, String webUrl, String serverRelativeUrl, Date created, Date modified) {
+    public FileCrawl(SharePointClient client, String fileName, String webUrl, String serverRelativeUrl, Date created, Date modified, List<String> roles) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.webUrl = webUrl;
         this.fileName = fileName;
         this.created = created;
         this.modified = modified;
+        this.roles = roles;
     }
 
     @Override
@@ -60,17 +59,19 @@ public class FileCrawl extends SharePointCrawl {
         final Map<String, Object> dataMap = new HashMap<>();
         dataMap.put(fessConfig.getIndexFieldUrl(), webUrl);
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
-        dataMap.put(fessConfig.getIndexFieldSite(), client.getSiteUrl());
+        dataMap.put(fessConfig.getIndexFieldSite(), webUrl.replace("http://", "").replace("https://", ""));
 
         dataMap.put(fessConfig.getIndexFieldTitle(), fileName);
         dataMap.put(fessConfig.getIndexFieldMimetype(), mimeType);
         dataMap.put(fessConfig.getIndexFieldContent(), content);
         dataMap.put(fessConfig.getIndexFieldDigest(), content);
-        //TODO anchor
-        dataMap.put(fessConfig.getIndexFieldAnchor(), serverRelativeUrl);
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), modified);
         dataMap.put(fessConfig.getIndexFieldCreated(), created);
+
+        if (roles != null && !roles.isEmpty()) {
+            dataMap.put(fessConfig.getIndexFieldRole(), roles);
+        }
         return dataMap;
     }
 

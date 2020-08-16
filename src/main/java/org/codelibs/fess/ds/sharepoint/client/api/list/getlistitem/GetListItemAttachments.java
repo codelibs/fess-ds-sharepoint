@@ -6,21 +6,23 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 
 public class GetListItemAttachments extends SharePointApi<GetListItemAttachmentsResponse> {
-    private String editLink = null;
+    private String listId = null;
+    private String itemId = null;
 
     public GetListItemAttachments(CloseableHttpClient client, String siteUrl) {
         super(client, siteUrl);
     }
 
-    public GetListItemAttachments setEditLink(String editLink) {
-        this.editLink = editLink;
+    public GetListItemAttachments setId(String listId, String itemId) {
+        this.listId = listId;
+        this.itemId = itemId;
         return this;
     }
 
     @Override
     public GetListItemAttachmentsResponse execute() {
-        if (editLink == null) {
-            throw new SharePointClientException("editLink is required.");
+        if (listId == null || itemId == null) {
+            throw new SharePointClientException("listId/itemId is required.");
         }
         final HttpGet httpGet = new HttpGet(buildUrl());
         JsonResponse jsonResponse = doRequest(httpGet);
@@ -32,6 +34,6 @@ public class GetListItemAttachments extends SharePointApi<GetListItemAttachments
     }
 
     private String buildUrl() {
-        return siteUrl + "/_api/" + editLink + "/AttachmentFiles";
+        return siteUrl + "/_api/Web/Lists(guid'" + listId + "')/Items(" + itemId + ")/AttachmentFiles";
     }
 }

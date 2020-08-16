@@ -19,7 +19,6 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
     private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Items";
-    private static final String GETBYTITLE_API_PATH = "_api/lists/getbytitle('{{list_name}}')/items";
     private static final String PAGING_PARAM = "%24top={{num}}&%24skiptoken=Paged=TRUE%26p_ID={{start}}";
     private static final String SELECT_PARAM = "%24select=Title,Id,Attachments,Created,Modified";
 
@@ -38,23 +37,13 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
             throw new SharePointClientException("ListID|ListName is required.");
         }
         final String pagingParam = PAGING_PARAM.replace("{{num}}", String.valueOf(num)).replace("{{start}}", String.valueOf(start));
-        final HttpGet httpGet;
-        if (listName != null) {
-            httpGet = new HttpGet(siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName) + "?" + pagingParam + "&" + SELECT_PARAM);
-        } else {
-            httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + SELECT_PARAM);
-        }
+        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + SELECT_PARAM);
         JsonResponse jsonResponse = doRequest(httpGet);
         return buildResponse(jsonResponse);
     }
 
     public GetListItems setListId(final String listId) {
         this.listId = listId;
-        return this;
-    }
-
-    public GetListItems setListName(final String listName) {
-        this.listName = listName;
         return this;
     }
 
@@ -68,12 +57,13 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         return this;
     }
 
+    @SuppressWarnings("unchecked")
     private GetListItemsResponse buildResponse(final JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
         final List<GetListItemsResponse.ListItem> listItems = new ArrayList<>();
         final List<Map<String, Object>> valueList = (List)jsonMap.get("value");
-        valueList.stream().forEach(value -> {
+        valueList.forEach(value -> {
             try {
                 Object titleObj = value.get("Title");
                 if (titleObj == null) {

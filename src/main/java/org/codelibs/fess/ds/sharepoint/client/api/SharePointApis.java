@@ -4,9 +4,11 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfiles.GetFiles;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolder;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFolders;
+import org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem.GetDoclibListItem;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFile;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachments;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRole;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValue;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
@@ -49,6 +51,10 @@ public class SharePointApis {
             return new GetListItemAttachments(client, siteUrl);
         }
 
+        public GetListItemRole getListItemRole() {
+            return new GetListItemRole(client, siteUrl);
+        }
+
         public GetForms getForms() {
             return new GetForms(client, siteUrl);
         }
@@ -71,6 +77,10 @@ public class SharePointApis {
 
         public GetFiles getFiles() {
             return new GetFiles(client, siteUrl);
+        }
+
+        public GetDoclibListItem getListItem() {
+            return new GetDoclibListItem(client, siteUrl);
         }
     }
 }

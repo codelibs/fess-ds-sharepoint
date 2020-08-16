@@ -3,6 +3,7 @@ package org.codelibs.fess.ds.sharepoint;
 import org.apache.http.client.config.RequestConfig;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.validation.ValidationException;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SharePointCrawler {
@@ -60,14 +62,15 @@ public class SharePointCrawler {
     }
 
     private void setFirstCrawl(CrawlerConfig crawlerConfig) {
+        final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = new ConcurrentHashMap<>();
         if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null && crawlerConfig.getInitialDocLibPath() == null) {
-            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages()));
+            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages(), sharePointGroupCache));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
-                crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(), crawlerConfig.listItemNumPerPages));
+                crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(), crawlerConfig.listItemNumPerPages, sharePointGroupCache));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
-                crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath()));
+                crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), sharePointGroupCache));
             }
         }
 
