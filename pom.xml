@@ -4,7 +4,7 @@
 	<groupId>org.codelibs.fess</groupId>
 	<artifactId>fess-ds-sharepoint</artifactId>
 	<packaging>jar</packaging>
-	<name>Sample Data Store</name>
+	<name>Sharepoint Data Store</name>
 	<version>13.8.0-SNAPSHOT</version>
 	<url>https://fess.codelibs.org/</url>
 	<inceptionYear>2009</inceptionYear>
@@ -191,7 +191,7 @@
 		<dependency>
 			<groupId>org.codelibs</groupId>
 			<artifactId>corelib</artifactId>
-			<version>0.5.0</version>
+			<version>0.5.4</version>
 		</dependency>
 		<dependency>
 			<groupId>org.lastaflute</groupId>
