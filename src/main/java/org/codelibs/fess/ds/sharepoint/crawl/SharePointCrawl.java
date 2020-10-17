@@ -17,6 +17,8 @@ package org.codelibs.fess.ds.sharepoint.crawl;
 
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
+import org.codelibs.fess.helper.SystemHelper;
+import org.codelibs.fess.util.ComponentUtil;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -35,10 +37,11 @@ public abstract class SharePointCrawl {
                 .setId(listId, itemId)
                 .setSharePointGroupCache(sharePointGroupCache)
                 .execute();
+        SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> roles = new HashSet<>();
         getListItemRoleResponse.getUsers().stream().map(GetListItemRoleResponse.User::getTitle)
                 .filter(title -> title.contains("\\"))
-                .map(title -> "1" + title.substring(title.indexOf("\\") + 1))
+                .map(systemHelper::getSearchRoleByUser)
                 .forEach(roles::add);
         getListItemRoleResponse.getSharePointGroups().stream()
                 .flatMap(group -> getSharePointGroupTitles(group, sharePointGroupCache).stream())
@@ -47,14 +50,15 @@ public abstract class SharePointCrawl {
     }
 
     private Set<String> getSharePointGroupTitles(final GetListItemRoleResponse.SharePointGroup sharePointGroup, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+        SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> titles = new HashSet<>();
         sharePointGroup.getUsers().stream().map(GetListItemRoleResponse.User::getTitle)
                 .filter(title -> title.contains("\\"))
-                .map(title -> "1" + title.substring(title.indexOf("\\") + 1))
+                .map(systemHelper::getSearchRoleByUser)
                 .forEach(titles::add);
         sharePointGroup.getSecurityGroups().stream().map(GetListItemRoleResponse.SecurityGroup::getTitle)
                 .filter(title -> title.contains("\\"))
-                .map(title -> "2" + title.substring(title.indexOf("\\") + 1))
+                .map(systemHelper::getSearchRoleByGroup)
                 .forEach(titles::add);
         sharePointGroup.getSharePointGroups().stream().flatMap(group -> getSharePointGroupTitles(group, sharePointGroupCache).stream())
                 .forEach(titles::add);
