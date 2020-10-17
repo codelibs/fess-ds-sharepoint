@@ -14,3 +14,27 @@ See [Maven Repository](http://central.maven.org/maven2/org/codelibs/fess/fess-ds
 1. Download fess-ds-sharepoint-X.X.X.jar
 2. Copy fess-ds-sharepoint-X.X.X.jar to $FESS\_HOME/app/WEB-INF/lib or /usr/share/fess/app/WEB-INF/lib
 
+## Crawling Setting
+
+```
+# Parameter
+url={URL of SharePoint}
+auth.ntlm.user={Name of SharePoint User}
+auth.ntlm.password={Passsword}
+site.name={SiteName of crawling target}
+site.list_name={ListName of crawling target}
+site.doclib_path=/Shared Documents
+
+# Script
+url=url
+host=host
+site=site
+title=title
+content=content
+cache=content
+digest=content
+anchor=
+contentLength=content.length()
+lastModified=lastModified
+created=created
+```
