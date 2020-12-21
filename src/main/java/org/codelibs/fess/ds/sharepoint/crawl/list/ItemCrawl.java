@@ -31,6 +31,8 @@ import java.util.*;
 public class ItemCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(ItemCrawl.class);
 
+    private static final String ITEM_VALUE_PREFIX = "val_";
+
     private final String listId;
     private final String listName;
     private final String itemId;
@@ -66,10 +68,14 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), response.getModified());
         dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
+        response.getValues().entrySet().stream()
+                .forEach(entry -> dataMap.put(ITEM_VALUE_PREFIX + entry.getKey(), entry.getValue()));
 
         if (roles != null && !roles.isEmpty()) {
             dataMap.put(fessConfig.getIndexFieldRole(), roles);
         }
+        dataMap.put("list_id", listId);
+        dataMap.put("item_id", itemId);
         return dataMap;
     }
 

@@ -21,11 +21,12 @@ import org.codelibs.fess.ds.AbstractDataStore;
 import org.codelibs.fess.ds.callback.IndexUpdateCallback;
 import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
+import org.codelibs.fess.mylasta.direction.FessConfig;
+import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class SharePointDataStore extends AbstractDataStore {
     private static final Logger logger = LoggerFactory.getLogger(SharePointDataStore.class);
@@ -37,15 +38,32 @@ public class SharePointDataStore extends AbstractDataStore {
     @Override
     protected void storeData(final DataConfig dataConfig, final IndexUpdateCallback callback, final Map<String, String> paramMap,
                              final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
+        final FessConfig fessConfig = ComponentUtil.getFessConfig();
+        final String roleField = fessConfig.getIndexFieldRole();
         final SharePointCrawler crawler = createCrawler(paramMap);
         final long readInterval = getReadInterval(paramMap);
         boolean running = true;
         while (running && crawler.hasCrawlTarget()) {
             try {
-                final Map<String, Object> result = crawler.doCrawl();
-                if (result != null) {
+                final Map<String, Object> resultMap = crawler.doCrawl();
+                if (logger.isDebugEnabled()) {
+                    logger.debug("ResultMap: " + resultMap);
+                }
+                if (resultMap != null) {
                     final Map<String, Object> dataMap = new HashMap<>(defaultDataMap);
-                    result.forEach(dataMap::put);
+                    if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
+                        ((List) resultMap.get(roleField)).stream()
+                                .forEach(((List) dataMap.get(roleField))::add);
+                    } else {
+                        dataMap.put(roleField, resultMap.get(roleField));
+                    }
+                    resultMap.remove(roleField);
+                    for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
+                        final Object convertValue = convertValue(entry.getValue(), resultMap);
+                        if (convertValue != null) {
+                            dataMap.put(entry.getKey(), convertValue);
+                        }
+                    }
                     callback.store(paramMap, dataMap);
                 }
             } catch (final CrawlingAccessException e) {
