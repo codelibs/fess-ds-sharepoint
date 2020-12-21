@@ -74,6 +74,7 @@ public class ItemCrawl extends SharePointCrawl {
         if (roles != null && !roles.isEmpty()) {
             dataMap.put(fessConfig.getIndexFieldRole(), roles);
         }
+        dataMap.put("list_name", listName);
         dataMap.put("list_id", listId);
         dataMap.put("item_id", itemId);
         return dataMap;
