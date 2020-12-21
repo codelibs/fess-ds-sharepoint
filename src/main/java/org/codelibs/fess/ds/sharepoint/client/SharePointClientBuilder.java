@@ -23,6 +23,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.client.credential.SharePointCredential;
+import org.codelibs.fess.ds.sharepoint.client2013.api.SharePoint2013Apis;
 
 public class SharePointClientBuilder {
     private String url = null;
@@ -31,6 +32,7 @@ public class SharePointClientBuilder {
     private RequestConfig requestConfig = null;
     private CloseableHttpClient httpClient = null;
     private int retryCount = 0;
+    private boolean verson2013 = false;
 
     protected SharePointClientBuilder() {
     }
@@ -65,8 +67,17 @@ public class SharePointClientBuilder {
         return this;
     }
 
+    public SharePointClientBuilder apply2013() {
+        verson2013 = true;
+        return this;
+    }
+
     public SharePointClient build() {
-        SharePointClient client = new SharePointClient(buildHttpClient(), url, siteName);
+        final CloseableHttpClient httpClient = buildHttpClient();
+        final SharePointClient client = new SharePointClient(httpClient, url, siteName);
+        if (verson2013) {
+            client.overrideSharePointApis(new SharePoint2013Apis(httpClient, client.getSiteUrl()));
+        }
         return client;
     }
 

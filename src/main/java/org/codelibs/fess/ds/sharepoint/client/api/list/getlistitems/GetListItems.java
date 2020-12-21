@@ -53,7 +53,7 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         }
         final String pagingParam = PAGING_PARAM.replace("{{num}}", String.valueOf(num)).replace("{{start}}", String.valueOf(start));
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + SELECT_PARAM);
-        JsonResponse jsonResponse = doRequest(httpGet);
+        JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }
 

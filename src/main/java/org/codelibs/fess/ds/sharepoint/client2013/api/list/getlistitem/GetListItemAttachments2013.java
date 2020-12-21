@@ -13,36 +13,36 @@
  * either express or implied. See the License for the specific language
  * governing permissions and limitations under the License.
  */
-package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem;
+package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachments;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 
-public class GetListItemAttachments extends SharePointApi<GetListItemAttachmentsResponse> {
+public class GetListItemAttachments2013 extends GetListItemAttachments {
     private String listId = null;
     private String itemId = null;
 
-    public GetListItemAttachments(CloseableHttpClient client, String siteUrl) {
+    public GetListItemAttachments2013(CloseableHttpClient client, String siteUrl) {
         super(client, siteUrl);
     }
 
-    public GetListItemAttachments setId(String listId, String itemId) {
+    public GetListItemAttachments2013 setId(String listId, String itemId) {
         this.listId = listId;
         this.itemId = itemId;
         return this;
     }
 
     @Override
-    public GetListItemAttachmentsResponse execute() {
+    public GetListItemAttachments2013Response execute() {
         if (listId == null || itemId == null) {
             throw new SharePointClientException("listId/itemId is required.");
         }
         final HttpGet httpGet = new HttpGet(buildUrl());
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        XmlResponse xmlResponse = doXmlRequest(httpGet);
         try {
-            return GetListItemAttachmentsResponse.build(jsonResponse);
+            return GetListItemAttachments2013Response.build(xmlResponse);
         } catch (Exception e) {
             throw new SharePointClientException(e);
         }

@@ -51,7 +51,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         }
 
         final HttpGet httpGet = new HttpGet(buildRoleAssignmentsUrl());
-        final JsonResponse jsonResponse = doRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
 
         final GetListItemRoleResponse response = new GetListItemRoleResponse();
         final Map<String, Object> bodyMap = jsonResponse.getBodyAsMap();
@@ -62,7 +62,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                 return;
             }
             final HttpGet memberRequest = new HttpGet(buildMemberUrl(principalId));
-            final JsonResponse memberResponse = doRequest(memberRequest);
+            final JsonResponse memberResponse = doJsonRequest(memberRequest);
             final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
             final String id = memberResponseMap.get("Id").toString();
             final int principalType = Integer.valueOf(memberResponseMap.get("PrincipalType").toString());
@@ -101,7 +101,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         // SharePointGroup
         final GetListItemRoleResponse.SharePointGroup sharePointGroup = new GetListItemRoleResponse.SharePointGroup(id, title);
         final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
-        final JsonResponse usersResponse = doRequest(usersRequest);
+        final JsonResponse usersResponse = doJsonRequest(usersRequest);
         final Map<String, Object> usersResponseMap = usersResponse.getBodyAsMap();
         List<Map<String, Object>> usersList = (List)usersResponseMap.get("value");
         usersList.forEach(user -> {

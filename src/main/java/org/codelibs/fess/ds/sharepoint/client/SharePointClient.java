@@ -24,7 +24,7 @@ public class SharePointClient {
     private final String siteUrl;
     private final String siteName;
 
-    private final SharePointApis sharePointApis;
+    private SharePointApis sharePointApis;
     private final SharePointHelper sharePointHelper;
 
     protected SharePointClient(CloseableHttpClient httpClient, String url, String siteName) {
@@ -61,5 +61,9 @@ public class SharePointClient {
 
     private String buildSiteUrl(String url, String siteName) {
         return url + "sites/" + siteName + "/";
+    }
+
+    protected void overrideSharePointApis(final SharePointApis apis) {
+        sharePointApis = apis;
     }
 }

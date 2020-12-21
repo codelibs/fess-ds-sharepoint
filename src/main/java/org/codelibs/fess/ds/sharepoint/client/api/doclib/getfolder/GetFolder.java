@@ -41,7 +41,7 @@ public class GetFolder extends SharePointApi<GetFolderResponse> {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)));
-        JsonResponse jsonResponse = doRequest(httpGet);
+        JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFolderResponse.build(jsonResponse);
         } catch (Exception e) {

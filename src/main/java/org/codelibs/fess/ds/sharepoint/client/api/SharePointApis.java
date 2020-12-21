@@ -29,8 +29,8 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
 
 public class SharePointApis {
-    private final CloseableHttpClient client;
-    private final String siteUrl;
+    protected final CloseableHttpClient client;
+    protected final String siteUrl;
 
     public SharePointApis(CloseableHttpClient client, String siteUrl) {
         this.client = client;

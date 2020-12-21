@@ -22,7 +22,7 @@ import java.util.List;
 
 public class GetListItemsResponse implements SharePointApiResponse {
 
-    private final List<ListItem> listItems;
+    protected final List<ListItem> listItems;
 
     public GetListItemsResponse(List<ListItem> listItems) {
         this.listItems = listItems;

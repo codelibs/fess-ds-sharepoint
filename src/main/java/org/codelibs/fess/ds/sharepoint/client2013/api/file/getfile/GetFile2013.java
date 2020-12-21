@@ -13,39 +13,43 @@
  * either express or implied. See the License for the specific language
  * governing permissions and limitations under the License.
  */
-package org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders;
+package org.codelibs.fess.ds.sharepoint.client2013.api.file.getfile;
 
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFile;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 
-public class GetFolders extends SharePointApi<GetFoldersResponse> {
-    private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')/Folders";
-
+public class GetFile2013 extends GetFile {
     private String serverRelativeUrl = null;
 
-    public GetFolders(CloseableHttpClient client, String siteUrl) {
+    public GetFile2013(CloseableHttpClient client, String siteUrl) {
         super(client, siteUrl);
     }
 
-    public GetFolders setServerRelativeUrl(String serverRelativeUrl) {
+    public GetFile2013 setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
     @Override
-    public GetFoldersResponse execute() {
+    public GetFile2013Response execute() {
         if (serverRelativeUrl == null) {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)));
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final HttpGet httpGet = new HttpGet(buildUrl());
+        httpGet.addHeader("Accept", "application/json");
         try {
-            return GetFoldersResponse.build(jsonResponse);
-        } catch (Exception e) {
-            throw new SharePointClientException(e);
+            CloseableHttpResponse httpResponse = client.execute(httpGet);
+            return new GetFile2013Response(httpResponse);
+        } catch(Exception e) {
+            throw new SharePointClientException("Request failure.", e);
         }
+    }
+
+    private String buildUrl() {
+        return siteUrl + "/_api/web/GetFileByServerRelativeUrl('" + encodeRelativeUrl(serverRelativeUrl) + "')/$value";
     }
 }

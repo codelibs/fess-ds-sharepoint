@@ -26,9 +26,6 @@ import java.util.Map;
 public class GetFormsResponse implements SharePointApiResponse {
     private final List<Form> forms = new ArrayList<>();
 
-    private GetFormsResponse() {
-    }
-
     public List<Form> getForms() {
         return forms;
     }

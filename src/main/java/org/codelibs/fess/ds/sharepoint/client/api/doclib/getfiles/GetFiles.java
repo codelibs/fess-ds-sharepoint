@@ -41,7 +41,7 @@ public class GetFiles extends SharePointApi<GetFilesResponse> {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)));
-        SharePointApi.JsonResponse jsonResponse = doRequest(httpGet);
+        SharePointApi.JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFilesResponse.build(jsonResponse);
         } catch (Exception e) {

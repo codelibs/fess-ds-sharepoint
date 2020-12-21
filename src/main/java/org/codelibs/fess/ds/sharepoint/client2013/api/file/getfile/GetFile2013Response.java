@@ -13,24 +13,16 @@
  * either express or implied. See the License for the specific language
  * governing permissions and limitations under the License.
  */
-package org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem;
+package org.codelibs.fess.ds.sharepoint.client2013.api.file.getfile;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
 
-public class GetDoclibListItemResponse implements SharePointApiResponse {
-    protected final String listId;
-    protected final String itemId;
+import java.io.IOException;
+import java.io.InputStream;
 
-    public GetDoclibListItemResponse(String listId, String itemId) {
-        this.listId = listId;
-        this.itemId = itemId;
-    }
-
-    public String getListId() {
-        return listId;
-    }
-
-    public String getItemId() {
-        return itemId;
+public class GetFile2013Response extends GetFileResponse {
+    public GetFile2013Response(CloseableHttpResponse httpResponse) {
+        super(httpResponse);
     }
 }

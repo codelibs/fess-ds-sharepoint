@@ -73,6 +73,9 @@ public class SharePointCrawler {
             final String ntlmPass = config.getNtlmPassword();
             builder.setCredential(new NtlmCredential(ntlmUser, ntlmPass, null, null));
         }
+        if ("2013".equals(config.getSharePointVersion())) {
+            builder.apply2013();
+        }
         return builder.build();
     }
 
@@ -129,6 +132,7 @@ public class SharePointCrawler {
         private int connectionTimeout = 30000;
         private int socketTimeout = 30000;
         private int listItemNumPerPages = 100;
+        private String sharePointVersion = null;
 
         public String getUrl() {
             return url;
@@ -214,6 +218,14 @@ public class SharePointCrawler {
 
         public void setListItemNumPerPages(int listItemNumPerPages) {
             this.listItemNumPerPages = listItemNumPerPages;
+        }
+
+        public String getSharePointVersion() {
+            return sharePointVersion;
+        }
+
+        public void setSharePointVersion(String sharePointVersion) {
+            this.sharePointVersion = sharePointVersion;
         }
     }
 }

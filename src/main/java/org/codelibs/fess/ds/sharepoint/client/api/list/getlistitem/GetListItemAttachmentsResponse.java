@@ -61,7 +61,7 @@ public class GetListItemAttachmentsResponse implements SharePointApiResponse {
         private final String fileName;
         private final String serverRelativeUrl;
 
-        private AttachmentFile(String fileName, String serverRelativeUrl) {
+        public AttachmentFile(String fileName, String serverRelativeUrl) {
             this.fileName = fileName;
             this.serverRelativeUrl = serverRelativeUrl;
         }

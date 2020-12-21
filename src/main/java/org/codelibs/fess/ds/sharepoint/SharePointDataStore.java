@@ -101,6 +101,9 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("http.socket_timeout")) {
             config.setSocketTimeout(Integer.valueOf(paramMap.get("http.socket_timeout")));
         }
+        if (paramMap.containsKey("sp.version")) {
+            config.setSharePointVersion(paramMap.get("sp.version"));
+        }
         return new SharePointCrawler(config);
     }
 }
