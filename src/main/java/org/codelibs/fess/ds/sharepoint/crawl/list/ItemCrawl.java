@@ -31,7 +31,7 @@ import java.util.*;
 public class ItemCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(ItemCrawl.class);
 
-    private static final String ITEM_VALUE_PREFIX = "val_";
+    private static final String ITEM_VALUE_PREFIX = "val__";
 
     private final String listId;
     private final String listName;
@@ -68,8 +68,16 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), response.getModified());
         dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
+        for (Map.Entry<String, String> entry: response.getValues().entrySet()) {
+            if (dataMap.containsKey(entry.getKey())) {
+                dataMap.put(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey()), entry.getValue());
+            } else {
+                dataMap.put(normalizeKey(entry.getKey()), entry.getValue());
+            }
+        }
         response.getValues().entrySet().stream()
-                .forEach(entry -> dataMap.put(ITEM_VALUE_PREFIX + entry.getKey(), entry.getValue()));
+                .filter(entry -> !dataMap.containsKey(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey())))
+                .forEach(entry -> dataMap.put(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey()), entry.getValue()));
 
         if (roles != null && !roles.isEmpty()) {
             dataMap.put(fessConfig.getIndexFieldRole(), roles);
@@ -83,7 +91,7 @@ public class ItemCrawl extends SharePointCrawl {
     private String buildContent(final GetListItemValueResponse response) {
         final StringBuilder sb = new StringBuilder();
         response.getValues().entrySet().stream().forEach(entry -> {
-            sb.append(entry.getKey()).append(' ').append(entry.getValue()).append('\n');
+            sb.append(normalizeKey(entry.getKey())).append(' ').append(entry.getValue()).append('\n');
         });
         return sb.toString();
     }
@@ -100,5 +108,9 @@ public class ItemCrawl extends SharePointCrawl {
         }
         String serverRelativeUrl = form.getServerRelativeUrl();
         return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
+    }
+
+    private String normalizeKey(final String key) {
+        return key.replace("_x005f_", "_");
     }
 }
