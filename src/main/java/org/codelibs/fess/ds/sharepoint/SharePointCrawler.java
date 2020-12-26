@@ -123,9 +123,9 @@ public class SharePointCrawler {
                     }
                 } catch (SharePointClientException e) {
                     if (retryCount+1 <= config.getRetryLimit()) {
-                        logger.error("Error occured: {}  [Retry:{}]" + e.getMessage(), retryCount);
+                        logger.warn("Error occured: {}  [Retry:{}]" + e.getMessage(), retryCount);
                     } else {
-                        logger.error("Error occured. " + e.getMessage(), e);
+                        logger.warn("Error occured. " + e.getMessage(), e);
                     }
                 }
                 retryCount++;

@@ -31,7 +31,7 @@ import java.util.*;
 public class ItemCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(ItemCrawl.class);
 
-    private static final String ITEM_VALUE_PREFIX = "val__";
+    private static final String ITEM_VALUE_PREFIX = "val_";
 
     private final String listId;
     private final String listName;
@@ -71,14 +71,11 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldMimetype(), "text/html");
         dataMap.put(fessConfig.getIndexFieldFiletype(), ComponentUtil.getFileTypeHelper().get("text/html"));
         for (Map.Entry<String, String> entry: response.getValues().entrySet()) {
-            if (dataMap.containsKey(entry.getKey())) {
-                dataMap.put(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey()), entry.getValue());
-            } else {
+            if (!dataMap.containsKey(entry.getKey())) {
                 dataMap.put(normalizeKey(entry.getKey()), entry.getValue());
             }
         }
         response.getValues().entrySet().stream()
-                .filter(entry -> !dataMap.containsKey(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey())))
                 .forEach(entry -> dataMap.put(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey()), entry.getValue()));
 
         if (roles != null && !roles.isEmpty()) {
