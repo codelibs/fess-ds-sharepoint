@@ -52,8 +52,9 @@ public class SharePointDataStore extends AbstractDataStore {
                 if (resultMap != null) {
                     final Map<String, Object> dataMap = new HashMap<>(defaultDataMap);
                     if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
-                        ((List) resultMap.get(roleField)).stream()
-                                .forEach(((List) dataMap.get(roleField))::add);
+                        final List<Object> roles = new ArrayList<>((List) dataMap.get(roleField));
+                        roles.addAll((List) resultMap.get(roleField));
+                        dataMap.put(roleField, roles);
                     } else {
                         dataMap.put(roleField, resultMap.get(roleField));
                     }

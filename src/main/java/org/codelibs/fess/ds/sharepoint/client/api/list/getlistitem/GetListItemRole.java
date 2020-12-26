@@ -118,8 +118,15 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                 sharePointGroup.addSecurityGroup(securityGroup);
             } else if (userPrincipalType == 8) {
                 // SharePoint Group
-                GetListItemRoleResponse.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
-                sharePointGroup.addSharePointGroup(userSharePointGroup);
+                if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
+                    sharePointGroup.addSharePointGroup(sharePointGroupCache.get(userId));
+                } else {
+                    GetListItemRoleResponse.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
+                    sharePointGroup.addSharePointGroup(userSharePointGroup);
+                    if (sharePointGroupCache != null) {
+                        sharePointGroupCache.put(userId, userSharePointGroup);
+                    }
+                }
             }
         });
         return sharePointGroup;
