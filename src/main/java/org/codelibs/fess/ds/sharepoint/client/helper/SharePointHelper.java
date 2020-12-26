@@ -16,6 +16,7 @@
 package org.codelibs.fess.ds.sharepoint.client.helper;
 
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,14 +30,36 @@ public class SharePointHelper {
 
     private final SharePointClient client;
 
-    public SharePointHelper(final SharePointClient client) {
+    private final boolean verson2013;
+
+    public SharePointHelper(final SharePointClient client, final boolean verson2013) {
         this.client = client;
+        this.verson2013 = verson2013;
     }
 
-    public String buildDocLibFileWebLink(final String serverRelativeUrl, final String parentUrl) {
-        return client.getSiteUrl() + "Shared%20Documents/Forms/AllItems.aspx?id=" +
-                URLEncoder.encode(serverRelativeUrl, StandardCharsets.UTF_8) +
-                "&parent=" + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
+    public String buildDocLibFileWebLink(final String id, final String serverRelativeUrl, final String parentUrl) {
+        if (verson2013) {
+            String docLibName = null;
+            final String[] splitArray = serverRelativeUrl.split("/");
+            for (int i=0;i<splitArray.length;i++) {
+                final String s = splitArray[i];
+                if (!"sites".equals(s)) {
+                    continue;
+                }
+                if (i + 2 < splitArray.length) {
+                    docLibName = splitArray[i+2];
+                }
+                break;
+            }
+            if (docLibName == null) {
+                throw new SharePointClientException("Failed to build webUrl. serverRelativeUrl:" + serverRelativeUrl);
+            }
+            return client.getSiteUrl() + docLibName + "/Forms/AllItems.aspx?ID=id&Source=";
+        } else {
+            return client.getSiteUrl() + "Shared%20Documents/Forms/AllItems.aspx?id=" +
+                    URLEncoder.encode(serverRelativeUrl, StandardCharsets.UTF_8) +
+                    "&parent=" + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
+        }
     }
 
     public String encodeRelativeUrl(final String url) {

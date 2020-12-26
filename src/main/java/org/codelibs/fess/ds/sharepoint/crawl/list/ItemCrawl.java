@@ -68,6 +68,8 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), response.getModified());
         dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
+        dataMap.put(fessConfig.getIndexFieldMimetype(), "text/html");
+        dataMap.put(fessConfig.getIndexFieldFiletype(), ComponentUtil.getFileTypeHelper().get("text/html"));
         for (Map.Entry<String, String> entry: response.getValues().entrySet()) {
             if (dataMap.containsKey(entry.getKey())) {
                 dataMap.put(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey()), entry.getValue());

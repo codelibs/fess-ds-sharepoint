@@ -40,6 +40,7 @@ public class FileCrawl extends SharePointCrawl {
     private final Date created;
     private final Date modified;
     private final List<String> roles;
+    private final Map<String, String> additionalProperties = new HashMap<>();
 
     private final String defaultExtractorName = "tikaExtractor";
 
@@ -51,6 +52,10 @@ public class FileCrawl extends SharePointCrawl {
         this.created = created;
         this.modified = modified;
         this.roles = roles;
+    }
+
+    public void addProperty(final String key, final String value) {
+        additionalProperties.put(key, value);
     }
 
     @Override
@@ -88,6 +93,9 @@ public class FileCrawl extends SharePointCrawl {
 
         if (roles != null && !roles.isEmpty()) {
             dataMap.put(fessConfig.getIndexFieldRole(), roles);
+        }
+        if (additionalProperties.size() > 0) {
+            additionalProperties.entrySet().stream().forEach(entry -> dataMap.put(entry.getKey(), entry.getValue()));
         }
         return dataMap;
     }

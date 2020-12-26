@@ -123,6 +123,9 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("sp.version")) {
             config.setSharePointVersion(paramMap.get("sp.version"));
         }
+        if (paramMap.containsKey("retry_limit")) {
+            config.setRetryLimit(Integer.valueOf(paramMap.get("retry_limit")));
+        }
         return new SharePointCrawler(config);
     }
 }

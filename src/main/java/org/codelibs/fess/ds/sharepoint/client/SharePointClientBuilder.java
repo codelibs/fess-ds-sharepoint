@@ -74,10 +74,7 @@ public class SharePointClientBuilder {
 
     public SharePointClient build() {
         final CloseableHttpClient httpClient = buildHttpClient();
-        final SharePointClient client = new SharePointClient(httpClient, url, siteName);
-        if (verson2013) {
-            client.overrideSharePointApis(new SharePoint2013Apis(httpClient, client.getSiteUrl()));
-        }
+        final SharePointClient client = new SharePointClient(httpClient, url, siteName, verson2013);
         return client;
     }
 

@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint.client;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApis;
 import org.codelibs.fess.ds.sharepoint.client.helper.SharePointHelper;
+import org.codelibs.fess.ds.sharepoint.client2013.api.SharePoint2013Apis;
 
 public class SharePointClient {
     private final String url;
@@ -26,13 +27,20 @@ public class SharePointClient {
 
     private SharePointApis sharePointApis;
     private final SharePointHelper sharePointHelper;
+    private final boolean verson2013;
 
-    protected SharePointClient(CloseableHttpClient httpClient, String url, String siteName) {
+    protected SharePointClient(CloseableHttpClient httpClient, String url, String siteName, boolean verson2013) {
         this.siteUrl = buildSiteUrl(url, siteName);
         this.url = url;
         this.siteName = siteName;
-        this.sharePointApis = new SharePointApis(httpClient, siteUrl);
-        this.sharePointHelper = new SharePointHelper(this);
+        this.sharePointHelper = new SharePointHelper(this, verson2013);
+        this.verson2013 = verson2013;
+        if (verson2013) {
+            this.sharePointApis = new SharePoint2013Apis(httpClient, siteUrl);
+        } else {
+            this.sharePointApis = new SharePointApis(httpClient, siteUrl);
+
+        }
     }
 
     public SharePointApis api() {
@@ -61,9 +69,5 @@ public class SharePointClient {
 
     private String buildSiteUrl(String url, String siteName) {
         return url + "sites/" + siteName + "/";
-    }
-
-    protected void overrideSharePointApis(final SharePointApis apis) {
-        sharePointApis = apis;
     }
 }

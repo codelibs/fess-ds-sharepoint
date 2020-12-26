@@ -41,9 +41,12 @@ public class SharePointCrawler {
 
     private final ConcurrentLinkedQueue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
 
+    private final CrawlerConfig config;
+
     public SharePointCrawler(CrawlerConfig config) {
         validate(config);
         this.client = createClient(config);
+        this.config = config;
         setFirstCrawl(config);
         if (crawlingQueue.isEmpty()) {
             logger.error("Failed to start crawl.");
@@ -104,18 +107,28 @@ public class SharePointCrawler {
             if (crawl == null) {
                 continue;
             }
-            try {
-                Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
-                if (dataMap != null) {
-                    return dataMap;
+            int retryCount = 0;
+            while(retryCount <= config.getRetryLimit()) {
+                try {
+                    Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
+                    if (dataMap != null) {
+                        return dataMap;
+                    }
+                    break;
+                } catch (SharePointServerException e) {
+                    if (retryCount+1 <= config.getRetryLimit()) {
+                        logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
+                    } else {
+                        logger.warn("Api server error: {}", e.getMessage(), e);
+                    }
+                } catch (SharePointClientException e) {
+                    if (retryCount+1 <= config.getRetryLimit()) {
+                        logger.error("Error occured: {}  [Retry:{}]" + e.getMessage(), retryCount);
+                    } else {
+                        logger.error("Error occured. " + e.getMessage(), e);
+                    }
                 }
-            } catch (SharePointServerException e){
-                logger.warn("Api server error: {}", e.getMessage());
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Error detail.", e);
-                }
-            } catch (SharePointClientException e) {
-                logger.error("Error occured. " + e.getMessage(), e);
+                retryCount++;
             }
         }
         return null;
@@ -133,6 +146,7 @@ public class SharePointCrawler {
         private int socketTimeout = 30000;
         private int listItemNumPerPages = 100;
         private String sharePointVersion = null;
+        private int retryLimit = 2;
 
         public String getUrl() {
             return url;
@@ -226,6 +240,14 @@ public class SharePointCrawler {
 
         public void setSharePointVersion(String sharePointVersion) {
             this.sharePointVersion = sharePointVersion;
+        }
+
+        public int getRetryLimit() {
+            return retryLimit;
+        }
+
+        public void setRetryLimit(int retryLimit) {
+            this.retryLimit = retryLimit;
         }
     }
 }
