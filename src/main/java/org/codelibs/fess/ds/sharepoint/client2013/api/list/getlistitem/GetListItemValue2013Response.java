@@ -25,7 +25,7 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class GetListItemValue2013Response extends GetListItemValueResponse {
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm");
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
 
     private String id;
     private String title;
