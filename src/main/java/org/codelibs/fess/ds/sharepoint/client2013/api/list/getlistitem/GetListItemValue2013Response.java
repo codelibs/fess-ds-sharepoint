@@ -36,6 +36,9 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
     private boolean hasAttachments = false;
     private long order = 0;
     private String editLink;
+    private String fileRef;
+    private String fileDirRef;
+    private String fileLeafRef;
     private Map<String, String> values = new HashMap<>();
 
     public String getId() {
@@ -74,6 +77,18 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         return editLink;
     }
 
+    public String getFileRef() {
+        return fileRef;
+    }
+
+    public String getFileDirRef() {
+        return fileDirRef;
+    }
+
+    public String getFileLeafRef() {
+        return fileLeafRef;
+    }
+
     public Map<String, String> getValues() {
         return values;
     }
@@ -85,11 +100,14 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
 
         GetListItemValue2013Response response = new GetListItemValue2013Response();
         response.id = dataMap.get("ID").toString();
-        response.title = dataMap.get("Title").toString();
+        response.title = dataMap.getOrDefault("Title", "").toString();
         response.modified = sdf.parse(dataMap.get("Modified").toString());
         response.created = sdf.parse(dataMap.get("Created").toString());
         response.author = dataMap.get("Author").toString();
         response.editor = dataMap.get("Editor").toString();
+        response.fileRef = dataMap.getOrDefault("FileRef", "").toString();
+        response.fileDirRef = dataMap.getOrDefault("FileDirRef", "").toString();
+        response.fileLeafRef = dataMap.getOrDefault("FileLeafRef", "").toString();
         if (dataMap.containsKey("Attachments")) {
             response.hasAttachments = Boolean.valueOf(dataMap.get("Attachments").toString());
         }
@@ -232,6 +250,15 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
                 if (rel != null && rel.equals("edit")) {
                     dataMap.put("odata.editLink", attributes.getValue("href"));
                 }
+            } else if ("d:FileRef".equals(qName)) {
+                fieldName = "FileRef";
+                buffer.setLength(0);
+            } else if ("d:FileDirRef".equals(qName)) {
+                fieldName = "FileDirRef";
+                buffer.setLength(0);
+            } else if ("d:FileLeafRef".equals(qName)) {
+                fieldName = "FileLeafRef";
+                buffer.setLength(0);
             } else if (nowCountent && !isExcludeField(nonePredfixQName)) {
                 fieldName = nonePredfixQName;
                 buffer.setLength(0);

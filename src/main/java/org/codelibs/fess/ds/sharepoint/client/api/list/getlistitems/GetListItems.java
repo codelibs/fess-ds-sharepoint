@@ -36,11 +36,13 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Items";
     private static final String PAGING_PARAM = "%24top={{num}}&%24skiptoken=Paged=TRUE%26p_ID={{start}}";
     private static final String SELECT_PARAM = "%24select=Title,Id,Attachments,Created,Modified";
+    private static final String SELECT_PARAM_SITE_PAGE = "%24select=Id,Created,Modified";
 
     private String listId = null;
     private String listName = null;
     private int num = 100;
     private int start = 0;
+    private boolean isSubPage = false;
 
     public GetListItems(CloseableHttpClient client, String siteUrl) {
         super(client, siteUrl);
@@ -52,7 +54,14 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
             throw new SharePointClientException("ListID|ListName is required.");
         }
         final String pagingParam = PAGING_PARAM.replace("{{num}}", String.valueOf(num)).replace("{{start}}", String.valueOf(start));
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + SELECT_PARAM);
+        final String selectParam;
+        if (isSubPage) {
+            selectParam = SELECT_PARAM_SITE_PAGE;
+        } else {
+            selectParam = SELECT_PARAM;
+        }
+
+        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + selectParam);
         JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }
@@ -72,6 +81,11 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         return this;
     }
 
+    public GetListItems setSubPage(boolean subPage) {
+        isSubPage = subPage;
+        return this;
+    }
+
     @SuppressWarnings("unchecked")
     private GetListItemsResponse buildResponse(final JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
@@ -82,8 +96,7 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
             try {
                 Object titleObj = value.get("Title");
                 if (titleObj == null) {
-                    logger.warn("Title field does not contain. Skip item. " + jsonResponse.getBody());
-                    return;
+                    titleObj = "";
                 }
                 Object idObj = value.get("Id");
                 if (idObj == null) {
@@ -97,8 +110,7 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
                 }
                 Object attachmentsObj = value.get("Attachments");
                 if (attachmentsObj == null) {
-                    logger.warn("Attachments field does not contain. Skip item. " + jsonResponse.getBody());
-                    return;
+                    attachmentsObj = "false";
                 }
                 boolean attachments = Boolean.valueOf(attachmentsObj.toString());
                 Object createdObj = value.get("Created");

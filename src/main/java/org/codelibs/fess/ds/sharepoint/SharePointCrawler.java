@@ -88,13 +88,12 @@ public class SharePointCrawler {
             crawlingQueue.offer(new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages(), sharePointGroupCache));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
-                crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(), crawlerConfig.listItemNumPerPages, sharePointGroupCache));
+                crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(), crawlerConfig.listItemNumPerPages, sharePointGroupCache, crawlerConfig.isSubPage()));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
                 crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), sharePointGroupCache));
             }
         }
-
     }
 
     public boolean hasCrawlTarget() {
@@ -147,6 +146,7 @@ public class SharePointCrawler {
         private int listItemNumPerPages = 100;
         private String sharePointVersion = null;
         private int retryLimit = 2;
+        private boolean isSubPage = false;
 
         public String getUrl() {
             return url;
@@ -248,6 +248,14 @@ public class SharePointCrawler {
 
         public void setRetryLimit(int retryLimit) {
             this.retryLimit = retryLimit;
+        }
+
+        public boolean isSubPage() {
+            return isSubPage;
+        }
+
+        public void setSubPage(boolean subPage) {
+            isSubPage = subPage;
         }
     }
 }

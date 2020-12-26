@@ -37,6 +37,9 @@ public class GetListItemValueResponse implements SharePointApiResponse {
     private boolean hasAttachments = false;
     private long order = 0;
     private String editLink;
+    private String fileRef;
+    private String fileDirRef;
+    private String fileLeafRef;
     private Map<String, String> values = new HashMap<>();
 
     public String getId() {
@@ -75,6 +78,18 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         return editLink;
     }
 
+    public String getFileRef() {
+        return fileRef;
+    }
+
+    public String getFileDirRef() {
+        return fileDirRef;
+    }
+
+    public String getFileLeafRef() {
+        return fileLeafRef;
+    }
+
     public Map<String, String> getValues() {
         return values;
     }
@@ -89,6 +104,9 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         response.created = sdf.parse(jsonMap.get("Created").toString());
         response.author = jsonMap.get("Author").toString();
         response.editor = jsonMap.get("Editor").toString();
+        response.fileRef = jsonMap.getOrDefault("FileRef", "").toString();
+        response.fileDirRef = jsonMap.getOrDefault("FileDirRef", "").toString();
+        response.fileLeafRef = jsonMap.getOrDefault("FileLeafRef", "").toString();
         if (jsonMap.containsKey("Attachments")) {
             response.hasAttachments = Boolean.valueOf(jsonMap.get("Attachments").toString());
         }

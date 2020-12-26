@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.list;
 
+import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
@@ -26,6 +27,8 @@ import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class ItemCrawl extends SharePointCrawl {
@@ -37,13 +40,15 @@ public class ItemCrawl extends SharePointCrawl {
     private final String listName;
     private final String itemId;
     private final List<String> roles;
+    private final boolean isSubPage;
 
-    public ItemCrawl(SharePointClient client, String listId, String listName, String itemId, List<String> roles) {
+    public ItemCrawl(SharePointClient client, String listId, String listName, String itemId, List<String> roles, boolean isSubPage) {
         super(client);
         this.listId = listId;
         this.listName = listName;
         this.itemId = itemId;
         this.roles = roles;
+        this.isSubPage = isSubPage;
     }
 
     @Override
@@ -55,14 +60,14 @@ public class ItemCrawl extends SharePointCrawl {
         final GetListItemValueResponse response = client.api().list().getListItemValue().setListId(listId).setItemId(itemId).execute();
         final String content = buildContent(response);
 
-        final String webLink = getWebLink();
+        final String webLink = getWebLink(response);
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
         final Map<String, Object> dataMap = new HashMap<>();
         dataMap.put(fessConfig.getIndexFieldUrl(), webLink);
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
         dataMap.put(fessConfig.getIndexFieldSite(), webLink.replace("http://", "").replace("https://", ""));
 
-        dataMap.put(fessConfig.getIndexFieldTitle(), response.getTitle());
+        dataMap.put(fessConfig.getIndexFieldTitle(), getTitle(response));
         dataMap.put(fessConfig.getIndexFieldContent(), content);
         dataMap.put(fessConfig.getIndexFieldDigest(), content);
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
@@ -95,7 +100,31 @@ public class ItemCrawl extends SharePointCrawl {
         return sb.toString();
     }
 
-    private String getWebLink() {
+    private String getTitle(final GetListItemValueResponse response) {
+        if (response.getTitle().length() > 0) {
+            return response.getTitle();
+        } else if (response.getFileLeafRef().length() > 0) {
+            return response.getFileLeafRef();
+        }
+        return "";
+    }
+
+    private String getWebLink(GetListItemValueResponse response) {
+        if (isSubPage && StringUtils.isNotBlank(response.getFileRef())) {
+            String siteRef = response.getFileRef();
+            StringBuilder sb = new StringBuilder(siteRef.length() * 2);
+
+            for (String part: siteRef.split("/")) {
+                if (part.length() == 0) {
+                    continue;
+                }
+                if (sb.length() > 0) {
+                    sb.append('/');
+                }
+                sb.append(URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"));
+            }
+            return client.getUrl() + sb.toString();
+        }
         final GetForms getForms = client.api().list().getForms();
         if (listId != null) {
             getForms.setListId(listId);

@@ -35,11 +35,13 @@ public class GetListItems2013 extends GetListItems {
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Items";
     private static final String PAGING_PARAM = "%24skiptoken=Paged=TRUE%26p_ID={{start}}&%24top={{num}}";
     private static final String SELECT_PARAM = "%24select=Title,Id,Attachments,Created,Modified";
+    private static final String SELECT_PARAM_SITE_PAGE = "%24select=Id,Created,Modified";
 
     private String listId = null;
     private String listName = null;
     private int num = 100;
     private int start = 0;
+    private boolean isSubPage = false;
 
     public GetListItems2013(CloseableHttpClient client, String siteUrl) {
         super(client, siteUrl);
@@ -51,7 +53,14 @@ public class GetListItems2013 extends GetListItems {
             throw new SharePointClientException("ListID|ListName is required.");
         }
         final String pagingParam = PAGING_PARAM.replace("{{num}}", String.valueOf(num)).replace("{{start}}", String.valueOf(start));
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + SELECT_PARAM);
+        final String selectParam;
+        if (isSubPage) {
+            selectParam = SELECT_PARAM_SITE_PAGE;
+        } else {
+            selectParam = SELECT_PARAM;
+        }
+
+        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + selectParam);
         XmlResponse xmlResponse = doXmlRequest(httpGet);
         return buildResponse(xmlResponse);
     }
@@ -71,6 +80,11 @@ public class GetListItems2013 extends GetListItems {
         return this;
     }
 
+    public GetListItems2013 setSubPage(boolean subPage) {
+        isSubPage = subPage;
+        return this;
+    }
+
     @SuppressWarnings("unchecked")
     private GetListItems2013Response buildResponse(final XmlResponse xmlResponse) {
         final GetListItemsDocHandler handler = new GetListItemsDocHandler();
@@ -83,8 +97,7 @@ public class GetListItems2013 extends GetListItems {
             try {
                 Object titleObj = value.get("Title");
                 if (titleObj == null) {
-                    logger.warn("Title field does not contain. Skip item. " + xmlResponse.getBody());
-                    return;
+                    titleObj = "";
                 }
                 Object idObj = value.get("Id");
                 if (idObj == null) {
@@ -98,8 +111,7 @@ public class GetListItems2013 extends GetListItems {
                 }
                 Object attachmentsObj = value.get("Attachments");
                 if (attachmentsObj == null) {
-                    logger.warn("Attachments field does not contain. Skip item. " + xmlResponse.getBody());
-                    return;
+                    attachmentsObj = "false";
                 }
                 boolean attachments = Boolean.valueOf(attachmentsObj.toString());
                 Object createdObj = value.get("Created");

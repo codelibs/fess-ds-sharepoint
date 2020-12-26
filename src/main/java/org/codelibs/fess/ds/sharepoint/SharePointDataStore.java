@@ -114,6 +114,9 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("list.items.number_per_page")) {
             config.setListItemNumPerPages(Integer.valueOf(paramMap.get("list.items.number_per_page")));
         }
+        if (paramMap.containsKey("list.is_sub_page")) {
+            config.setSubPage(Boolean.valueOf(paramMap.get("list.is_sub_page")));
+        }
         if (paramMap.containsKey("http.connection_timeout")) {
             config.setConnectionTimeout(Integer.valueOf(paramMap.get("http.connection_timeout")));
         }

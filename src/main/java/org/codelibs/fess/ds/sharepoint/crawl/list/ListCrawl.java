@@ -34,14 +34,15 @@ public class ListCrawl extends SharePointCrawl {
     private final String listName;
     private final int numberPerPage;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
+    private final Boolean isSubPage;
 
-
-    public ListCrawl(SharePointClient client, String id, String listName, int numberPerPage, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    public ListCrawl(SharePointClient client, String id, String listName, int numberPerPage, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, boolean isSubPage) {
         super(client);
         this.id = id;
         this.listName = listName;
         this.numberPerPage = numberPerPage;
         this.sharePointGroupCache = sharePointGroupCache;
+        this.isSubPage = isSubPage;
     }
 
     @Override
@@ -78,7 +79,7 @@ public class ListCrawl extends SharePointCrawl {
         for (int start=0; ;start += numberPerPage) {
             final GetListItemsResponse getListItemsResponse;
             if (listId != null) {
-                getListItemsResponse = client.api().list().getListItems().setListId(listId).setNum(numberPerPage).setStart(start).execute();
+                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage).setStart(start).execute();
             } else {
                 return null;
             }
@@ -91,7 +92,7 @@ public class ListCrawl extends SharePointCrawl {
                 }
 
                 final List<String> roles = getItemRoles(listId, item.getId(), sharePointGroupCache);
-                crawlingQueue.offer(new ItemCrawl(client, listId, listName, item.getId(), roles));
+                crawlingQueue.offer(new ItemCrawl(client, listId, listName, item.getId(), roles, isSubPage));
                 if (item.hasAttachments()) {
                     crawlingQueue.offer(new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles));
                 }
