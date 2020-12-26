@@ -18,10 +18,7 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRole;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -31,8 +28,6 @@ import java.util.List;
 import java.util.Map;
 
 public class GetListItemRole2013 extends GetListItemRole {
-    private static final Logger logger = LoggerFactory.getLogger(GetListItemRole2013.class);
-
     private String listId = null;
     private String itemId = null;
     private Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache = null;
@@ -55,7 +50,6 @@ public class GetListItemRole2013 extends GetListItemRole {
     @Override
     @SuppressWarnings("unchecked")
     public GetListItemRole2013Response execute() {
-        logger.info("Get role api."); //TODO
         if (listId == null || itemId == null) {
             throw new SharePointClientException("listId/itemId is required.");
         }
@@ -70,10 +64,6 @@ public class GetListItemRole2013 extends GetListItemRole {
         List<Map<String, Object>> values = (List)bodyMap.get("value");
         values.stream().map(value -> (value.get("PrincipalId").toString())).forEach(principalId -> {
             if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
-                if (logger.isInfoEnabled()) {
-                    //TODO
-                    logger.info("Use sharepointgroup cache. PrincipalId:" + principalId);
-                }
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
                 return;
             }
@@ -116,8 +106,6 @@ public class GetListItemRole2013 extends GetListItemRole {
     }
 
     private GetListItemRole2013Response.SharePointGroup buildSharePointGroup(String id, String title) {
-        logger.info("buildSharePointGroup."); //TODO
-
         // SharePointGroup
         final GetListItemRole2013Response.SharePointGroup sharePointGroup = new GetListItemRole2013Response.SharePointGroup(id, title);
         final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
@@ -140,7 +128,6 @@ public class GetListItemRole2013 extends GetListItemRole {
                 sharePointGroup.addSecurityGroup(securityGroup);
             } else if (userPrincipalType == 8) {
                 if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
-                    logger.info("Use user sharepointgroup cache. PrincipalId:" + userId); //TODO
                     sharePointGroup.addSharePointGroup(sharePointGroupCache.get(userId));
                 } else {
                     GetListItemRole2013Response.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
