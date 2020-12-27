@@ -90,7 +90,7 @@ public class GetListItemRole2013 extends GetListItemRole {
     }
 
     private String buildBaseUrl() {
-        return siteUrl + "/_api/Web/Lists(guid'" + listId + "')/";
+        return siteUrl + "_api/Web/Lists(guid'" + listId + "')/";
     }
 
     private String buildRoleAssignmentsUrl() {
@@ -102,7 +102,7 @@ public class GetListItemRole2013 extends GetListItemRole {
     }
 
     private String buildUsersUrl(String memberId) {
-        return siteUrl + "/_api/Web/SiteGroups/GetById(" + memberId + ")/Users";
+        return siteUrl + "_api/Web/SiteGroups/GetById(" + memberId + ")/Users";
     }
 
     private GetListItemRole2013Response.SharePointGroup buildSharePointGroup(String id, String title) {
