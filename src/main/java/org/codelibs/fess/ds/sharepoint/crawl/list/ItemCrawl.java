@@ -59,7 +59,9 @@ public class ItemCrawl extends SharePointCrawl {
         this.roles = roles;
         this.isSubPage = isSubPage;
         this.includeFields = includeFields;
-        this.excludeFields = excludeFields;
+        final List<String> exList = new ArrayList<>(excludeFields);
+        exList.addAll(EXCLUDE_FIELDS);
+        this.excludeFields = exList;
     }
 
     @Override
@@ -107,8 +109,7 @@ public class ItemCrawl extends SharePointCrawl {
         final StringBuilder sb = new StringBuilder();
         response.getValues().entrySet().stream()
                 .filter(entry -> StringUtils.isNotBlank(entry.getValue()))
-                .filter(entry -> includeFields.size() == 0 || includeFields.contains(entry.getKey()))
-                .filter(entry -> excludeFields.size() == 0 || !excludeFields.contains(entry.getKey()))
+                .filter(entry -> (includeFields.size() > 0 && includeFields.contains(entry.getKey())) || !excludeFields.contains(entry.getKey()))
                 .forEach(entry -> {
                     sb.append('[').append(normalizeKey(entry.getKey())).append("] ").append(entry.getValue()).append('\n');
                 });
@@ -168,4 +169,70 @@ public class ItemCrawl extends SharePointCrawl {
         }
         return form.getServerRelativeUrl();
     }
+
+    private static final List<String> EXCLUDE_FIELDS = Arrays.asList(new String[] {
+            "odata.metadata",
+            "odata.type",
+            "odata.id",
+            "odata.editLink",
+            "ContentTypeId",
+            "Title",
+            "File_x005f_x0020_x005f_Type",
+            "ComplianceAssetId",
+            "ID",
+            "Modified",
+            "Created",
+            "Author",
+            "Editor",
+            "OData__x005f_HasCopyDestinations",
+            "OData__x005f_CopySource",
+            "owshiddenversion",
+            "WorkflowVersion",
+            "OData__x005f_UIVersion",
+            "OData__x005f_UIVersionString",
+            "Attachments",
+            "OData__x005f_ModerationStatus",
+            "InstanceID",
+            "Order",
+            "GUID",
+            "WorkflowInstanceID",
+            "FileRef",
+            "FileDirRef",
+            "Last_x005f_x0020_x005f_Modified",
+            "Created_x005f_x0020_x005f_Date",
+            "FSObjType",
+            "SortBehavior",
+            "FileLeafRef",
+            "UniqueId",
+            "SyncClientId",
+            "ProgId",
+            "ScopeId",
+            "MetaInfo",
+            "OData__x005f_Level",
+            "OData__x005f_IsCurrentVersion",
+            "ItemChildCount",
+            "FolderChildCount",
+            "Restricted",
+            "OriginatorId",
+            "NoExecute",
+            "ContentVersion",
+            "OData__x005f_ComplianceFlags",
+            "OData__x005f_ComplianceTag",
+            "OData__x005f_ComplianceTagWrittenTime",
+            "OData__x005f_ComplianceTagUserId",
+            "AccessPolicy",
+            "OData__x005f_VirusStatus",
+            "OData__x005f_VirusVendorID",
+            "OData__x005f_VirusInfo",
+            "AppAuthor",
+            "AppEditor",
+            "SMTotalSize",
+            "SMLastModifiedDate",
+            "SMTotalFileStreamSize",
+            "SMTotalFileCount",
+            "OData__x005f_ModerationComments",
+            "Exists",
+            "ParentItemID",
+            "ParentFolderID"
+    });
 }
