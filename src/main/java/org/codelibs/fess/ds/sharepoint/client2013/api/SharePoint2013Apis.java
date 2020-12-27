@@ -27,6 +27,7 @@ import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem.GetListIt
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem.GetListItemRole2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem.GetListItemValue2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitems.GetListItems2013;
+import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetList2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetLists2013;
 
 public class SharePoint2013Apis extends SharePointApis {
@@ -47,6 +48,10 @@ public class SharePoint2013Apis extends SharePointApis {
     }
 
     public class ListApis  extends SharePointApis.ListApis {
+        public GetList2013 getList() {
+            return new GetList2013(client, siteUrl);
+        }
+
         public GetLists2013 getLists() {
             return new GetLists2013(client, siteUrl);
         }

@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint.crawl.list;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.slf4j.Logger;
@@ -63,31 +64,10 @@ public class ListCrawl extends SharePointCrawl {
             logger.info("[Crawling List] [id:{}] [listName:{}]", id, listName);
         }
 
-        GetListsResponse getListsResponse = client.api().list().getLists().execute();
-        GetListsResponse.SharePointList sharePointList = null;
-        for (GetListsResponse.SharePointList list: getListsResponse.getLists()) {
-            if (this.id != null) {
-                if (list.getId().equals(this.id)) {
-                    sharePointList = list;
-                    break;
-                }
-            } else {
-                if (list.getListName().equals(this.listName)) {
-                    sharePointList = list;
-                    break;
-                }
-            }
-        }
-        String listId;
-        String listName;
-        if (sharePointList == null) {
-            listId = this.id;
-            listName = this.listName;
-        } else {
-            listId = sharePointList.getId();
-            listName = sharePointList.getListName();
-        }
-
+        final GetListResponse getListResponse = client.api().list().getList().setListId(id).setListName(listName).execute();
+        final GetListsResponse.SharePointList sharePointList = getListResponse.getList();
+        final String listId = sharePointList.getId();
+        final String listName = sharePointList.getListName();
         for (int start=0; ;start += numberPerPage) {
             final GetListItemsResponse getListItemsResponse;
             if (listId != null) {

@@ -26,6 +26,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAt
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRole;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValue;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetList;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
 
 public class SharePointApis {
@@ -50,6 +51,10 @@ public class SharePointApis {
     }
 
     public class ListApis {
+        public GetList getList() {
+            return new GetList(client, siteUrl);
+        }
+
         public GetLists getLists() {
             return new GetLists(client, siteUrl);
         }
