@@ -69,7 +69,7 @@ public class ItemCrawl extends SharePointCrawl {
 
         dataMap.put(fessConfig.getIndexFieldTitle(), getTitle(response));
         dataMap.put(fessConfig.getIndexFieldContent(), content);
-        dataMap.put(fessConfig.getIndexFieldDigest(), content);
+        dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), response.getModified());
         dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
@@ -93,10 +93,18 @@ public class ItemCrawl extends SharePointCrawl {
     }
 
     private String buildContent(final GetListItemValueResponse response) {
+        if (isSubPage
+                && response.getValues().containsKey("WikiField")
+                && StringUtils.isNotBlank(response.getValues().get("WikiField"))) {
+            return response.getValues().get("WikiField");
+        }
+
         final StringBuilder sb = new StringBuilder();
-        response.getValues().entrySet().stream().forEach(entry -> {
-            sb.append(normalizeKey(entry.getKey())).append(' ').append(entry.getValue()).append('\n');
-        });
+        response.getValues().entrySet().stream()
+                .filter(entry -> StringUtils.isNotBlank(entry.getValue()))
+                .forEach(entry -> {
+                    sb.append('[').append(normalizeKey(entry.getKey())).append("] ").append(entry.getValue()).append('\n');
+                });
         return sb.toString();
     }
 

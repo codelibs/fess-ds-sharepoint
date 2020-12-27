@@ -196,6 +196,7 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
             "SMTotalFileStreamSize",
             "SMTotalFileCount",
             "OData__x005f_ModerationComments",
+            "Exists"
     });
     private static boolean isExcludeField(String fieldName) {
         return EXCLUDE_FIELDS.stream().anyMatch(excludeFIeld -> excludeFIeld.equals(fieldName));

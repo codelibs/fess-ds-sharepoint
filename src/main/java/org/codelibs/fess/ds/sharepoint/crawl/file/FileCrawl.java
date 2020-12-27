@@ -86,7 +86,7 @@ public class FileCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldMimetype(), mimeType);
         dataMap.put(fessConfig.getIndexFieldFiletype(), fileType);
         dataMap.put(fessConfig.getIndexFieldContent(), content);
-        dataMap.put(fessConfig.getIndexFieldDigest(), content);
+        dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), modified);
         dataMap.put(fessConfig.getIndexFieldCreated(), created);

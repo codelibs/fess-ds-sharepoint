@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl;
 
+import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.helper.SystemHelper;
@@ -65,5 +66,8 @@ public abstract class SharePointCrawl {
         return titles;
     }
 
-
+    protected String buildDigest(final String content) {
+        final int maxLength = ComponentUtil.getFessConfig().getCrawlerDocumentFileMaxDigestLengthAsInteger();
+        return StringUtils.abbreviate(content, maxLength);
+    }
 }

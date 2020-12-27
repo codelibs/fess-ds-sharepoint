@@ -195,6 +195,7 @@ public class GetListItemValueResponse implements SharePointApiResponse {
             "SMTotalFileStreamSize",
             "SMTotalFileCount",
             "OData__x005f_ModerationComments",
+            "Exists"
     };
     private static boolean isExcludeField(String fieldName) {
         return Arrays.stream(EXCLUDE_FIELDS).anyMatch(excludeFIeld -> excludeFIeld.equals(fieldName));
