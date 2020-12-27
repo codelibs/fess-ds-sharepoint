@@ -30,6 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.validation.ValidationException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -88,7 +91,14 @@ public class SharePointCrawler {
             crawlingQueue.offer(new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages(), sharePointGroupCache));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
-                crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(), crawlerConfig.listItemNumPerPages, sharePointGroupCache, crawlerConfig.isSubPage()));
+                crawlingQueue.offer(new ListCrawl(client,
+                        crawlerConfig.getInitialListId(),
+                        crawlerConfig.getInitialListName(),
+                        crawlerConfig.listItemNumPerPages,
+                        sharePointGroupCache,
+                        crawlerConfig.isSubPage(),
+                        crawlerConfig.getListContentIncludeFields(),
+                        crawlerConfig.getListContentExcludeFields()));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
                 crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), sharePointGroupCache));
@@ -147,6 +157,8 @@ public class SharePointCrawler {
         private String sharePointVersion = null;
         private int retryLimit = 2;
         private boolean isSubPage = false;
+        private List<String> listContentIncludeFields = new ArrayList<>();
+        private List<String> listContentExcludeFields = new ArrayList<>();
 
         public String getUrl() {
             return url;
@@ -256,6 +268,22 @@ public class SharePointCrawler {
 
         public void setSubPage(boolean subPage) {
             isSubPage = subPage;
+        }
+
+        public List<String> getListContentIncludeFields() {
+            return listContentIncludeFields;
+        }
+
+        public void setListContentIncludeFields(String listContentIncludeFields) {
+            this.listContentIncludeFields = Arrays.asList(listContentIncludeFields.trim().split(","));
+        }
+
+        public List<String> getListContentExcludeFields() {
+            return listContentExcludeFields;
+        }
+
+        public void setListContentExcludeFields(String listContentExcludeFields) {
+            this.listContentExcludeFields = Arrays.asList(listContentExcludeFields.trim().split(","));
         }
     }
 }

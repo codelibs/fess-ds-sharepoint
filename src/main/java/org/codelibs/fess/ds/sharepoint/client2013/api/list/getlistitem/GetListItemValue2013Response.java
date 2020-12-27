@@ -39,6 +39,9 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
     private String fileRef;
     private String fileDirRef;
     private String fileLeafRef;
+    private String parentItemId;
+    private String parentFolderId;
+    private int fsObjType;
     private Map<String, String> values = new HashMap<>();
 
     public String getId() {
@@ -89,6 +92,18 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         return fileLeafRef;
     }
 
+    public String getParentItemId() {
+        return parentItemId;
+    }
+
+    public String getParentFolderId() {
+        return parentFolderId;
+    }
+
+    public int getFsObjType() {
+        return fsObjType;
+    }
+
     public Map<String, String> getValues() {
         return values;
     }
@@ -108,6 +123,9 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         response.fileRef = dataMap.getOrDefault("FileRef", "").toString();
         response.fileDirRef = dataMap.getOrDefault("FileDirRef", "").toString();
         response.fileLeafRef = dataMap.getOrDefault("FileLeafRef", "").toString();
+        response.parentItemId = dataMap.getOrDefault("ParentItemID", "").toString();
+        response.parentFolderId = dataMap.getOrDefault("ParentFolderID", "").toString();
+        response.fsObjType = Integer.valueOf(dataMap.getOrDefault("FSObjType", "0").toString());
         if (dataMap.containsKey("Attachments")) {
             response.hasAttachments = Boolean.valueOf(dataMap.get("Attachments").toString());
         }
@@ -196,7 +214,9 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
             "SMTotalFileStreamSize",
             "SMTotalFileCount",
             "OData__x005f_ModerationComments",
-            "Exists"
+            "Exists",
+            "ParentItemID",
+            "ParentFolderID"
     });
     private static boolean isExcludeField(String fieldName) {
         return EXCLUDE_FIELDS.stream().anyMatch(excludeFIeld -> excludeFIeld.equals(fieldName));
@@ -260,7 +280,16 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
             } else if ("d:FileLeafRef".equals(qName)) {
                 fieldName = "FileLeafRef";
                 buffer.setLength(0);
-            } else if (nowCountent && !isExcludeField(nonePredfixQName)) {
+            } else if ("d:ParentItemID".equals(qName)) {
+                fieldName = "ParentItemID";
+                buffer.setLength(0);
+            } else if ("d:ParentFolderID".equals(qName)) {
+                fieldName = "ParentFolderID";
+                buffer.setLength(0);
+            } else if ("d:FSObjType".equals(qName)) {
+                fieldName = "FSObjType";
+                buffer.setLength(0);
+            }  else if (nowCountent && !isExcludeField(nonePredfixQName)) {
                 fieldName = nonePredfixQName;
                 buffer.setLength(0);
             }

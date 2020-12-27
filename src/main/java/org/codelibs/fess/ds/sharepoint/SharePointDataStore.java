@@ -114,6 +114,12 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("list.items.number_per_page")) {
             config.setListItemNumPerPages(Integer.valueOf(paramMap.get("list.items.number_per_page")));
         }
+        if (paramMap.containsKey("list.item.content.include_fields")) {
+            config.setListContentIncludeFields(paramMap.get("list.item.content.include_fields"));
+        }
+        if (paramMap.containsKey("list.item.content.exclude_fields")) {
+            config.setListContentExcludeFields(paramMap.get("list.item.content.exclude_fields"));
+        }
         if (paramMap.containsKey("list.is_sub_page")) {
             config.setSubPage(Boolean.valueOf(paramMap.get("list.is_sub_page")));
         }

@@ -40,6 +40,9 @@ public class GetListItemValueResponse implements SharePointApiResponse {
     private String fileRef;
     private String fileDirRef;
     private String fileLeafRef;
+    private String parentItemId;
+    private String parentFolderId;
+    private int fsObjType;
     private Map<String, String> values = new HashMap<>();
 
     public String getId() {
@@ -90,6 +93,18 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         return fileLeafRef;
     }
 
+    public String getParentItemId() {
+        return parentItemId;
+    }
+
+    public String getParentFolderId() {
+        return parentFolderId;
+    }
+
+    public int getFsObjType() {
+        return fsObjType;
+    }
+
     public Map<String, String> getValues() {
         return values;
     }
@@ -107,6 +122,9 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         response.fileRef = jsonMap.getOrDefault("FileRef", "").toString();
         response.fileDirRef = jsonMap.getOrDefault("FileDirRef", "").toString();
         response.fileLeafRef = jsonMap.getOrDefault("FileLeafRef", "").toString();
+        response.parentItemId = jsonMap.getOrDefault("ParentItemID", "").toString();
+        response.parentFolderId = jsonMap.getOrDefault("ParentFolderID", "").toString();
+        response.fsObjType = Integer.valueOf(jsonMap.getOrDefault("FSObjType", "0").toString());
         if (jsonMap.containsKey("Attachments")) {
             response.hasAttachments = Boolean.valueOf(jsonMap.get("Attachments").toString());
         }
@@ -195,7 +213,9 @@ public class GetListItemValueResponse implements SharePointApiResponse {
             "SMTotalFileStreamSize",
             "SMTotalFileCount",
             "OData__x005f_ModerationComments",
-            "Exists"
+            "Exists",
+            "ParentItemID",
+            "ParentFolderID"
     };
     private static boolean isExcludeField(String fieldName) {
         return Arrays.stream(EXCLUDE_FIELDS).anyMatch(excludeFIeld -> excludeFIeld.equals(fieldName));

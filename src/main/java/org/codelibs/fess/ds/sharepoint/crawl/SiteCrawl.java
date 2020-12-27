@@ -23,6 +23,7 @@ import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.Queue;
 
@@ -50,7 +51,14 @@ public class SiteCrawl extends SharePointCrawl {
             if (list.isNoCrawl()) {
                 return;
             }
-            crawlingQueue.offer(new ListCrawl(client, list.getId(), null, numberPerPage, sharePointGroupCache, false));
+            crawlingQueue.offer(new ListCrawl(client,
+                    list.getId(),
+                    null,
+                    numberPerPage,
+                    sharePointGroupCache,
+                    false,
+                    new ArrayList<>(),
+                    new ArrayList<>()));
         });
         crawlingQueue.offer(new FolderCrawl(client, "/sites/" + siteName + "/Shared Documents", sharePointGroupCache));
         return null;

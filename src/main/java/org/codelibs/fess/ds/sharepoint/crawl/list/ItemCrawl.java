@@ -41,14 +41,25 @@ public class ItemCrawl extends SharePointCrawl {
     private final String itemId;
     private final List<String> roles;
     private final boolean isSubPage;
+    private final List<String> includeFields;
+    private final List<String> excludeFields;
 
-    public ItemCrawl(SharePointClient client, String listId, String listName, String itemId, List<String> roles, boolean isSubPage) {
+    public ItemCrawl(SharePointClient client,
+                     String listId,
+                     String listName,
+                     String itemId,
+                     List<String> roles,
+                     boolean isSubPage,
+                     List<String> includeFields,
+                     List<String> excludeFields) {
         super(client);
         this.listId = listId;
         this.listName = listName;
         this.itemId = itemId;
         this.roles = roles;
         this.isSubPage = isSubPage;
+        this.includeFields = includeFields;
+        this.excludeFields = excludeFields;
     }
 
     @Override
@@ -93,15 +104,11 @@ public class ItemCrawl extends SharePointCrawl {
     }
 
     private String buildContent(final GetListItemValueResponse response) {
-        if (isSubPage
-                && response.getValues().containsKey("WikiField")
-                && StringUtils.isNotBlank(response.getValues().get("WikiField"))) {
-            return response.getValues().get("WikiField");
-        }
-
         final StringBuilder sb = new StringBuilder();
         response.getValues().entrySet().stream()
                 .filter(entry -> StringUtils.isNotBlank(entry.getValue()))
+                .filter(entry -> includeFields.size() == 0 || includeFields.contains(entry.getKey()))
+                .filter(entry -> excludeFields.size() == 0 || !excludeFields.contains(entry.getKey()))
                 .forEach(entry -> {
                     sb.append('[').append(normalizeKey(entry.getKey())).append("] ").append(entry.getValue()).append('\n');
                 });
@@ -132,7 +139,24 @@ public class ItemCrawl extends SharePointCrawl {
                 sb.append(URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"));
             }
             return client.getUrl() + sb.toString();
+        } else if (response.getFsObjType() == 0 && StringUtils.isNotBlank(response.getParentItemId())) {
+            final String dirRef = response.getFileDirRef();
+            String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder=" + URLEncoder.encode(dirRef, StandardCharsets.UTF_8);
+        } else if (response.getFsObjType() == 1) {
+            String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder=" + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
+        } else {
+            String serverRelativeUrl = getFormUrl();
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
         }
+    }
+
+    private String normalizeKey(final String key) {
+        return key.replace("_x005f_", "_");
+    }
+
+    private String getFormUrl() {
         final GetForms getForms = client.api().list().getForms();
         if (listId != null) {
             getForms.setListId(listId);
@@ -142,11 +166,6 @@ public class ItemCrawl extends SharePointCrawl {
         if (form == null) {
             return null;
         }
-        String serverRelativeUrl = form.getServerRelativeUrl();
-        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
-    }
-
-    private String normalizeKey(final String key) {
-        return key.replace("_x005f_", "_");
+        return form.getServerRelativeUrl();
     }
 }
