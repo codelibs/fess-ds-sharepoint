@@ -109,7 +109,7 @@ public class ItemCrawl extends SharePointCrawl {
         final StringBuilder sb = new StringBuilder();
         response.getValues().entrySet().stream()
                 .filter(entry -> StringUtils.isNotBlank(entry.getValue()))
-                .filter(entry -> (includeFields.size() > 0 && includeFields.contains(entry.getKey())) || !excludeFields.contains(entry.getKey()))
+                .filter(entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey())) && !excludeFields.contains(entry.getKey()))
                 .forEach(entry -> {
                     sb.append('[').append(normalizeKey(entry.getKey())).append("] ").append(entry.getValue()).append('\n');
                 });

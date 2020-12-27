@@ -37,6 +37,7 @@ import java.util.Queue;
 
 public class FolderCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(FolderCrawl.class);
+    private static final int PAGE_SIZE = 100;
 
     private final String serverRelativeUrl;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
@@ -58,26 +59,43 @@ public class FolderCrawl extends SharePointCrawl {
                 .setServerRelativeUrl(serverRelativeUrl)
                 .execute();
         if (getFolderResponse.getItemCount() > 0) {
-            GetFoldersResponse getFoldersResponse = client.api().doclib()
-                    .getFolders()
-                    .setServerRelativeUrl(serverRelativeUrl)
-                    .execute();
-            getFoldersResponse.getFolders().forEach(subFolder -> {
-                crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl(), sharePointGroupCache));
-            });
+            int foldersStart = 0;
+            while (true) {
+                GetFoldersResponse getFoldersResponse = client.api().doclib()
+                        .getFolders()
+                        .setServerRelativeUrl(serverRelativeUrl)
+                        .setStart(foldersStart)
+                        .setNum(PAGE_SIZE)
+                        .execute();
+                if (getFoldersResponse.getFolders().size() == 0) {
+                    break;
+                }
+                foldersStart += PAGE_SIZE;
+                getFoldersResponse.getFolders().forEach(subFolder -> {
+                    crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl(), sharePointGroupCache));
+                });
+            }
 
-            GetFilesResponse getFilesResponse = client.api().doclib()
-                    .getFiles()
-                    .setServerRelativeUrl(serverRelativeUrl)
-                    .execute();
-            getFilesResponse.getFiles().forEach(file -> {
-                final GetDoclibListItemResponse getDoclibListItemResponse = client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
-                final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), sharePointGroupCache);
-                final String webLink = getWebLink(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), serverRelativeUrl);
-                //crawlingQueue.offer(new FileCrawl(client, file.getFileName(), client.helper().buildDocLibFileWebLink(getDoclibListItemResponse.getItemId(), file.getServerRelativeUrl(), serverRelativeUrl), file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
-                crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
-
-            });
+            int filesStart = 0;
+            while(true) {
+                GetFilesResponse getFilesResponse = client.api().doclib()
+                        .getFiles()
+                        .setServerRelativeUrl(serverRelativeUrl)
+                        .setStart(filesStart)
+                        .setNum(PAGE_SIZE)
+                        .execute();
+                if (getFilesResponse.getFiles().size() == 0) {
+                    break;
+                }
+                filesStart += PAGE_SIZE;
+                getFilesResponse.getFiles().forEach(file -> {
+                    final GetDoclibListItemResponse getDoclibListItemResponse = client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
+                    final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), sharePointGroupCache);
+                    final String webLink = getWebLink(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), serverRelativeUrl);
+                    //crawlingQueue.offer(new FileCrawl(client, file.getFileName(), client.helper().buildDocLibFileWebLink(getDoclibListItemResponse.getItemId(), file.getServerRelativeUrl(), serverRelativeUrl), file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
+                    crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
+                });
+            }
         }
         return null;
     }

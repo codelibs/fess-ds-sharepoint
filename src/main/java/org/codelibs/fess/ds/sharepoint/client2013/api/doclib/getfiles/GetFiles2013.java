@@ -22,9 +22,11 @@ import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientExceptio
 
 public class GetFiles2013 extends GetFiles {
     private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')/Files";
-
+    private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
 
     private String serverRelativeUrl = null;
+    private int num = 100;
+    private int start = 0;
 
     public GetFiles2013(CloseableHttpClient client, String siteUrl) {
         super(client, siteUrl);
@@ -35,13 +37,26 @@ public class GetFiles2013 extends GetFiles {
         return this;
     }
 
+    public GetFiles2013 setNum(int num) {
+        this.num = num;
+        return this;
+    }
+
+    public GetFiles2013 setStart(int start) {
+        this.start = start;
+        return this;
+    }
+
     @Override
     public GetFiles2013Response execute() {
         if (serverRelativeUrl == null) {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)));
+        final HttpGet httpGet =
+                new HttpGet(siteUrl + "/"+
+                        API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) +
+                        "?" + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
         XmlResponse xmlResponse = doXmlRequest(httpGet);
         try {
             return GetFiles2013Response.build(xmlResponse);

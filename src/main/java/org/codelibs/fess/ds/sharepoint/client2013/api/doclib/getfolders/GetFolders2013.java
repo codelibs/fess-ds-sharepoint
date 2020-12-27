@@ -22,8 +22,11 @@ import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientExceptio
 
 public class GetFolders2013 extends GetFolders {
     private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')/Folders";
+    private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
 
     private String serverRelativeUrl = null;
+    private int num = 100;
+    private int start = 0;
 
     public GetFolders2013(CloseableHttpClient client, String siteUrl) {
         super(client, siteUrl);
@@ -34,14 +37,27 @@ public class GetFolders2013 extends GetFolders {
         return this;
     }
 
+    public GetFolders2013 setNum(int num) {
+        this.num = num;
+        return this;
+    }
+
+    public GetFolders2013 setStart(int start) {
+        this.start = start;
+        return this;
+    }
+
     @Override
     public GetFolders2013Response execute() {
         if (serverRelativeUrl == null) {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)));
-        XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final HttpGet httpGet =
+                new HttpGet(siteUrl + "/"+
+                        API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) +
+                        "?" + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
         try {
             return GetFolders2013Response.build(xmlResponse);
         } catch (Exception e) {
