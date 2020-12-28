@@ -16,6 +16,8 @@ See [Maven Repository](http://central.maven.org/maven2/org/codelibs/fess/fess-ds
 
 ## Crawling Setting
 
+### List Crawl
+
 ```
 # Parameter
 url={URL of SharePoint}
@@ -23,7 +25,40 @@ auth.ntlm.user={Name of SharePoint User}
 auth.ntlm.password={Passsword}
 site.name={SiteName of crawling target}
 site.list_name={ListName of crawling target}
-site.doclib_path=/Shared Documents
+## (Option parameter)
+list.item.content.include_fields={FieldName to include to content.}
+list.item.content.exclude_fields={FieldName to exclude to content.}
+## SharePoint2013
+sp.version=2013
+
+
+# Script
+url=url
+host=host
+site=site
+title="["+list_name+"]"+title
+content=content
+cache=content
+digest=digest
+content_length=content.length()
+last_modified=last_modified
+created=created
+timestamp=last_modified
+mimetype=mimetype
+filetype=filetype
+```
+
+### Document Library Crawl
+
+```
+# Parameter
+url={URL of SharePoint}
+auth.ntlm.user={Name of SharePoint User}
+auth.ntlm.password={Passsword}
+site.name={SiteName of crawling target}
+site.doclib_path={DocumentLibrary path. Ex) /Shared Documents}
+## SharePoint2013
+sp.version=2013
 
 # Script
 url=url
@@ -32,9 +67,11 @@ site=site
 title=title
 content=content
 cache=content
-digest=content
-anchor=
-contentLength=content.length()
-lastModified=lastModified
+digest=digest
+content_length=content.length()
+last_modified=last_modified
 created=created
+timestamp=last_modified
+mimetype=mimetype
+filetype=filetype
 ```
