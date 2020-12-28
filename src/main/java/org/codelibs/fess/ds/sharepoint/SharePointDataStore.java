@@ -21,11 +21,12 @@ import org.codelibs.fess.ds.AbstractDataStore;
 import org.codelibs.fess.ds.callback.IndexUpdateCallback;
 import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
+import org.codelibs.fess.mylasta.direction.FessConfig;
+import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 public class SharePointDataStore extends AbstractDataStore {
     private static final Logger logger = LoggerFactory.getLogger(SharePointDataStore.class);
@@ -37,15 +38,33 @@ public class SharePointDataStore extends AbstractDataStore {
     @Override
     protected void storeData(final DataConfig dataConfig, final IndexUpdateCallback callback, final Map<String, String> paramMap,
                              final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
+        final FessConfig fessConfig = ComponentUtil.getFessConfig();
+        final String roleField = fessConfig.getIndexFieldRole();
         final SharePointCrawler crawler = createCrawler(paramMap);
         final long readInterval = getReadInterval(paramMap);
         boolean running = true;
         while (running && crawler.hasCrawlTarget()) {
             try {
-                final Map<String, Object> result = crawler.doCrawl();
-                if (result != null) {
+                final Map<String, Object> resultMap = crawler.doCrawl();
+                if (logger.isDebugEnabled()) {
+                    logger.debug("ResultMap: " + resultMap);
+                }
+                if (resultMap != null) {
                     final Map<String, Object> dataMap = new HashMap<>(defaultDataMap);
-                    result.forEach(dataMap::put);
+                    if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
+                        final List<Object> roles = new ArrayList<>((List) dataMap.get(roleField));
+                        roles.addAll((List) resultMap.get(roleField));
+                        dataMap.put(roleField, roles);
+                    } else {
+                        dataMap.put(roleField, resultMap.get(roleField));
+                    }
+                    resultMap.remove(roleField);
+                    for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
+                        final Object convertValue = convertValue(entry.getValue(), resultMap);
+                        if (convertValue != null) {
+                            dataMap.put(entry.getKey(), convertValue);
+                        }
+                    }
                     callback.store(paramMap, dataMap);
                 }
             } catch (final CrawlingAccessException e) {
@@ -95,11 +114,26 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("list.items.number_per_page")) {
             config.setListItemNumPerPages(Integer.valueOf(paramMap.get("list.items.number_per_page")));
         }
+        if (paramMap.containsKey("list.item.content.include_fields")) {
+            config.setListContentIncludeFields(paramMap.get("list.item.content.include_fields"));
+        }
+        if (paramMap.containsKey("list.item.content.exclude_fields")) {
+            config.setListContentExcludeFields(paramMap.get("list.item.content.exclude_fields"));
+        }
+        if (paramMap.containsKey("list.is_sub_page")) {
+            config.setSubPage(Boolean.valueOf(paramMap.get("list.is_sub_page")));
+        }
         if (paramMap.containsKey("http.connection_timeout")) {
             config.setConnectionTimeout(Integer.valueOf(paramMap.get("http.connection_timeout")));
         }
         if (paramMap.containsKey("http.socket_timeout")) {
             config.setSocketTimeout(Integer.valueOf(paramMap.get("http.socket_timeout")));
+        }
+        if (paramMap.containsKey("sp.version")) {
+            config.setSharePointVersion(paramMap.get("sp.version"));
+        }
+        if (paramMap.containsKey("retry_limit")) {
+            config.setRetryLimit(Integer.valueOf(paramMap.get("retry_limit")));
         }
         return new SharePointCrawler(config);
     }

@@ -44,7 +44,7 @@ public class GetListItemValue extends SharePointApi<GetListItemValueResponse> {
             throw new SharePointClientException("listId/itemId is required.");
         }
         final HttpGet httpGet = new HttpGet(buildUrl());
-        JsonResponse jsonResponse = doRequest(httpGet);
+        JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetListItemValueResponse.build(jsonResponse);
         } catch (Exception e) {

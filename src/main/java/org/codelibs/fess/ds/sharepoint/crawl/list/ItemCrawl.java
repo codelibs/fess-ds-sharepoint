@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.list;
 
+import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
@@ -26,22 +27,41 @@ import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class ItemCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(ItemCrawl.class);
 
+    private static final String ITEM_VALUE_PREFIX = "val_";
+
     private final String listId;
     private final String listName;
     private final String itemId;
     private final List<String> roles;
+    private final boolean isSubPage;
+    private final List<String> includeFields;
+    private final List<String> excludeFields;
 
-    public ItemCrawl(SharePointClient client, String listId, String listName, String itemId, List<String> roles) {
+    public ItemCrawl(SharePointClient client,
+                     String listId,
+                     String listName,
+                     String itemId,
+                     List<String> roles,
+                     boolean isSubPage,
+                     List<String> includeFields,
+                     List<String> excludeFields) {
         super(client);
         this.listId = listId;
         this.listName = listName;
         this.itemId = itemId;
         this.roles = roles;
+        this.isSubPage = isSubPage;
+        this.includeFields = includeFields;
+        final List<String> exList = new ArrayList<>(excludeFields);
+        exList.addAll(EXCLUDE_FIELDS);
+        this.excludeFields = exList;
     }
 
     @Override
@@ -52,36 +72,90 @@ public class ItemCrawl extends SharePointCrawl {
 
         final GetListItemValueResponse response = client.api().list().getListItemValue().setListId(listId).setItemId(itemId).execute();
         final String content = buildContent(response);
-
-        final String webLink = getWebLink();
+        final String webLink = getWebLink(response);
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
         final Map<String, Object> dataMap = new HashMap<>();
         dataMap.put(fessConfig.getIndexFieldUrl(), webLink);
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
-        dataMap.put(fessConfig.getIndexFieldSite(), webLink.replace("http://", "").replace("https://", ""));
-
-        dataMap.put(fessConfig.getIndexFieldTitle(), response.getTitle());
+        dataMap.put(fessConfig.getIndexFieldSite(), response.getFileRef());
+        dataMap.put(fessConfig.getIndexFieldTitle(), getTitle(response));
         dataMap.put(fessConfig.getIndexFieldContent(), content);
-        dataMap.put(fessConfig.getIndexFieldDigest(), content);
+        dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), response.getModified());
         dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
+        dataMap.put(fessConfig.getIndexFieldMimetype(), "text/html");
+        dataMap.put(fessConfig.getIndexFieldFiletype(), ComponentUtil.getFileTypeHelper().get("text/html"));
+        for (Map.Entry<String, String> entry: response.getValues().entrySet()) {
+            if (!dataMap.containsKey(entry.getKey())) {
+                dataMap.put(normalizeKey(entry.getKey()), entry.getValue());
+            }
+        }
+        response.getValues().entrySet().stream()
+                .forEach(entry -> dataMap.put(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey()), entry.getValue()));
 
         if (roles != null && !roles.isEmpty()) {
             dataMap.put(fessConfig.getIndexFieldRole(), roles);
         }
+        dataMap.put("list_name", listName);
+        dataMap.put("list_id", listId);
+        dataMap.put("item_id", itemId);
         return dataMap;
     }
 
     private String buildContent(final GetListItemValueResponse response) {
         final StringBuilder sb = new StringBuilder();
-        response.getValues().entrySet().stream().forEach(entry -> {
-            sb.append(entry.getKey()).append(' ').append(entry.getValue()).append('\n');
-        });
+        response.getValues().entrySet().stream()
+                .filter(entry -> StringUtils.isNotBlank(entry.getValue()))
+                .filter(entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey())) && !excludeFields.contains(entry.getKey()))
+                .forEach(entry -> {
+                    sb.append('[').append(normalizeKey(entry.getKey())).append("] ").append(entry.getValue()).append('\n');
+                });
         return sb.toString();
     }
 
-    private String getWebLink() {
+    private String getTitle(final GetListItemValueResponse response) {
+        if (response.getTitle().length() > 0) {
+            return response.getTitle();
+        } else if (response.getFileLeafRef().length() > 0) {
+            return response.getFileLeafRef();
+        }
+        return "";
+    }
+
+    private String getWebLink(GetListItemValueResponse response) {
+        if (isSubPage && StringUtils.isNotBlank(response.getFileRef())) {
+            String siteRef = response.getFileRef();
+            StringBuilder sb = new StringBuilder(siteRef.length() * 2);
+
+            for (String part: siteRef.split("/")) {
+                if (part.length() == 0) {
+                    continue;
+                }
+                if (sb.length() > 0) {
+                    sb.append('/');
+                }
+                sb.append(URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"));
+            }
+            return client.getUrl() + sb.toString();
+        } else if (response.getFsObjType() == 0 && StringUtils.isNotBlank(response.getParentItemId())) {
+            final String dirRef = response.getFileDirRef();
+            String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder=" + URLEncoder.encode(dirRef, StandardCharsets.UTF_8);
+        } else if (response.getFsObjType() == 1) {
+            String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder=" + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
+        } else {
+            String serverRelativeUrl = getFormUrl();
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
+        }
+    }
+
+    private String normalizeKey(final String key) {
+        return key.replace("_x005f_", "_");
+    }
+
+    private String getFormUrl() {
         final GetForms getForms = client.api().list().getForms();
         if (listId != null) {
             getForms.setListId(listId);
@@ -91,7 +165,72 @@ public class ItemCrawl extends SharePointCrawl {
         if (form == null) {
             return null;
         }
-        String serverRelativeUrl = form.getServerRelativeUrl();
-        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
+        return form.getServerRelativeUrl();
     }
+
+    private static final List<String> EXCLUDE_FIELDS = Arrays.asList(new String[] {
+            "odata.metadata",
+            "odata.type",
+            "odata.id",
+            "odata.editLink",
+            "ContentTypeId",
+            "Title",
+            "File_x005f_x0020_x005f_Type",
+            "ComplianceAssetId",
+            "ID",
+            "Modified",
+            "Created",
+            "Author",
+            "Editor",
+            "OData__x005f_HasCopyDestinations",
+            "OData__x005f_CopySource",
+            "owshiddenversion",
+            "WorkflowVersion",
+            "OData__x005f_UIVersion",
+            "OData__x005f_UIVersionString",
+            "Attachments",
+            "OData__x005f_ModerationStatus",
+            "InstanceID",
+            "Order",
+            "GUID",
+            "WorkflowInstanceID",
+            "FileRef",
+            "FileDirRef",
+            "Last_x005f_x0020_x005f_Modified",
+            "Created_x005f_x0020_x005f_Date",
+            "FSObjType",
+            "SortBehavior",
+            "FileLeafRef",
+            "UniqueId",
+            "SyncClientId",
+            "ProgId",
+            "ScopeId",
+            "MetaInfo",
+            "OData__x005f_Level",
+            "OData__x005f_IsCurrentVersion",
+            "ItemChildCount",
+            "FolderChildCount",
+            "Restricted",
+            "OriginatorId",
+            "NoExecute",
+            "ContentVersion",
+            "OData__x005f_ComplianceFlags",
+            "OData__x005f_ComplianceTag",
+            "OData__x005f_ComplianceTagWrittenTime",
+            "OData__x005f_ComplianceTagUserId",
+            "AccessPolicy",
+            "OData__x005f_VirusStatus",
+            "OData__x005f_VirusVendorID",
+            "OData__x005f_VirusInfo",
+            "AppAuthor",
+            "AppEditor",
+            "SMTotalSize",
+            "SMLastModifiedDate",
+            "SMTotalFileStreamSize",
+            "SMTotalFileCount",
+            "OData__x005f_ModerationComments",
+            "Exists",
+            "ParentItemID",
+            "ParentFolderID"
+    });
 }

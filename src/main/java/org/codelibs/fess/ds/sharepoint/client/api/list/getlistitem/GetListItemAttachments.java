@@ -40,7 +40,7 @@ public class GetListItemAttachments extends SharePointApi<GetListItemAttachments
             throw new SharePointClientException("listId/itemId is required.");
         }
         final HttpGet httpGet = new HttpGet(buildUrl());
-        JsonResponse jsonResponse = doRequest(httpGet);
+        JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetListItemAttachmentsResponse.build(jsonResponse);
         } catch (Exception e) {

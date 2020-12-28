@@ -30,6 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.validation.ValidationException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -41,9 +44,12 @@ public class SharePointCrawler {
 
     private final ConcurrentLinkedQueue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
 
+    private final CrawlerConfig config;
+
     public SharePointCrawler(CrawlerConfig config) {
         validate(config);
         this.client = createClient(config);
+        this.config = config;
         setFirstCrawl(config);
         if (crawlingQueue.isEmpty()) {
             logger.error("Failed to start crawl.");
@@ -73,6 +79,9 @@ public class SharePointCrawler {
             final String ntlmPass = config.getNtlmPassword();
             builder.setCredential(new NtlmCredential(ntlmUser, ntlmPass, null, null));
         }
+        if ("2013".equals(config.getSharePointVersion())) {
+            builder.apply2013();
+        }
         return builder.build();
     }
 
@@ -82,13 +91,19 @@ public class SharePointCrawler {
             crawlingQueue.offer(new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages(), sharePointGroupCache));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
-                crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(), crawlerConfig.listItemNumPerPages, sharePointGroupCache));
+                crawlingQueue.offer(new ListCrawl(client,
+                        crawlerConfig.getInitialListId(),
+                        crawlerConfig.getInitialListName(),
+                        crawlerConfig.listItemNumPerPages,
+                        sharePointGroupCache,
+                        crawlerConfig.isSubPage(),
+                        crawlerConfig.getListContentIncludeFields(),
+                        crawlerConfig.getListContentExcludeFields()));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
                 crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), sharePointGroupCache));
             }
         }
-
     }
 
     public boolean hasCrawlTarget() {
@@ -101,18 +116,28 @@ public class SharePointCrawler {
             if (crawl == null) {
                 continue;
             }
-            try {
-                Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
-                if (dataMap != null) {
-                    return dataMap;
+            int retryCount = 0;
+            while(retryCount <= config.getRetryLimit()) {
+                try {
+                    Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
+                    if (dataMap != null) {
+                        return dataMap;
+                    }
+                    break;
+                } catch (SharePointServerException e) {
+                    if (retryCount+1 <= config.getRetryLimit()) {
+                        logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
+                    } else {
+                        logger.warn("Api server error: {}", e.getMessage(), e);
+                    }
+                } catch (SharePointClientException e) {
+                    if (retryCount+1 <= config.getRetryLimit()) {
+                        logger.warn("Error occured: {}  [Retry:{}]" + e.getMessage(), retryCount);
+                    } else {
+                        logger.warn("Error occured. " + e.getMessage(), e);
+                    }
                 }
-            } catch (SharePointServerException e){
-                logger.warn("Api server error: {}", e.getMessage());
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Error detail.", e);
-                }
-            } catch (SharePointClientException e) {
-                logger.error("Error occured. " + e.getMessage(), e);
+                retryCount++;
             }
         }
         return null;
@@ -129,6 +154,11 @@ public class SharePointCrawler {
         private int connectionTimeout = 30000;
         private int socketTimeout = 30000;
         private int listItemNumPerPages = 100;
+        private String sharePointVersion = null;
+        private int retryLimit = 2;
+        private boolean isSubPage = false;
+        private List<String> listContentIncludeFields = new ArrayList<>();
+        private List<String> listContentExcludeFields = new ArrayList<>();
 
         public String getUrl() {
             return url;
@@ -214,6 +244,46 @@ public class SharePointCrawler {
 
         public void setListItemNumPerPages(int listItemNumPerPages) {
             this.listItemNumPerPages = listItemNumPerPages;
+        }
+
+        public String getSharePointVersion() {
+            return sharePointVersion;
+        }
+
+        public void setSharePointVersion(String sharePointVersion) {
+            this.sharePointVersion = sharePointVersion;
+        }
+
+        public int getRetryLimit() {
+            return retryLimit;
+        }
+
+        public void setRetryLimit(int retryLimit) {
+            this.retryLimit = retryLimit;
+        }
+
+        public boolean isSubPage() {
+            return isSubPage;
+        }
+
+        public void setSubPage(boolean subPage) {
+            isSubPage = subPage;
+        }
+
+        public List<String> getListContentIncludeFields() {
+            return listContentIncludeFields;
+        }
+
+        public void setListContentIncludeFields(String listContentIncludeFields) {
+            this.listContentIncludeFields = Arrays.asList(listContentIncludeFields.trim().split(","));
+        }
+
+        public List<String> getListContentExcludeFields() {
+            return listContentExcludeFields;
+        }
+
+        public void setListContentExcludeFields(String listContentExcludeFields) {
+            this.listContentExcludeFields = Arrays.asList(listContentExcludeFields.trim().split(","));
         }
     }
 }

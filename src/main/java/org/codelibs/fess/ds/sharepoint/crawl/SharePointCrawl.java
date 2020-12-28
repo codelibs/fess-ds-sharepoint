@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl;
 
+import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.helper.SystemHelper;
@@ -39,7 +40,7 @@ public abstract class SharePointCrawl {
                 .execute();
         SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> roles = new HashSet<>();
-        getListItemRoleResponse.getUsers().stream().map(GetListItemRoleResponse.User::getTitle)
+        getListItemRoleResponse.getUsers().stream().map(GetListItemRoleResponse.User::getAccount)
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(roles::add);
@@ -52,7 +53,7 @@ public abstract class SharePointCrawl {
     private Set<String> getSharePointGroupTitles(final GetListItemRoleResponse.SharePointGroup sharePointGroup, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> titles = new HashSet<>();
-        sharePointGroup.getUsers().stream().map(GetListItemRoleResponse.User::getTitle)
+        sharePointGroup.getUsers().stream().map(GetListItemRoleResponse.User::getAccount)
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(titles::add);
@@ -65,5 +66,8 @@ public abstract class SharePointCrawl {
         return titles;
     }
 
-
+    protected String buildDigest(final String content) {
+        final int maxLength = ComponentUtil.getFessConfig().getCrawlerDocumentFileMaxDigestLengthAsInteger();
+        return StringUtils.abbreviate(content, maxLength);
+    }
 }

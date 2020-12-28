@@ -30,9 +30,9 @@ import java.util.Map;
 public class GetFilesResponse implements SharePointApiResponse {
     private static final Logger logger = LoggerFactory.getLogger(GetFilesResponse.class);
 
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+    protected static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
-    private final List<DocLibFile> files = new ArrayList<>();
+    protected final List<DocLibFile> files = new ArrayList<>();
 
     public List<DocLibFile> getFiles() {
         return files;
@@ -45,20 +45,25 @@ public class GetFilesResponse implements SharePointApiResponse {
 
         final GetFilesResponse response = new GetFilesResponse();
         results.stream().forEach(result -> {
-            final DocLibFile docLibFile = new DocLibFile();
-            docLibFile.fileName = result.get("Name").toString();
-            docLibFile.title = (String)result.getOrDefault("Title", "");
-            docLibFile.serverRelativeUrl = result.get("ServerRelativeUrl").toString();
-            try {
-                docLibFile.created = sdf.parse(result.get("TimeCreated").toString());
-                docLibFile.modified = sdf.parse(result.get("TimeLastModified").toString());
-            } catch (ParseException e) {
-                logger.warn("Failed to parse date.", e);
-            }
+            final DocLibFile docLibFile = createDocLibFile(result);
             response.files.add(docLibFile);
         });
 
         return response;
+    }
+
+    protected static DocLibFile createDocLibFile(Map<String, Object> dataMap) {
+        final DocLibFile docLibFile = new DocLibFile();
+        docLibFile.fileName = dataMap.get("Name").toString();
+        docLibFile.title = (String)dataMap.getOrDefault("Title", "");
+        docLibFile.serverRelativeUrl = dataMap.get("ServerRelativeUrl").toString();
+        try {
+            docLibFile.created = sdf.parse(dataMap.get("TimeCreated").toString());
+            docLibFile.modified = sdf.parse(dataMap.get("TimeLastModified").toString());
+        } catch (ParseException e) {
+            logger.warn("Failed to parse date.", e);
+        }
+        return docLibFile;
     }
 
     public static class DocLibFile {
@@ -87,5 +92,7 @@ public class GetFilesResponse implements SharePointApiResponse {
         public Date getModified() {
             return modified;
         }
+
+
     }
 }

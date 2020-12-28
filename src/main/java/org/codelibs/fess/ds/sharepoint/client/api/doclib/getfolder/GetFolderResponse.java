@@ -25,15 +25,15 @@ import java.util.Date;
 import java.util.Map;
 
 public class GetFolderResponse implements SharePointApiResponse {
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+    protected static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
-    private String id = null;
-    private String name = null;
-    private boolean exists = false;
-    private String serverRelativeUrl = null;
-    private Date created = null;
-    private Date modified = null;
-    private int itemCount = 0;
+    protected String id = null;
+    protected String name = null;
+    protected boolean exists = false;
+    protected String serverRelativeUrl = null;
+    protected Date created = null;
+    protected Date modified = null;
+    protected int itemCount = 0;
 
     public String getId() {
         return id;

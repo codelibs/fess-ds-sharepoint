@@ -21,14 +21,24 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.codelibs.core.lang.StringUtil;
+import org.codelibs.fess.crawler.Constants;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xml.sax.helpers.DefaultHandler;
 
+import javax.xml.XMLConstants;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 public abstract class SharePointApi<T extends SharePointApiResponse> {
     private static final Logger logger = LoggerFactory.getLogger(SharePointApi.class);
@@ -46,7 +56,7 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     abstract public T execute();
 
     @SuppressWarnings("unchecked")
-    protected JsonResponse doRequest(final HttpRequestBase httpRequest) {
+    protected JsonResponse doJsonRequest(final HttpRequestBase httpRequest) {
         httpRequest.addHeader("Accept", "application/json");
         try (CloseableHttpResponse httpResponse = client.execute(httpRequest)) {
             final String body = EntityUtils.toString(httpResponse.getEntity());
@@ -70,6 +80,30 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
                 throw new SharePointServerException("Api returned error. " + " url:" + httpRequest.getURI().toString() + " body:" + bodyMap.toString(), httpResponse.getStatusLine().getStatusCode());
             }
             return new JsonResponse(body, bodyMap, httpResponse.getStatusLine().getStatusCode());
+        } catch (SharePointServerException e) {
+            throw e;
+        } catch(Exception e) {
+            throw new SharePointClientException("Request failure. " + e.getMessage(), e);
+        }
+    }
+
+    protected XmlResponse doXmlRequest(final HttpRequestBase httpRequest) {
+        httpRequest.addHeader("Accept", "application/xml; charset=\"UTF-8\"");
+        try (CloseableHttpResponse httpResponse = client.execute(httpRequest)) {
+            final String body = EntityUtils.toString(httpResponse.getEntity());
+            if (logger.isDebugEnabled()) {
+                logger.debug("API's ResponseBody. [url:{}] [body:{}]", httpRequest.getURI().toString(), body);
+            }
+            if (isErrorResponse(httpResponse)) {
+                throw new SharePointServerException("Api returned error. code:" + httpResponse.getStatusLine().getStatusCode() +
+                        "url:" + httpRequest.getURI().toString() + " body:" + body,
+                        httpResponse.getStatusLine().getStatusCode());
+            }
+
+            if (body.contains("odata.error")) {
+                throw new SharePointServerException("Api returned error. " + " url:" + httpRequest.getURI().toString() + " body:" + body, httpResponse.getStatusLine().getStatusCode());
+            }
+            return new XmlResponse(body, httpResponse.getStatusLine().getStatusCode());
         } catch (SharePointServerException e) {
             throw e;
         } catch(Exception e) {
@@ -114,6 +148,49 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
 
         public boolean isErrorResponse() {
             return statusCode >= 400;
+        }
+    }
+
+    public static class XmlResponse {
+        private final String body;
+        private final int statusCode;
+
+        private XmlResponse(String body, int statusCode) {
+            this.body = body;
+            this.statusCode = statusCode;
+        }
+
+        public String getBody() {
+            return body;
+        }
+
+        public boolean isErrorResponse() {
+            return statusCode >= 400;
+        }
+
+        public void parseXml(final DefaultHandler handler) {
+            parseXml(body, handler);
+        }
+
+        public static void parseXml(final String xml, final DefaultHandler handler) {
+            final SAXParserFactory spfactory = SAXParserFactory.newInstance();
+            try (InputStream is = new ByteArrayInputStream(xml.getBytes(UTF_8))) {
+                spfactory.setFeature(Constants.FEATURE_SECURE_PROCESSING, true);
+                // create a sax parser
+                final SAXParser parser = spfactory.newSAXParser();
+                try {
+                    parser.setProperty(XMLConstants.ACCESS_EXTERNAL_DTD, StringUtil.EMPTY);
+                    parser.setProperty(XMLConstants.ACCESS_EXTERNAL_SCHEMA, StringUtil.EMPTY);
+                } catch (final Exception e) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("Failed to set a property.", e);
+                    }
+                }
+                // parse a content
+                parser.parse(is, handler);
+            } catch (final Exception e) {
+                throw new SharePointClientException("Could not create a data map from XML content.", e);
+            }
         }
     }
 }

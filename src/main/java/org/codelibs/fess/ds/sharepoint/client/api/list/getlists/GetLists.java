@@ -33,7 +33,7 @@ public class GetLists extends SharePointApi<GetListsResponse> {
     @Override
     public GetListsResponse execute() {
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH);
-        JsonResponse jsonResponse = doRequest(httpGet);
+        JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }
 

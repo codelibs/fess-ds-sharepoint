@@ -18,8 +18,8 @@ package org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
 public class GetDoclibListItemResponse implements SharePointApiResponse {
-    private final String listId;
-    private final String itemId;
+    protected final String listId;
+    protected final String itemId;
 
     public GetDoclibListItemResponse(String listId, String itemId) {
         this.listId = listId;

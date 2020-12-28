@@ -41,7 +41,7 @@ public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> 
         }
 
         final HttpGet httpGet = new HttpGet(buildUrl());
-        final JsonResponse jsonResponse = doRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         final Map<String, Object> bodyMap = jsonResponse.getBodyAsMap();
         try {
             final String itemId = bodyMap.get("Id").toString();

@@ -57,12 +57,16 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
 
         GetListItemAttachmentsResponse response = client.api().list().getListItemAttachments().setId(listId, itemId).execute();
         response.getFiles().forEach(file -> {
-            crawlingQueue.offer(new FileCrawl(client, file.getFileName(),
-                            getWebLink(file.getFileName()),
+            FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(),
+                    getWebLink(file.getFileName()),
                     file.getServerRelativeUrl(),
                     created,
                     modified,
-                    roles));
+                    roles);
+            fileCrawl.addProperty("list_name", listName);
+            fileCrawl.addProperty("list_id", listId);
+            fileCrawl.addProperty("item_id", itemId);
+            crawlingQueue.offer(fileCrawl);
         });
         return null;
     }

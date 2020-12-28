@@ -21,6 +21,7 @@ import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
+import org.codelibs.fess.helper.FileTypeHelper;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
@@ -39,6 +40,7 @@ public class FileCrawl extends SharePointCrawl {
     private final Date created;
     private final Date modified;
     private final List<String> roles;
+    private final Map<String, String> additionalProperties = new HashMap<>();
 
     private final String defaultExtractorName = "tikaExtractor";
 
@@ -50,6 +52,10 @@ public class FileCrawl extends SharePointCrawl {
         this.created = created;
         this.modified = modified;
         this.roles = roles;
+    }
+
+    public void addProperty(final String key, final String value) {
+        additionalProperties.put(key, value);
     }
 
     @Override
@@ -68,24 +74,28 @@ public class FileCrawl extends SharePointCrawl {
     private Map<String, Object> buildDataMap(GetFileResponse response) throws IOException {
         final InputStream is = response.getFileContent();
         final String mimeType = getMimeType(fileName, is);
+        final String fileType = getFileType(mimeType);
         final String content = getContent(is, mimeType);
 
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
         final Map<String, Object> dataMap = new HashMap<>();
         dataMap.put(fessConfig.getIndexFieldUrl(), webUrl);
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
-        dataMap.put(fessConfig.getIndexFieldSite(), webUrl.replace("http://", "").replace("https://", ""));
-
+        dataMap.put(fessConfig.getIndexFieldSite(), serverRelativeUrl);
         dataMap.put(fessConfig.getIndexFieldTitle(), fileName);
         dataMap.put(fessConfig.getIndexFieldMimetype(), mimeType);
+        dataMap.put(fessConfig.getIndexFieldFiletype(), fileType);
         dataMap.put(fessConfig.getIndexFieldContent(), content);
-        dataMap.put(fessConfig.getIndexFieldDigest(), content);
+        dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
         dataMap.put(fessConfig.getIndexFieldLastModified(), modified);
         dataMap.put(fessConfig.getIndexFieldCreated(), created);
 
         if (roles != null && !roles.isEmpty()) {
             dataMap.put(fessConfig.getIndexFieldRole(), roles);
+        }
+        if (additionalProperties.size() > 0) {
+            additionalProperties.entrySet().stream().forEach(entry -> dataMap.put(entry.getKey(), entry.getValue()));
         }
         return dataMap;
     }
@@ -108,6 +118,11 @@ public class FileCrawl extends SharePointCrawl {
     protected String getMimeType(final String filename, final InputStream is) {
         final MimeTypeHelper mimeTypeHelper = ComponentUtil.getComponent(MimeTypeHelper.class);
         return mimeTypeHelper.getContentType(is, filename);
+    }
+
+    protected String getFileType(final String mimeType) {
+        final FileTypeHelper fileTypeHelper = ComponentUtil.getFileTypeHelper();
+        return fileTypeHelper.get(mimeType);
     }
 
 }

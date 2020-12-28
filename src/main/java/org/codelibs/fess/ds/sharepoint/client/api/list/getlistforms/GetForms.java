@@ -52,7 +52,7 @@ public class GetForms extends SharePointApi<GetFormsResponse> {
         } else {
             httpGet = new HttpGet(siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName));
         }
-        JsonResponse jsonResponse = doRequest(httpGet);
+        JsonResponse jsonResponse = doJsonRequest(httpGet);
         return GetFormsResponse.build(jsonResponse);
     }
 }
