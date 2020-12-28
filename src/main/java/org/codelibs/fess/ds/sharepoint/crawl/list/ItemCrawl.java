@@ -72,14 +72,12 @@ public class ItemCrawl extends SharePointCrawl {
 
         final GetListItemValueResponse response = client.api().list().getListItemValue().setListId(listId).setItemId(itemId).execute();
         final String content = buildContent(response);
-
         final String webLink = getWebLink(response);
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
         final Map<String, Object> dataMap = new HashMap<>();
         dataMap.put(fessConfig.getIndexFieldUrl(), webLink);
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
-        dataMap.put(fessConfig.getIndexFieldSite(), webLink.replace("http://", "").replace("https://", ""));
-
+        dataMap.put(fessConfig.getIndexFieldSite(), response.getFileRef());
         dataMap.put(fessConfig.getIndexFieldTitle(), getTitle(response));
         dataMap.put(fessConfig.getIndexFieldContent(), content);
         dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));

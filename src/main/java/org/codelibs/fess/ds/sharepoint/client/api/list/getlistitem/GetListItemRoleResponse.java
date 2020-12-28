@@ -89,12 +89,16 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
     }
 
     public static class User {
+        private static final String ACCOUNT_PREFIX = "i:0#.w|";
+
         private final String id;
         private final String title;
+        private final String account;
 
-        public User(String id, String title) {
+        public User(String id, String title, String account) {
             this.id = id;
             this.title = title;
+            this.account = account;
         }
 
         public String getId() {
@@ -103,6 +107,10 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
 
         public String getTitle() {
             return title;
+        }
+
+        public String getAccount() {
+            return account.substring(ACCOUNT_PREFIX.length());
         }
     }
 

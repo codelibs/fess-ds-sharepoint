@@ -86,7 +86,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             final int principalType = Integer.valueOf(memberResponseMap.get("PrincipalType").toString());
             if (principalType == 1) {
                 // User
-                GetListItemRoleResponse.User user = new GetListItemRoleResponse.User(id, memberResponseMap.get("Title").toString());
+                GetListItemRoleResponse.User user = new GetListItemRoleResponse.User(id, memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
                 response.addUser(user);
             } else if (principalType == 8) {
                 GetListItemRoleResponse.SharePointGroup sharePointGroup = buildSharePointGroup(id, memberResponseMap.get("Title").toString());
@@ -139,10 +139,11 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         usersList.forEach(user -> {
             String userId = user.get("Id").toString();
             String userTitle = user.get("Title").toString();
+            String loginName = user.get("LoginName").toString();
             int userPrincipalType = Integer.valueOf(user.get("PrincipalType").toString());
             if (userPrincipalType == 1) {
                 // user
-                GetListItemRoleResponse.User userUser = new GetListItemRoleResponse.User(userId, userTitle);
+                GetListItemRoleResponse.User userUser = new GetListItemRoleResponse.User(userId, userTitle, loginName);
                 sharePointGroup.addUser(userUser);
             } else if (userPrincipalType == 4) {
                 // Security Group

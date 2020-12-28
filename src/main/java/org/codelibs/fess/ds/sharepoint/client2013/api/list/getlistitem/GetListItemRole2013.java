@@ -76,7 +76,7 @@ public class GetListItemRole2013 extends GetListItemRole {
             final int principalType = Integer.valueOf(memberResponseMap.get("PrincipalType").toString());
             if (principalType == 1) {
                 // User
-                GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id, memberResponseMap.get("Title").toString());
+                GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id, memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
                 response.addUser(user);
             } else if (principalType == 8) {
                 GetListItemRole2013Response.SharePointGroup sharePointGroup = buildSharePointGroup(id, memberResponseMap.get("Title").toString());
@@ -117,10 +117,11 @@ public class GetListItemRole2013 extends GetListItemRole {
         usersList.forEach(user -> {
             String userId = user.get("Id").toString();
             String userTitle = user.get("Title").toString();
+            String loginName = user.get("LoginName").toString();
             int userPrincipalType = Integer.valueOf(user.get("PrincipalType").toString());
             if (userPrincipalType == 1) {
                 // user
-                GetListItemRole2013Response.User userUser = new GetListItemRole2013Response.User(userId, userTitle);
+                GetListItemRole2013Response.User userUser = new GetListItemRole2013Response.User(userId, userTitle, loginName);
                 sharePointGroup.addUser(userUser);
             } else if (userPrincipalType == 4) {
                 // Security Group
@@ -226,6 +227,9 @@ public class GetListItemRole2013 extends GetListItemRole {
             } else if ("d:PrincipalType".equals(qName)) {
                 fieldName = "PrincipalType";
                 buffer.setLength(0);
+            } else if ("d:LoginName".equals(qName)) {
+                fieldName = "LoginName";
+                buffer.setLength(0);
             }
         }
 
@@ -284,6 +288,9 @@ public class GetListItemRole2013 extends GetListItemRole {
                     buffer.setLength(0);
                 } else if ("d:PrincipalType".equals(qName)) {
                     fieldName = "PrincipalType";
+                    buffer.setLength(0);
+                } else if ("d:LoginName".equals(qName)) {
+                    fieldName = "LoginName";
                     buffer.setLength(0);
                 }
             }

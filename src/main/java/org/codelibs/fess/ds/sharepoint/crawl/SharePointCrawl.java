@@ -40,7 +40,7 @@ public abstract class SharePointCrawl {
                 .execute();
         SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> roles = new HashSet<>();
-        getListItemRoleResponse.getUsers().stream().map(GetListItemRoleResponse.User::getTitle)
+        getListItemRoleResponse.getUsers().stream().map(GetListItemRoleResponse.User::getAccount)
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(roles::add);
@@ -53,7 +53,7 @@ public abstract class SharePointCrawl {
     private Set<String> getSharePointGroupTitles(final GetListItemRoleResponse.SharePointGroup sharePointGroup, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> titles = new HashSet<>();
-        sharePointGroup.getUsers().stream().map(GetListItemRoleResponse.User::getTitle)
+        sharePointGroup.getUsers().stream().map(GetListItemRoleResponse.User::getAccount)
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(titles::add);
