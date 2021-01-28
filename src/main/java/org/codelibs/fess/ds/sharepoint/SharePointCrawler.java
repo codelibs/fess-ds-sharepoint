@@ -97,11 +97,12 @@ public class SharePointCrawler {
                         crawlerConfig.listItemNumPerPages,
                         sharePointGroupCache,
                         crawlerConfig.isSubPage(),
+                        crawlerConfig.isSkipRole(),
                         crawlerConfig.getListContentIncludeFields(),
                         crawlerConfig.getListContentExcludeFields()));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
-                crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), sharePointGroupCache));
+                crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), crawlerConfig.isSkipRole(), sharePointGroupCache));
             }
         }
     }
@@ -159,6 +160,7 @@ public class SharePointCrawler {
         private boolean isSubPage = false;
         private List<String> listContentIncludeFields = new ArrayList<>();
         private List<String> listContentExcludeFields = new ArrayList<>();
+        private boolean skipRole = false;
 
         public String getUrl() {
             return url;
@@ -284,6 +286,14 @@ public class SharePointCrawler {
 
         public void setListContentExcludeFields(String listContentExcludeFields) {
             this.listContentExcludeFields = Arrays.asList(listContentExcludeFields.trim().split(","));
+        }
+
+        public boolean isSkipRole() {
+            return skipRole;
+        }
+
+        public void setSkipRole(boolean skipRole) {
+            this.skipRole = skipRole;
         }
     }
 }

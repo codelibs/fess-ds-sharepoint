@@ -135,6 +135,9 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("retry_limit")) {
             config.setRetryLimit(Integer.valueOf(paramMap.get("retry_limit")));
         }
+        if (paramMap.containsKey("role.skip")) {
+            config.setSkipRole(Boolean.valueOf(paramMap.get("role.skip")));
+        }
         return new SharePointCrawler(config);
     }
 }

@@ -57,10 +57,11 @@ public class SiteCrawl extends SharePointCrawl {
                     numberPerPage,
                     sharePointGroupCache,
                     false,
+                    false,
                     new ArrayList<>(),
                     new ArrayList<>()));
         });
-        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + siteName + "/Shared Documents", sharePointGroupCache));
+        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + siteName + "/Shared Documents", false, sharePointGroupCache));
         return null;
     }
 }

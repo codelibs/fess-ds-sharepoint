@@ -36,6 +36,7 @@ public class ListCrawl extends SharePointCrawl {
     private final int numberPerPage;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
     private final Boolean isSubPage;
+    private final Boolean skipRole;
     private final List<String> includeFields;
     private final List<String> excludeFields;
 
@@ -45,6 +46,7 @@ public class ListCrawl extends SharePointCrawl {
                      int numberPerPage,
                      Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache,
                      boolean isSubPage,
+                     boolean skipRole,
                      List<String> includeFields,
                      List<String> excludeFields
                      ) {
@@ -54,6 +56,7 @@ public class ListCrawl extends SharePointCrawl {
         this.numberPerPage = numberPerPage;
         this.sharePointGroupCache = sharePointGroupCache;
         this.isSubPage = isSubPage;
+        this.skipRole = skipRole;
         this.includeFields = includeFields;
         this.excludeFields = excludeFields;
     }
@@ -83,7 +86,7 @@ public class ListCrawl extends SharePointCrawl {
                     return;
                 }
 
-                final List<String> roles = getItemRoles(listId, item.getId(), sharePointGroupCache);
+                final List<String> roles = getItemRoles(listId, item.getId(), sharePointGroupCache, skipRole);
                 crawlingQueue.offer(new ItemCrawl(client,
                         listId,
                         listName,

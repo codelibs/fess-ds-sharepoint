@@ -33,7 +33,10 @@ public abstract class SharePointCrawl {
 
     abstract public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue);
 
-    protected List<String> getItemRoles(String listId, String itemId, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    protected List<String> getItemRoles(String listId, String itemId, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, boolean skipRole) {
+        if (skipRole) {
+            return new ArrayList<>();
+        }
         final GetListItemRoleResponse getListItemRoleResponse = client.api().list().getListItemRole()
                 .setId(listId, itemId)
                 .setSharePointGroupCache(sharePointGroupCache)
