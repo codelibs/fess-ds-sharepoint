@@ -28,14 +28,17 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemVa
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetList;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 public class SharePointApis {
     protected final CloseableHttpClient client;
     protected final String siteUrl;
+    protected final OAuth oAuth;
 
-    public SharePointApis(CloseableHttpClient client, String siteUrl) {
+    public SharePointApis(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
         this.client = client;
         this.siteUrl = siteUrl;
+        this.oAuth = oAuth;
     }
 
     public ListApis list() {
@@ -52,55 +55,55 @@ public class SharePointApis {
 
     public class ListApis {
         public GetList getList() {
-            return new GetList(client, siteUrl);
+            return new GetList(client, siteUrl, oAuth);
         }
 
         public GetLists getLists() {
-            return new GetLists(client, siteUrl);
+            return new GetLists(client, siteUrl, oAuth);
         }
 
         public GetListItems getListItems() {
-            return new GetListItems(client, siteUrl);
+            return new GetListItems(client, siteUrl, oAuth);
         }
 
         public GetListItemValue getListItemValue() {
-            return new GetListItemValue(client, siteUrl);
+            return new GetListItemValue(client, siteUrl, oAuth);
         }
 
         public GetListItemAttachments getListItemAttachments() {
-            return new GetListItemAttachments(client, siteUrl);
+            return new GetListItemAttachments(client, siteUrl, oAuth);
         }
 
         public GetListItemRole getListItemRole() {
-            return new GetListItemRole(client, siteUrl);
+            return new GetListItemRole(client, siteUrl, oAuth);
         }
 
         public GetForms getForms() {
-            return new GetForms(client, siteUrl);
+            return new GetForms(client, siteUrl, oAuth);
         }
     }
 
     public class FileApis {
         public GetFile getFile() {
-            return new GetFile(client, siteUrl);
+            return new GetFile(client, siteUrl, oAuth);
         }
     }
 
     public class DocLibApis {
         public GetFolder getFolder() {
-            return new GetFolder(client, siteUrl);
+            return new GetFolder(client, siteUrl, oAuth);
         }
 
         public GetFolders getFolders() {
-            return new GetFolders(client, siteUrl);
+            return new GetFolders(client, siteUrl, oAuth);
         }
 
         public GetFiles getFiles() {
-            return new GetFiles(client, siteUrl);
+            return new GetFiles(client, siteUrl, oAuth);
         }
 
         public GetDoclibListItem getListItem() {
-            return new GetDoclibListItem(client, siteUrl);
+            return new GetDoclibListItem(client, siteUrl, oAuth);
         }
     }
 }

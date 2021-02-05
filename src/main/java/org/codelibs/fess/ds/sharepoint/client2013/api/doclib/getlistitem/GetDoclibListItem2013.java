@@ -19,6 +19,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem.GetDoclibListItem;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -29,8 +30,8 @@ import java.util.Map;
 public class GetDoclibListItem2013 extends GetDoclibListItem {
     private String serverRelativeUrl = null;
 
-    public GetDoclibListItem2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetDoclibListItem2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetDoclibListItem2013 setServerRelativeUrl(final String serverRelativeUrl) {

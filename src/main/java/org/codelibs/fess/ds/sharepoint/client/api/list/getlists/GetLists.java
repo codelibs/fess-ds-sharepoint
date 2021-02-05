@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint.client.api.list.getlists;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,8 +27,8 @@ import java.util.Map;
 public class GetLists extends SharePointApi<GetListsResponse> {
     private static final String API_PATH = "_api/lists";
 
-    public GetLists(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetLists(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     @Override

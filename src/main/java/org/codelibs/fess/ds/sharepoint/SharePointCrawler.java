@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.sharepoint;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.config.RequestConfig;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
@@ -22,6 +23,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRo
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
@@ -75,9 +77,12 @@ public class SharePointCrawler {
                 .build();
         SharePointClientBuilder builder = SharePointClient.builder().setUrl(config.getUrl()).setSite(config.getSiteName()).setRequestConfig(requestConfig);
         final String ntlmUser = config.getNtlmUser();
-        if (ntlmUser != null) {
+        if (StringUtils.isNotBlank(ntlmUser)) {
             final String ntlmPass = config.getNtlmPassword();
             builder.setCredential(new NtlmCredential(ntlmUser, ntlmPass, null, null));
+        }
+        if (StringUtils.isNotBlank(config.getOauthClientId())) {
+            builder.setOAuth(new OAuth(config.getOauthClientId(), config.getOauthClientSecret(), config.getOauthTenant(), config.getOauthRealm()));
         }
         if ("2013".equals(config.getSharePointVersion())) {
             builder.apply2013();
@@ -152,6 +157,10 @@ public class SharePointCrawler {
         private String initialDocLibPath = null;
         private String ntlmUser = null;
         private String ntlmPassword = null;
+        private String oauthClientId = null;
+        private String oauthClientSecret = null;
+        private String oauthTenant = null;
+        private String oauthRealm = null;
         private int connectionTimeout = 30000;
         private int socketTimeout = 30000;
         private int listItemNumPerPages = 100;
@@ -222,6 +231,38 @@ public class SharePointCrawler {
 
         public void setNtlmPassword(String ntlmPassword) {
             this.ntlmPassword = ntlmPassword;
+        }
+
+        public String getOauthClientId() {
+            return oauthClientId;
+        }
+
+        public void setOauthClientId(String oauthClientId) {
+            this.oauthClientId = oauthClientId;
+        }
+
+        public String getOauthClientSecret() {
+            return oauthClientSecret;
+        }
+
+        public void setOauthClientSecret(String oauthClientSecret) {
+            this.oauthClientSecret = oauthClientSecret;
+        }
+
+        public String getOauthTenant() {
+            return oauthTenant;
+        }
+
+        public void setOauthTenant(String oauthTenant) {
+            this.oauthTenant = oauthTenant;
+        }
+
+        public String getOauthRealm() {
+            return oauthRealm;
+        }
+
+        public void setOauthRealm(String oauthRealm) {
+            this.oauthRealm = oauthRealm;
         }
 
         public int getConnectionTimeout() {

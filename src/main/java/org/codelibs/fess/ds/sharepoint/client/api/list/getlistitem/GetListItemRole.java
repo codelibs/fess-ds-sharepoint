@@ -19,6 +19,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,8 +33,8 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     private String itemId = null;
     private Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = null;
 
-    public GetListItemRole(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetListItemRole(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetListItemRole setId(String listId, String itemId) {
@@ -124,6 +125,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         final GetListItemRoleResponse.SharePointGroup sharePointGroup = new GetListItemRoleResponse.SharePointGroup(id, title);
         List<Map<String, Object>> usersList = new ArrayList<>();
 
+        /* TODO need paging?
         int start = 0;
         while(true) {
             final HttpGet usersRequest = new HttpGet(buildUsersUrl(id) + getPagingParam(start, PAGE_SISE));
@@ -136,6 +138,12 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             usersList.addAll(users);
             start += PAGE_SISE;
         }
+         */
+        final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
+        final JsonResponse usersResponse = doJsonRequest(usersRequest);
+        final Map<String, Object> usersResponseMap = usersResponse.getBodyAsMap();
+        List<Map<String, Object>> users = (List) usersResponseMap.get("value");
+        usersList.addAll(users);
         usersList.forEach(user -> {
             String userId = user.get("Id").toString();
             String userTitle = user.get("Title").toString();

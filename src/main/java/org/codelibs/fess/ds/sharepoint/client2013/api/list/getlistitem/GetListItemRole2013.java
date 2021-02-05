@@ -19,6 +19,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRole;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -32,8 +33,8 @@ public class GetListItemRole2013 extends GetListItemRole {
     private String itemId = null;
     private Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache = null;
 
-    public GetListItemRole2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetListItemRole2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetListItemRole2013 setId(String listId, String itemId) {

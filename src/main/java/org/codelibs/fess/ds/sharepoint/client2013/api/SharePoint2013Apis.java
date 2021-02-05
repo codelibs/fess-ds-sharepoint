@@ -17,6 +17,7 @@ package org.codelibs.fess.ds.sharepoint.client2013.api;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApis;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.client2013.api.doclib.getfiles.GetFiles2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.doclib.getfolder.GetFolder2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.doclib.getfolders.GetFolders2013;
@@ -31,8 +32,8 @@ import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetList2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetLists2013;
 
 public class SharePoint2013Apis extends SharePointApis {
-    public SharePoint2013Apis(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public SharePoint2013Apis(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public ListApis list() {
@@ -49,55 +50,55 @@ public class SharePoint2013Apis extends SharePointApis {
 
     public class ListApis  extends SharePointApis.ListApis {
         public GetList2013 getList() {
-            return new GetList2013(client, siteUrl);
+            return new GetList2013(client, siteUrl, oAuth);
         }
 
         public GetLists2013 getLists() {
-            return new GetLists2013(client, siteUrl);
+            return new GetLists2013(client, siteUrl, oAuth);
         }
 
         public GetListItems2013 getListItems() {
-            return new GetListItems2013(client, siteUrl);
+            return new GetListItems2013(client, siteUrl, oAuth);
         }
 
         public GetListItemValue2013 getListItemValue() {
-            return new GetListItemValue2013(client, siteUrl);
+            return new GetListItemValue2013(client, siteUrl, oAuth);
         }
 
         public GetListItemAttachments2013 getListItemAttachments() {
-            return new GetListItemAttachments2013(client, siteUrl);
+            return new GetListItemAttachments2013(client, siteUrl, oAuth);
         }
 
         public GetListItemRole2013 getListItemRole() {
-            return new GetListItemRole2013(client, siteUrl);
+            return new GetListItemRole2013(client, siteUrl, oAuth);
         }
 
         public GetForms2013 getForms() {
-            return new GetForms2013(client, siteUrl);
+            return new GetForms2013(client, siteUrl, oAuth);
         }
     }
 
     public class FileApis extends SharePointApis.FileApis {
         public GetFile2013 getFile() {
-            return new GetFile2013(client, siteUrl);
+            return new GetFile2013(client, siteUrl, oAuth);
         }
     }
 
     public class DocLibApis extends SharePointApis.DocLibApis {
         public GetFolder2013 getFolder() {
-            return new GetFolder2013(client, siteUrl);
+            return new GetFolder2013(client, siteUrl, oAuth);
         }
 
         public GetFolders2013 getFolders() {
-            return new GetFolders2013(client, siteUrl);
+            return new GetFolders2013(client, siteUrl, oAuth);
         }
 
         public GetFiles2013 getFiles() {
-            return new GetFiles2013(client, siteUrl);
+            return new GetFiles2013(client, siteUrl, oAuth);
         }
 
         public GetDoclibListItem2013 getListItem() {
-            return new GetDoclibListItem2013(client, siteUrl);
+            return new GetDoclibListItem2013(client, siteUrl, oAuth);
         }
     }
 }

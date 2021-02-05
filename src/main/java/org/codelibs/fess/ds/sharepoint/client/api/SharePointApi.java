@@ -23,6 +23,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.crawler.Constants;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.slf4j.Logger;
@@ -47,10 +48,12 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
 
     protected final CloseableHttpClient client;
     protected final String siteUrl;
+    protected final OAuth oAuth;
 
-    public SharePointApi(CloseableHttpClient client, String siteUrl) {
+    public SharePointApi(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
         this.client = client;
         this.siteUrl = siteUrl;
+        this.oAuth = oAuth;
     }
 
     abstract public T execute();
@@ -58,6 +61,9 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     @SuppressWarnings("unchecked")
     protected JsonResponse doJsonRequest(final HttpRequestBase httpRequest) {
         httpRequest.addHeader("Accept", "application/json");
+        if (oAuth != null) {
+            oAuth.apply(httpRequest);
+        }
         try (CloseableHttpResponse httpResponse = client.execute(httpRequest)) {
             final String body = EntityUtils.toString(httpResponse.getEntity());
             if (logger.isDebugEnabled()) {

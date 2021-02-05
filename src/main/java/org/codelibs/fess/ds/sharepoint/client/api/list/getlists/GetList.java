@@ -20,6 +20,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -33,8 +34,8 @@ public class GetList extends SharePointApi<GetListResponse> {
     protected String listId = null;
     protected String listName = null;
 
-    public GetList(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetList(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetList setListId(String listId) {

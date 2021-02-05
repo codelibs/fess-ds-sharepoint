@@ -18,14 +18,16 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.file.getfile;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.util.EntityUtils;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFile;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 public class GetFile2013 extends GetFile {
     private String serverRelativeUrl = null;
 
-    public GetFile2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetFile2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetFile2013 setServerRelativeUrl(final String serverRelativeUrl) {
@@ -43,6 +45,9 @@ public class GetFile2013 extends GetFile {
         httpGet.addHeader("Accept", "application/json");
         try {
             CloseableHttpResponse httpResponse = client.execute(httpGet);
+            if (isErrorResponse(httpResponse)) {
+                throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode() + " body:" + EntityUtils.toString(httpResponse.getEntity()));
+            }
             return new GetFile2013Response(httpResponse);
         } catch(Exception e) {
             throw new SharePointClientException("Request failure.", e);

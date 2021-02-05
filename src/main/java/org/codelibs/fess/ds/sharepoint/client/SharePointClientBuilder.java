@@ -22,13 +22,14 @@ import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.client.credential.SharePointCredential;
-import org.codelibs.fess.ds.sharepoint.client2013.api.SharePoint2013Apis;
 
 public class SharePointClientBuilder {
     private String url = null;
     private String siteName = null;
     private SharePointCredential credential = null;
+    private OAuth oAuth = null;
     private RequestConfig requestConfig = null;
     private CloseableHttpClient httpClient = null;
     private int retryCount = 0;
@@ -49,6 +50,11 @@ public class SharePointClientBuilder {
 
     public SharePointClientBuilder setCredential(final SharePointCredential credential) {
         this.credential = credential;
+        return this;
+    }
+
+    public SharePointClientBuilder setOAuth(final OAuth oAuth) {
+        this.oAuth = oAuth;
         return this;
     }
 
@@ -74,7 +80,10 @@ public class SharePointClientBuilder {
 
     public SharePointClient build() {
         final CloseableHttpClient httpClient = buildHttpClient();
-        final SharePointClient client = new SharePointClient(httpClient, url, siteName, verson2013);
+        if (oAuth != null) {
+            oAuth.updateAccessToken(httpClient);
+        }
+        final SharePointClient client = new SharePointClient(httpClient, url, siteName, oAuth, verson2013);
         return client;
     }
 

@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -29,8 +30,8 @@ import java.util.Map;
 public class GetLists2013 extends GetLists {
     private static final String API_PATH = "_api/lists";
 
-    public GetLists2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetLists2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     @Override

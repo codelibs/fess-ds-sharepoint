@@ -19,13 +19,14 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 public class GetListItemAttachments extends SharePointApi<GetListItemAttachmentsResponse> {
     private String listId = null;
     private String itemId = null;
 
-    public GetListItemAttachments(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetListItemAttachments(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetListItemAttachments setId(String listId, String itemId) {

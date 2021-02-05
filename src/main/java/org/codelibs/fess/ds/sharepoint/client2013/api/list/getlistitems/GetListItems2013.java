@@ -19,6 +19,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.Attributes;
@@ -43,8 +44,8 @@ public class GetListItems2013 extends GetListItems {
     private int start = 0;
     private boolean isSubPage = false;
 
-    public GetListItems2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetListItems2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     @Override

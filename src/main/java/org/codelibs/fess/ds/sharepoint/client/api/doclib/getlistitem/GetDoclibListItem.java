@@ -19,14 +19,15 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 import java.util.Map;
 
 public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> {
     private String serverRelativeUrl = null;
 
-    public GetDoclibListItem(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetDoclibListItem(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetDoclibListItem setServerRelativeUrl(final String serverRelativeUrl) {

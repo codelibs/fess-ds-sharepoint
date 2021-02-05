@@ -22,6 +22,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetList;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -38,8 +39,8 @@ public class GetList2013 extends GetList {
     protected String listId = null;
     protected String listName = null;
 
-    public GetList2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetList2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetList2013 setListId(String listId) {

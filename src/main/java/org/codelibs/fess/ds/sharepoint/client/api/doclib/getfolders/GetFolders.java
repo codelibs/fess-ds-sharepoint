@@ -19,6 +19,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 public class GetFolders extends SharePointApi<GetFoldersResponse> {
     private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')/Folders";
@@ -28,8 +29,8 @@ public class GetFolders extends SharePointApi<GetFoldersResponse> {
     private int num = 100;
     private int start = 0;
 
-    public GetFolders(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetFolders(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetFolders setServerRelativeUrl(String serverRelativeUrl) {

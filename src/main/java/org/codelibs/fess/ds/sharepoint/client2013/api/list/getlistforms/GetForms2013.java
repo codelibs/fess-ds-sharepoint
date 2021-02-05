@@ -19,6 +19,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 public class GetForms2013 extends GetForms {
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Forms";
@@ -27,8 +28,8 @@ public class GetForms2013 extends GetForms {
     private String listId = null;
     private String listName = null;
 
-    public GetForms2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetForms2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetForms2013 setListId(final String listId) {

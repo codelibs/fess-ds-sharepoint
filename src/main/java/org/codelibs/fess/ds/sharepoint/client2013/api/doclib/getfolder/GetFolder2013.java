@@ -19,14 +19,15 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolder;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 public class GetFolder2013 extends GetFolder {
     private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')";
 
     private String serverRelativeUrl = null;
 
-    public GetFolder2013(CloseableHttpClient client, String siteUrl) {
-        super(client, siteUrl);
+    public GetFolder2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+        super(client, siteUrl, oAuth);
     }
 
     public GetFolder2013 setServerRelativeUrl(String serverRelativeUrl) {

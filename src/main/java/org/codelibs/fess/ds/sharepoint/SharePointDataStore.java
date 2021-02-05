@@ -101,6 +101,12 @@ public class SharePointDataStore extends AbstractDataStore {
             config.setNtlmUser(paramMap.get("auth.ntlm.user"));
             config.setNtlmPassword(paramMap.get("auth.ntlm.password"));
         }
+        if (paramMap.containsKey("auth.oauth.client_id")) {
+            config.setOauthClientId(paramMap.get("auth.oauth.client_id"));
+            config.setOauthClientSecret(paramMap.get("auth.oauth.client_secret"));
+            config.setOauthTenant(paramMap.get("auth.oauth.tenant"));
+            config.setOauthRealm(paramMap.get("auth.oauth.realm"));
+        }
         config.setSiteName(paramMap.get("site.name"));
         if (paramMap.containsKey("site.list_id")) {
             config.setInitialListId(paramMap.get("site.list_id"));
