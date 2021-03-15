@@ -126,7 +126,7 @@ public class GetListItemRole2013 extends GetListItemRole {
                 sharePointGroup.addUser(userUser);
             } else if (userPrincipalType == 4) {
                 // Security Group
-                GetListItemRole2013Response.SecurityGroup securityGroup = new GetListItemRole2013Response.SecurityGroup(userId, userTitle);
+                GetListItemRole2013Response.SecurityGroup securityGroup = new GetListItemRole2013Response.SecurityGroup(userId, userTitle, loginName);
                 sharePointGroup.addSecurityGroup(securityGroup);
             } else if (userPrincipalType == 8) {
                 if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {

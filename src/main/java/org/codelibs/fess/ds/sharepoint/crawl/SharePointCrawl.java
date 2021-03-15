@@ -20,11 +20,15 @@ import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.util.ComponentUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.stream.Collectors;
 
 public abstract class SharePointCrawl {
+    private final Logger logger = LoggerFactory.getLogger(SharePointCrawl.class);
+
     protected final SharePointClient client;
 
     public SharePointCrawl(SharePointClient client) {
@@ -43,8 +47,17 @@ public abstract class SharePointCrawl {
                 .execute();
         SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> roles = new HashSet<>();
-        getListItemRoleResponse.getUsers().stream().map(GetListItemRoleResponse.User::getAccount)
+        // AD
+        getListItemRoleResponse.getUsers().stream()
+                .filter(user -> !user.isAzureAccount())
+                .map(GetListItemRoleResponse.User::getAccount)
                 .filter(title -> title.contains("\\"))
+                .map(systemHelper::getSearchRoleByUser)
+                .forEach(roles::add);
+        // AzureAD
+        getListItemRoleResponse.getUsers().stream()
+                .filter(GetListItemRoleResponse.User::isAzureAccount)
+                .map(GetListItemRoleResponse.User::getAccount)
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(roles::add);
         getListItemRoleResponse.getSharePointGroups().stream()
@@ -56,7 +69,10 @@ public abstract class SharePointCrawl {
     private Set<String> getSharePointGroupTitles(final GetListItemRoleResponse.SharePointGroup sharePointGroup, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> titles = new HashSet<>();
-        sharePointGroup.getUsers().stream().map(GetListItemRoleResponse.User::getAccount)
+        // AD
+        sharePointGroup.getUsers().stream()
+                .filter(user -> !user.isAzureAccount())
+                .map(GetListItemRoleResponse.User::getAccount)
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(titles::add);
@@ -64,6 +80,18 @@ public abstract class SharePointCrawl {
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByGroup)
                 .forEach(titles::add);
+        // AzureAD
+        sharePointGroup.getUsers().stream()
+                .filter(GetListItemRoleResponse.User::isAzureAccount)
+                .map(GetListItemRoleResponse.User::getAzureAccount)
+                .map(systemHelper::getSearchRoleByUser)
+                .forEach(titles::add);
+        sharePointGroup.getSecurityGroups().stream()
+                .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
+                .map(GetListItemRoleResponse.SecurityGroup::getAzureAccount)
+                .map(systemHelper::getSearchRoleByGroup)
+                .forEach(titles::add);
+
         sharePointGroup.getSharePointGroups().stream().flatMap(group -> getSharePointGroupTitles(group, sharePointGroupCache).stream())
                 .forEach(titles::add);
         return titles;

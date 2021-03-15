@@ -90,6 +90,7 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
 
     public static class User {
         private static final String ACCOUNT_PREFIX = "i:0#.w|";
+        private static final String AZURE_ACCOUNT_PREFIX = "i:0#.f|membership|";
 
         private final String id;
         private final String title;
@@ -112,15 +113,27 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
         public String getAccount() {
             return account.substring(ACCOUNT_PREFIX.length());
         }
+
+        public boolean isAzureAccount() {
+            return account.startsWith(AZURE_ACCOUNT_PREFIX);
+        }
+
+        public String getAzureAccount() {
+            return account.substring(AZURE_ACCOUNT_PREFIX.length());
+        }
     }
 
     public static class SecurityGroup {
+        private static final String AZURE_ACCOUNT_PREFIX = "c:0o.c|federateddirectoryclaimprovider|";
+
         private final String id;
         private final String title;
+        private final String loginName;
 
-        public SecurityGroup(String id, String title) {
+        public SecurityGroup(String id, String title, String loginName) {
             this.id = id;
             this.title = title;
+            this.loginName = loginName;
         }
 
         public String getId() {
@@ -129,6 +142,14 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
 
         public String getTitle() {
             return title;
+        }
+
+        public boolean isAzureAccount() {
+            return loginName.startsWith(AZURE_ACCOUNT_PREFIX);
+        }
+
+        public String getAzureAccount() {
+            return loginName.substring(0, loginName.length() - "_o".length()).substring(AZURE_ACCOUNT_PREFIX.length());
         }
     }
 
