@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class GetListItemRoleResponse implements SharePointApiResponse {
@@ -124,7 +125,7 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
     }
 
     public static class SecurityGroup {
-        private static final String AZURE_ACCOUNT_PREFIX = "c:0o.c|federateddirectoryclaimprovider|";
+        private static final String[] AZURE_ACCOUNT_PREFIXES = new String[]{"c:0o.c|federateddirectoryclaimprovider|", "c:0t.c|tenant|"};
 
         private final String id;
         private final String title;
@@ -145,11 +146,21 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
         }
 
         public boolean isAzureAccount() {
-            return loginName.startsWith(AZURE_ACCOUNT_PREFIX);
+            return Arrays.stream(AZURE_ACCOUNT_PREFIXES).anyMatch(prefix -> loginName.startsWith(prefix));
         }
 
         public String getAzureAccount() {
-            return loginName.substring(0, loginName.length() - "_o".length()).substring(AZURE_ACCOUNT_PREFIX.length());
+            String account = loginName;
+            for (String prefix: AZURE_ACCOUNT_PREFIXES) {
+                if (account.startsWith(prefix)) {
+                    account = account.substring(prefix.length());
+                    if (account.endsWith("_o")) {
+                        account = account.substring(0, account.length() - "_o".length());
+                    }
+                    break;
+                }
+            }
+            return account;
         }
     }
 
