@@ -24,6 +24,7 @@ import java.util.List;
 public class GetListItemRoleResponse implements SharePointApiResponse {
     private final List<SharePointGroup> sharePointGroups = new ArrayList<>();
     private final List<User> users = new ArrayList<>();
+    private final List<SecurityGroup> securityGroups = new ArrayList<>();
 
     public GetListItemRoleResponse() {
     }
@@ -42,6 +43,14 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
 
     public void addUser(final User user) {
         users.add(user);
+    }
+
+    public List<SecurityGroup> getSecurityGroups() {
+        return securityGroups;
+    }
+
+    public void addSecurityGroup(final SecurityGroup securityGroup) {
+        securityGroups.add(securityGroup);
     }
 
     public static class SharePointGroup {

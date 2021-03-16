@@ -58,11 +58,12 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         int start = 0;
         while (true) {
             GetListItemRoleResponse getListItemRoleResponse = executeInternal(start, PAGE_SISE);
-            if (getListItemRoleResponse.getUsers().size() == 0 && getListItemRoleResponse.getSharePointGroups().size() == 0) {
+            if (getListItemRoleResponse.getUsers().size() == 0 && getListItemRoleResponse.getSharePointGroups().size() == 0 && getListItemRoleResponse.getSecurityGroups().size() == 0) {
                 break;
             }
             getListItemRoleResponse.getUsers().stream().forEach(response::addUser);
             getListItemRoleResponse.getSharePointGroups().stream().forEach(response::addSharePointGroup);
+            getListItemRoleResponse.getSecurityGroups().stream().forEach(response::addSecurityGroup);
             start += PAGE_SISE;
         }
         return response;
@@ -89,6 +90,10 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                 // User
                 GetListItemRoleResponse.User user = new GetListItemRoleResponse.User(id, memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
                 response.addUser(user);
+            } else if (principalType == 4) {
+                // Security Group
+                GetListItemRoleResponse.SecurityGroup securityGroup = new GetListItemRoleResponse.SecurityGroup(id, memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
+                response.addSecurityGroup(securityGroup);
             } else if (principalType == 8) {
                 GetListItemRoleResponse.SharePointGroup sharePointGroup = buildSharePointGroup(id, memberResponseMap.get("Title").toString());
                 response.addSharePointGroup(sharePointGroup);
