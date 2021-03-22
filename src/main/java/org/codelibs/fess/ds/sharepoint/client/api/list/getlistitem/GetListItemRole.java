@@ -81,7 +81,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
                 return;
             }
-            final HttpGet memberRequest = new HttpGet(buildMemberUrl(principalId));
+            final HttpGet memberRequest = new HttpGet(buildMemberUrl(itemId, principalId));
             final JsonResponse memberResponse = doJsonRequest(memberRequest);
             final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
             final String id = memberResponseMap.get("Id").toString();
@@ -113,8 +113,8 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         return buildBaseUrl() + "Items(" + itemId + ")/RoleAssignments";
     }
 
-    private String buildMemberUrl(String principalId) {
-        return buildBaseUrl() + "RoleAssignments/GetByPrincipalId(" + principalId + ")/Member";
+    private String buildMemberUrl(String itemId, String principalId) {
+        return buildBaseUrl() + "Items(" + itemId + ")/RoleAssignments/GetByPrincipalId(" + principalId + ")/Member";
     }
 
     private String buildUsersUrl(String memberId) {
