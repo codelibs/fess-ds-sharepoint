@@ -44,14 +44,8 @@ public class ItemCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     private final List<String> excludeFields;
 
-    public ItemCrawl(SharePointClient client,
-                     String listId,
-                     String listName,
-                     String itemId,
-                     List<String> roles,
-                     boolean isSubPage,
-                     List<String> includeFields,
-                     List<String> excludeFields) {
+    public ItemCrawl(SharePointClient client, String listId, String listName, String itemId, List<String> roles, boolean isSubPage,
+            List<String> includeFields, List<String> excludeFields) {
         super(client);
         this.listId = listId;
         this.listName = listName;
@@ -86,7 +80,7 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
         dataMap.put(fessConfig.getIndexFieldMimetype(), "text/html");
         dataMap.put(fessConfig.getIndexFieldFiletype(), ComponentUtil.getFileTypeHelper().get("text/html"));
-        for (Map.Entry<String, String> entry: response.getValues().entrySet()) {
+        for (Map.Entry<String, String> entry : response.getValues().entrySet()) {
             if (!dataMap.containsKey(entry.getKey())) {
                 dataMap.put(normalizeKey(entry.getKey()), entry.getValue());
             }
@@ -105,9 +99,8 @@ public class ItemCrawl extends SharePointCrawl {
 
     private String buildContent(final GetListItemValueResponse response) {
         final StringBuilder sb = new StringBuilder();
-        response.getValues().entrySet().stream()
-                .filter(entry -> StringUtils.isNotBlank(entry.getValue()))
-                .filter(entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey())) && !excludeFields.contains(entry.getKey()))
+        response.getValues().entrySet().stream().filter(entry -> StringUtils.isNotBlank(entry.getValue())).filter(
+                entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey())) && !excludeFields.contains(entry.getKey()))
                 .forEach(entry -> {
                     sb.append('[').append(normalizeKey(entry.getKey())).append("] ").append(entry.getValue()).append('\n');
                 });
@@ -128,7 +121,7 @@ public class ItemCrawl extends SharePointCrawl {
             String siteRef = response.getFileRef();
             StringBuilder sb = new StringBuilder(siteRef.length() * 2);
 
-            for (String part: siteRef.split("/")) {
+            for (String part : siteRef.split("/")) {
                 if (part.length() == 0) {
                     continue;
                 }
@@ -141,10 +134,12 @@ public class ItemCrawl extends SharePointCrawl {
         } else if (response.getFsObjType() == 0 && StringUtils.isNotBlank(response.getParentItemId())) {
             final String dirRef = response.getFileDirRef();
             String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
-            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder=" + URLEncoder.encode(dirRef, StandardCharsets.UTF_8);
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
+                    + URLEncoder.encode(dirRef, StandardCharsets.UTF_8);
         } else if (response.getFsObjType() == 1) {
             String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
-            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder=" + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
+            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
+                    + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
         } else {
             String serverRelativeUrl = getFormUrl();
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
@@ -161,76 +156,23 @@ public class ItemCrawl extends SharePointCrawl {
             getForms.setListId(listId);
         }
         final GetFormsResponse getFormsResponse = getForms.execute();
-        GetFormsResponse.Form form = getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
+        GetFormsResponse.Form form =
+                getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
         if (form == null) {
             return null;
         }
         return form.getServerRelativeUrl();
     }
 
-    private static final List<String> EXCLUDE_FIELDS = Arrays.asList(new String[] {
-            "odata.metadata",
-            "odata.type",
-            "odata.id",
-            "odata.editLink",
-            "ContentTypeId",
-            "Title",
-            "File_x005f_x0020_x005f_Type",
-            "ComplianceAssetId",
-            "ID",
-            "Modified",
-            "Created",
-            "Author",
-            "Editor",
-            "OData__x005f_HasCopyDestinations",
-            "OData__x005f_CopySource",
-            "owshiddenversion",
-            "WorkflowVersion",
-            "OData__x005f_UIVersion",
-            "OData__x005f_UIVersionString",
-            "Attachments",
-            "OData__x005f_ModerationStatus",
-            "InstanceID",
-            "Order",
-            "GUID",
-            "WorkflowInstanceID",
-            "FileRef",
-            "FileDirRef",
-            "Last_x005f_x0020_x005f_Modified",
-            "Created_x005f_x0020_x005f_Date",
-            "FSObjType",
-            "SortBehavior",
-            "FileLeafRef",
-            "UniqueId",
-            "SyncClientId",
-            "ProgId",
-            "ScopeId",
-            "MetaInfo",
-            "OData__x005f_Level",
-            "OData__x005f_IsCurrentVersion",
-            "ItemChildCount",
-            "FolderChildCount",
-            "Restricted",
-            "OriginatorId",
-            "NoExecute",
-            "ContentVersion",
-            "OData__x005f_ComplianceFlags",
-            "OData__x005f_ComplianceTag",
-            "OData__x005f_ComplianceTagWrittenTime",
-            "OData__x005f_ComplianceTagUserId",
-            "AccessPolicy",
-            "OData__x005f_VirusStatus",
-            "OData__x005f_VirusVendorID",
-            "OData__x005f_VirusInfo",
-            "AppAuthor",
-            "AppEditor",
-            "SMTotalSize",
-            "SMLastModifiedDate",
-            "SMTotalFileStreamSize",
-            "SMTotalFileCount",
-            "OData__x005f_ModerationComments",
-            "Exists",
-            "ParentItemID",
-            "ParentFolderID"
-    });
+    private static final List<String> EXCLUDE_FIELDS = Arrays.asList(new String[] { "odata.metadata", "odata.type", "odata.id",
+            "odata.editLink", "ContentTypeId", "Title", "File_x005f_x0020_x005f_Type", "ComplianceAssetId", "ID", "Modified", "Created",
+            "Author", "Editor", "OData__x005f_HasCopyDestinations", "OData__x005f_CopySource", "owshiddenversion", "WorkflowVersion",
+            "OData__x005f_UIVersion", "OData__x005f_UIVersionString", "Attachments", "OData__x005f_ModerationStatus", "InstanceID", "Order",
+            "GUID", "WorkflowInstanceID", "FileRef", "FileDirRef", "Last_x005f_x0020_x005f_Modified", "Created_x005f_x0020_x005f_Date",
+            "FSObjType", "SortBehavior", "FileLeafRef", "UniqueId", "SyncClientId", "ProgId", "ScopeId", "MetaInfo", "OData__x005f_Level",
+            "OData__x005f_IsCurrentVersion", "ItemChildCount", "FolderChildCount", "Restricted", "OriginatorId", "NoExecute",
+            "ContentVersion", "OData__x005f_ComplianceFlags", "OData__x005f_ComplianceTag", "OData__x005f_ComplianceTagWrittenTime",
+            "OData__x005f_ComplianceTagUserId", "AccessPolicy", "OData__x005f_VirusStatus", "OData__x005f_VirusVendorID",
+            "OData__x005f_VirusInfo", "AppAuthor", "AppEditor", "SMTotalSize", "SMLastModifiedDate", "SMTotalFileStreamSize",
+            "SMTotalFileCount", "OData__x005f_ModerationComments", "Exists", "ParentItemID", "ParentFolderID" });
 }

@@ -41,13 +41,13 @@ public class SharePointHelper {
         if (verson2013) {
             String docLibName = null;
             final String[] splitArray = serverRelativeUrl.split("/");
-            for (int i=0;i<splitArray.length;i++) {
+            for (int i = 0; i < splitArray.length; i++) {
                 final String s = splitArray[i];
                 if (!"sites".equals(s)) {
                     continue;
                 }
                 if (i + 2 < splitArray.length) {
-                    docLibName = splitArray[i+2];
+                    docLibName = splitArray[i + 2];
                 }
                 break;
             }
@@ -56,16 +56,16 @@ public class SharePointHelper {
             }
             return client.getSiteUrl() + docLibName + "/Forms/AllItems.aspx?ID=id&Source=";
         } else {
-            return client.getSiteUrl() + "Shared%20Documents/Forms/AllItems.aspx?id=" +
-                    URLEncoder.encode(serverRelativeUrl, StandardCharsets.UTF_8) +
-                    "&parent=" + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
+            return client.getSiteUrl() + "Shared%20Documents/Forms/AllItems.aspx?id="
+                    + URLEncoder.encode(serverRelativeUrl, StandardCharsets.UTF_8) + "&parent="
+                    + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
         }
     }
 
     public String encodeRelativeUrl(final String url) {
         String result = url;
         String[] array = url.split("/");
-        for (String value: array) {
+        for (String value : array) {
             result = result.replace(value, URLEncoder.encode(value, StandardCharsets.UTF_8));
         }
         return result.replace("+", "%20");

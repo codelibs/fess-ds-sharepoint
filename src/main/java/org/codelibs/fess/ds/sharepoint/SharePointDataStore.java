@@ -37,11 +37,12 @@ public class SharePointDataStore extends AbstractDataStore {
 
     @Override
     protected void storeData(final DataConfig dataConfig, final IndexUpdateCallback callback, final Map<String, String> paramMap,
-                             final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
+            final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
         final String roleField = fessConfig.getIndexFieldRole();
         final SharePointCrawler crawler = createCrawler(paramMap);
         final long readInterval = getReadInterval(paramMap);
+        final String scriptType = getScriptType(paramMap);
         boolean running = true;
         while (running && crawler.hasCrawlTarget()) {
             try {
@@ -60,7 +61,7 @@ public class SharePointDataStore extends AbstractDataStore {
                     }
                     resultMap.remove(roleField);
                     for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
-                        final Object convertValue = convertValue(entry.getValue(), resultMap);
+                        final Object convertValue = convertValue(scriptType, entry.getValue(), resultMap);
                         if (convertValue != null) {
                             dataMap.put(entry.getKey(), convertValue);
                         }

@@ -39,7 +39,7 @@ public class GetForms2013Response extends GetFormsResponse {
         final GetFormsDocHandler handler = new GetFormsDocHandler();
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
-        final List<Map<String, Object>> values = (List)dataMap.get("value");
+        final List<Map<String, Object>> values = (List) dataMap.get("value");
         values.stream().forEach(value -> {
             String id = value.get("Id").toString();
             String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
@@ -93,7 +93,7 @@ public class GetForms2013Response extends GetFormsResponse {
         public void endElement(final String uri, final String localName, final String qName) {
             if ("entry".equals(qName)) {
                 if (resultMap != null) {
-                    ((List)dataMap.get("value")).add(resultMap);
+                    ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
             } else {

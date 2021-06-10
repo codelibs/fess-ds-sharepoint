@@ -134,7 +134,7 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
     }
 
     public static class SecurityGroup {
-        private static final String[] AZURE_ACCOUNT_PREFIXES = new String[]{"c:0o.c|federateddirectoryclaimprovider|", "c:0t.c|tenant|"};
+        private static final String[] AZURE_ACCOUNT_PREFIXES = new String[] { "c:0o.c|federateddirectoryclaimprovider|", "c:0t.c|tenant|" };
 
         private final String id;
         private final String title;
@@ -160,7 +160,7 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
 
         public String getAzureAccount() {
             String account = loginName;
-            for (String prefix: AZURE_ACCOUNT_PREFIXES) {
+            for (String prefix : AZURE_ACCOUNT_PREFIXES) {
                 if (account.startsWith(prefix)) {
                     account = account.substring(prefix.length());
                     if (account.endsWith("_o")) {

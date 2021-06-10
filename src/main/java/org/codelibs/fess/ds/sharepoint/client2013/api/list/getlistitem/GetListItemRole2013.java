@@ -62,7 +62,7 @@ public class GetListItemRole2013 extends GetListItemRole {
         final GetListItemRoleDocHandler getListItemRoleDocHandler = new GetListItemRoleDocHandler();
         xmlResponse.parseXml(getListItemRoleDocHandler);
         final Map<String, Object> bodyMap = getListItemRoleDocHandler.getDataMap();
-        List<Map<String, Object>> values = (List)bodyMap.get("value");
+        List<Map<String, Object>> values = (List) bodyMap.get("value");
         values.stream().map(value -> (value.get("PrincipalId").toString())).forEach(principalId -> {
             if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
@@ -77,10 +77,12 @@ public class GetListItemRole2013 extends GetListItemRole {
             final int principalType = Integer.valueOf(memberResponseMap.get("PrincipalType").toString());
             if (principalType == 1) {
                 // User
-                GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id, memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
+                GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id, memberResponseMap.get("Title").toString(),
+                        memberResponseMap.get("LoginName").toString());
                 response.addUser(user);
             } else if (principalType == 8) {
-                GetListItemRole2013Response.SharePointGroup sharePointGroup = buildSharePointGroup(id, memberResponseMap.get("Title").toString());
+                GetListItemRole2013Response.SharePointGroup sharePointGroup =
+                        buildSharePointGroup(id, memberResponseMap.get("Title").toString());
                 response.addSharePointGroup(sharePointGroup);
                 if (sharePointGroupCache != null) {
                     sharePointGroupCache.put(principalId, sharePointGroup);
@@ -114,7 +116,7 @@ public class GetListItemRole2013 extends GetListItemRole {
         final UsersDocHandler usersDocHandler = new UsersDocHandler();
         usersResponse.parseXml(usersDocHandler);
         final Map<String, Object> usersResponseMap = usersDocHandler.getDataMap();
-        List<Map<String, Object>> usersList = (List)usersResponseMap.get("value");
+        List<Map<String, Object>> usersList = (List) usersResponseMap.get("value");
         usersList.forEach(user -> {
             String userId = user.get("Id").toString();
             String userTitle = user.get("Title").toString();
@@ -126,7 +128,8 @@ public class GetListItemRole2013 extends GetListItemRole {
                 sharePointGroup.addUser(userUser);
             } else if (userPrincipalType == 4) {
                 // Security Group
-                GetListItemRole2013Response.SecurityGroup securityGroup = new GetListItemRole2013Response.SecurityGroup(userId, userTitle, loginName);
+                GetListItemRole2013Response.SecurityGroup securityGroup =
+                        new GetListItemRole2013Response.SecurityGroup(userId, userTitle, loginName);
                 sharePointGroup.addSecurityGroup(securityGroup);
             } else if (userPrincipalType == 8) {
                 if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
@@ -181,7 +184,7 @@ public class GetListItemRole2013 extends GetListItemRole {
         public void endElement(final String uri, final String localName, final String qName) {
             if ("entry".equals(qName)) {
                 if (resultMap != null) {
-                    ((List)dataMap.get("value")).add(resultMap);
+                    ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
             } else {
@@ -309,7 +312,7 @@ public class GetListItemRole2013 extends GetListItemRole {
         public void endElement(final String uri, final String localName, final String qName) {
             if ("entry".equals(qName)) {
                 if (resultMap != null) {
-                    ((List)dataMap.get("value")).add(resultMap);
+                    ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
             } else {

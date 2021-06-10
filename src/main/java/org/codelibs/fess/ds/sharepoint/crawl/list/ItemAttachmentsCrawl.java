@@ -39,7 +39,8 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
     private final Date modified;
     private final List<String> roles;
 
-    public ItemAttachmentsCrawl(SharePointClient client, String listId, String listName, String itemId, Date created, Date modified, List<String> roles) {
+    public ItemAttachmentsCrawl(SharePointClient client, String listId, String listName, String itemId, Date created, Date modified,
+            List<String> roles) {
         super(client);
         this.itemId = itemId;
         this.listId = listId;
@@ -57,12 +58,8 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
 
         GetListItemAttachmentsResponse response = client.api().list().getListItemAttachments().setId(listId, itemId).execute();
         response.getFiles().forEach(file -> {
-            FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(),
-                    getWebLink(file.getFileName()),
-                    file.getServerRelativeUrl(),
-                    created,
-                    modified,
-                    roles);
+            FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(), getWebLink(file.getFileName()), file.getServerRelativeUrl(),
+                    created, modified, roles);
             fileCrawl.addProperty("list_name", listName);
             fileCrawl.addProperty("list_id", listId);
             fileCrawl.addProperty("item_id", itemId);
@@ -77,11 +74,13 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
             getForms.setListId(listId);
         }
         final GetFormsResponse getFormsResponse = getForms.execute();
-        GetFormsResponse.Form form = getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
+        GetFormsResponse.Form form =
+                getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
         if (form == null) {
             return null;
         }
         String serverRelativeUrl = form.getServerRelativeUrl();
-        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&attachments=" + URLEncoder.encode(fileName, StandardCharsets.UTF_8);
+        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&attachments="
+                + URLEncoder.encode(fileName, StandardCharsets.UTF_8);
     }
 }

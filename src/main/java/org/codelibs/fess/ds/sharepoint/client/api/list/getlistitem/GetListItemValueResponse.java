@@ -131,8 +131,7 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         response.order = Long.valueOf(jsonMap.get("Order").toString().replace(",", ""));
         response.editLink = jsonMap.get("odata.editLink").toString();
 
-        jsonMap.entrySet().stream()
-                .forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
+        jsonMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
 
         return response;
     }

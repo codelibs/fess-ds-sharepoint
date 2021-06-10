@@ -40,7 +40,8 @@ public class GetListItemsResponse implements SharePointApiResponse {
         private final Date created;
         private final Date modified;
 
-        public ListItem(final String id, final String editLink, final String title, final boolean attachments, final Date created, final Date modified) {
+        public ListItem(final String id, final String editLink, final String title, final boolean attachments, final Date created,
+                final Date modified) {
             this.id = id;
             this.editLink = editLink;
             this.title = title;

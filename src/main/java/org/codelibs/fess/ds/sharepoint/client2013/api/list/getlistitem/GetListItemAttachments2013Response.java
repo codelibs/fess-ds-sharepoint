@@ -35,7 +35,7 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
         Map<String, Object> dataMap = handler.getDataMap();
 
         @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> valueList = (List)dataMap.get("value");
+        final List<Map<String, Object>> valueList = (List) dataMap.get("value");
         valueList.stream().forEach(value -> {
             final String fileName = value.get("FileName").toString();
             final String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
@@ -102,7 +102,7 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
         public void endElement(final String uri, final String localName, final String qName) {
             if ("entry".equals(qName)) {
                 if (resultMap != null) {
-                    ((List)dataMap.get("value")).add(resultMap);
+                    ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
             } else {

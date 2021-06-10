@@ -43,7 +43,7 @@ public class GetLists extends SharePointApi<GetListsResponse> {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
         final List<GetListsResponse.SharePointList> sharePointLists = new ArrayList<>();
-        final List<Map<String, Object>> valueList = (List)jsonMap.get("value");
+        final List<Map<String, Object>> valueList = (List) jsonMap.get("value");
         valueList.forEach(value -> {
             Object titleObj = value.get("Title");
             if (titleObj == null) {
@@ -57,11 +57,11 @@ public class GetLists extends SharePointApi<GetListsResponse> {
             if (noCrawl == null) {
                 noCrawl = "true";
             }
-            GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
+            GetListsResponse.SharePointList sharePointList =
+                    new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
             sharePointLists.add(sharePointList);
         });
 
         return new GetListsResponse(sharePointLists);
     }
 }
-

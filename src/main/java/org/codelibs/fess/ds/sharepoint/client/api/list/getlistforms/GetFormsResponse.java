@@ -35,7 +35,7 @@ public class GetFormsResponse implements SharePointApiResponse {
         final GetFormsResponse response = new GetFormsResponse();
 
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
-        final List<Map<String, Object>> values = (List)jsonMap.get("value");
+        final List<Map<String, Object>> values = (List) jsonMap.get("value");
         values.stream().forEach(value -> {
             String id = value.get("Id").toString();
             String serverRelativeUrl = value.get("ServerRelativeUrl").toString();

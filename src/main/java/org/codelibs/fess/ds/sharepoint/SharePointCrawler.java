@@ -71,18 +71,18 @@ public class SharePointCrawler {
     }
 
     private SharePointClient createClient(CrawlerConfig config) {
-        RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectTimeout(config.getConnectionTimeout())
-                .setSocketTimeout(config.getSocketTimeout())
-                .build();
-        SharePointClientBuilder builder = SharePointClient.builder().setUrl(config.getUrl()).setSite(config.getSiteName()).setRequestConfig(requestConfig);
+        RequestConfig requestConfig =
+                RequestConfig.custom().setConnectTimeout(config.getConnectionTimeout()).setSocketTimeout(config.getSocketTimeout()).build();
+        SharePointClientBuilder builder =
+                SharePointClient.builder().setUrl(config.getUrl()).setSite(config.getSiteName()).setRequestConfig(requestConfig);
         final String ntlmUser = config.getNtlmUser();
         if (StringUtils.isNotBlank(ntlmUser)) {
             final String ntlmPass = config.getNtlmPassword();
             builder.setCredential(new NtlmCredential(ntlmUser, ntlmPass, null, null));
         }
         if (StringUtils.isNotBlank(config.getOauthClientId())) {
-            builder.setOAuth(new OAuth(config.getOauthClientId(), config.getOauthClientSecret(), config.getOauthTenant(), config.getOauthRealm()));
+            builder.setOAuth(
+                    new OAuth(config.getOauthClientId(), config.getOauthClientSecret(), config.getOauthTenant(), config.getOauthRealm()));
         }
         if ("2013".equals(config.getSharePointVersion())) {
             builder.apply2013();
@@ -92,22 +92,19 @@ public class SharePointCrawler {
 
     private void setFirstCrawl(CrawlerConfig crawlerConfig) {
         final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = new ConcurrentHashMap<>();
-        if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null && crawlerConfig.getInitialDocLibPath() == null) {
-            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages(), sharePointGroupCache));
+        if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null
+                && crawlerConfig.getInitialDocLibPath() == null) {
+            crawlingQueue.offer(
+                    new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages(), sharePointGroupCache));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
-                crawlingQueue.offer(new ListCrawl(client,
-                        crawlerConfig.getInitialListId(),
-                        crawlerConfig.getInitialListName(),
-                        crawlerConfig.listItemNumPerPages,
-                        sharePointGroupCache,
-                        crawlerConfig.isSubPage(),
-                        crawlerConfig.isSkipRole(),
-                        crawlerConfig.getListContentIncludeFields(),
-                        crawlerConfig.getListContentExcludeFields()));
+                crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(),
+                        crawlerConfig.listItemNumPerPages, sharePointGroupCache, crawlerConfig.isSubPage(), crawlerConfig.isSkipRole(),
+                        crawlerConfig.getListContentIncludeFields(), crawlerConfig.getListContentExcludeFields()));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
-                crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), crawlerConfig.isSkipRole(), sharePointGroupCache));
+                crawlingQueue.offer(
+                        new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), crawlerConfig.isSkipRole(), sharePointGroupCache));
             }
         }
     }
@@ -117,13 +114,13 @@ public class SharePointCrawler {
     }
 
     public Map<String, Object> doCrawl() {
-        while(!crawlingQueue.isEmpty()) {
+        while (!crawlingQueue.isEmpty()) {
             SharePointCrawl crawl = crawlingQueue.poll();
             if (crawl == null) {
                 continue;
             }
             int retryCount = 0;
-            while(retryCount <= config.getRetryLimit()) {
+            while (retryCount <= config.getRetryLimit()) {
                 try {
                     Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
                     if (dataMap != null) {
@@ -131,13 +128,13 @@ public class SharePointCrawler {
                     }
                     break;
                 } catch (SharePointServerException e) {
-                    if (retryCount+1 <= config.getRetryLimit()) {
+                    if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
                     } else {
                         logger.warn("Api server error: {}", e.getMessage(), e);
                     }
                 } catch (SharePointClientException e) {
-                    if (retryCount+1 <= config.getRetryLimit()) {
+                    if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Error occured: {}  [Retry:{}]" + e.getMessage(), retryCount);
                     } else {
                         logger.warn("Error occured. " + e.getMessage(), e);

@@ -54,10 +54,8 @@ public class GetFiles extends SharePointApi<GetFilesResponse> {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet =
-                new HttpGet(siteUrl + "/"+
-                        API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) +
-                        "?" + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
+        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
+                + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
         SharePointApi.JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFilesResponse.build(jsonResponse);

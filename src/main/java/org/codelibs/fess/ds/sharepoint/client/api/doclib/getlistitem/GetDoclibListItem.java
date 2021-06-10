@@ -54,7 +54,8 @@ public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> 
     }
 
     private String buildUrl() {
-        return siteUrl + "_api/Web/GetFolderByServerRelativePath(decodedurl='" + encodeRelativeUrl(serverRelativeUrl) + "')/ListItemAllFields";
+        return siteUrl + "_api/Web/GetFolderByServerRelativePath(decodedurl='" + encodeRelativeUrl(serverRelativeUrl)
+                + "')/ListItemAllFields";
     }
 
     private String getListId(final String editLink) {

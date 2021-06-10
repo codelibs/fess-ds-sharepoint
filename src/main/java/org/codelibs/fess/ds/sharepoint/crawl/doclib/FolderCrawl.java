@@ -43,7 +43,8 @@ public class FolderCrawl extends SharePointCrawl {
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
     private final boolean skipRole;
 
-    public FolderCrawl(SharePointClient client, String serverRelativeUrl,  boolean skipRole, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    public FolderCrawl(SharePointClient client, String serverRelativeUrl, boolean skipRole,
+            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.sharePointGroupCache = sharePointGroupCache;
@@ -56,19 +57,12 @@ public class FolderCrawl extends SharePointCrawl {
             logger.info("[Crawling DocLib Folder] serverRelativeUrl:{}", serverRelativeUrl);
         }
 
-        GetFolderResponse getFolderResponse = client.api().doclib()
-                .getFolder()
-                .setServerRelativeUrl(serverRelativeUrl)
-                .execute();
+        GetFolderResponse getFolderResponse = client.api().doclib().getFolder().setServerRelativeUrl(serverRelativeUrl).execute();
         if (getFolderResponse.getItemCount() > 0) {
             int foldersStart = 0;
             while (true) {
-                GetFoldersResponse getFoldersResponse = client.api().doclib()
-                        .getFolders()
-                        .setServerRelativeUrl(serverRelativeUrl)
-                        .setStart(foldersStart)
-                        .setNum(PAGE_SIZE)
-                        .execute();
+                GetFoldersResponse getFoldersResponse = client.api().doclib().getFolders().setServerRelativeUrl(serverRelativeUrl)
+                        .setStart(foldersStart).setNum(PAGE_SIZE).execute();
                 if (getFoldersResponse.getFolders().size() == 0) {
                     break;
                 }
@@ -79,23 +73,23 @@ public class FolderCrawl extends SharePointCrawl {
             }
 
             int filesStart = 0;
-            while(true) {
-                GetFilesResponse getFilesResponse = client.api().doclib()
-                        .getFiles()
-                        .setServerRelativeUrl(serverRelativeUrl)
-                        .setStart(filesStart)
-                        .setNum(PAGE_SIZE)
-                        .execute();
+            while (true) {
+                GetFilesResponse getFilesResponse = client.api().doclib().getFiles().setServerRelativeUrl(serverRelativeUrl)
+                        .setStart(filesStart).setNum(PAGE_SIZE).execute();
                 if (getFilesResponse.getFiles().size() == 0) {
                     break;
                 }
                 filesStart += PAGE_SIZE;
                 getFilesResponse.getFiles().forEach(file -> {
-                    final GetDoclibListItemResponse getDoclibListItemResponse = client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
-                    final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), sharePointGroupCache, skipRole);
-                    final String webLink = getWebLink(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), serverRelativeUrl);
+                    final GetDoclibListItemResponse getDoclibListItemResponse =
+                            client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
+                    final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(),
+                            sharePointGroupCache, skipRole);
+                    final String webLink =
+                            getWebLink(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), serverRelativeUrl);
                     //crawlingQueue.offer(new FileCrawl(client, file.getFileName(), client.helper().buildDocLibFileWebLink(getDoclibListItemResponse.getItemId(), file.getServerRelativeUrl(), serverRelativeUrl), file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
-                    crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
+                    crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(),
+                            file.getModified(), roles));
                 });
             }
         }
@@ -108,11 +102,13 @@ public class FolderCrawl extends SharePointCrawl {
             getForms.setListId(listId);
         }
         final GetFormsResponse getFormsResponse = getForms.execute();
-        GetFormsResponse.Form form = getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
+        GetFormsResponse.Form form =
+                getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
         if (form == null) {
             return null;
         }
         String serverRelativeUrl = form.getServerRelativeUrl();
-        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&SOURCE=" + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
+        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&SOURCE="
+                + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
     }
 }

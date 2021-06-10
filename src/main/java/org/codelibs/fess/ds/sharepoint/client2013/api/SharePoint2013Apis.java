@@ -48,7 +48,7 @@ public class SharePoint2013Apis extends SharePointApis {
         return new DocLibApis();
     }
 
-    public class ListApis  extends SharePointApis.ListApis {
+    public class ListApis extends SharePointApis.ListApis {
         public GetList2013 getList() {
             return new GetList2013(client, siteUrl, oAuth);
         }

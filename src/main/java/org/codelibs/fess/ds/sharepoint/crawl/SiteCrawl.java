@@ -34,7 +34,8 @@ public class SiteCrawl extends SharePointCrawl {
     private final int numberPerPage;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
 
-    public SiteCrawl(SharePointClient client, String siteName, int numberPerPage, Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    public SiteCrawl(SharePointClient client, String siteName, int numberPerPage,
+            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);
         this.siteName = siteName;
         this.numberPerPage = numberPerPage;
@@ -51,15 +52,8 @@ public class SiteCrawl extends SharePointCrawl {
             if (list.isNoCrawl()) {
                 return;
             }
-            crawlingQueue.offer(new ListCrawl(client,
-                    list.getId(),
-                    null,
-                    numberPerPage,
-                    sharePointGroupCache,
-                    false,
-                    false,
-                    new ArrayList<>(),
-                    new ArrayList<>()));
+            crawlingQueue.offer(new ListCrawl(client, list.getId(), null, numberPerPage, sharePointGroupCache, false, false,
+                    new ArrayList<>(), new ArrayList<>()));
         });
         crawlingQueue.offer(new FolderCrawl(client, "/sites/" + siteName + "/Shared Documents", false, sharePointGroupCache));
         return null;

@@ -132,8 +132,7 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         response.order = Long.valueOf(dataMap.get("Order").toString().replace(",", ""));
         response.editLink = dataMap.get("odata.editLink").toString();
 
-        dataMap.entrySet().stream()
-                .forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
+        dataMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
 
         return response;
     }
@@ -219,7 +218,7 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
             } else if ("d:FSObjType".equals(qName)) {
                 fieldName = "FSObjType";
                 buffer.setLength(0);
-            }  else if (nowCountent) {
+            } else if (nowCountent) {
                 fieldName = nonePredfixQName;
                 buffer.setLength(0);
             }

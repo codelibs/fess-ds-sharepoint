@@ -54,10 +54,9 @@ public class GetFolders extends SharePointApi<GetFoldersResponse> {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet =
-                new HttpGet(siteUrl + "/"+
-                        API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) +
-                        "?" + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
+                + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
+        JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFoldersResponse.build(jsonResponse);
         } catch (Exception e) {

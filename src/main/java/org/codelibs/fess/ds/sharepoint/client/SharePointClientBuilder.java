@@ -96,10 +96,7 @@ public class SharePointClientBuilder {
         if (requestConfig != null) {
             builder.setDefaultRequestConfig(requestConfig);
         } else {
-            RequestConfig config = RequestConfig.custom()
-                    .setSocketTimeout(30000)
-                    .setConnectTimeout(30000)
-                    .build();
+            RequestConfig config = RequestConfig.custom().setSocketTimeout(30000).setConnectTimeout(30000).build();
             builder.setDefaultRequestConfig(config);
         }
 

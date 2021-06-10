@@ -46,10 +46,11 @@ public class GetFile2013 extends GetFile {
         try {
             CloseableHttpResponse httpResponse = client.execute(httpGet);
             if (isErrorResponse(httpResponse)) {
-                throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode() + " body:" + EntityUtils.toString(httpResponse.getEntity()));
+                throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode()
+                        + " body:" + EntityUtils.toString(httpResponse.getEntity()));
             }
             return new GetFile2013Response(httpResponse);
-        } catch(Exception e) {
+        } catch (Exception e) {
             throw new SharePointClientException("Request failure.", e);
         }
     }

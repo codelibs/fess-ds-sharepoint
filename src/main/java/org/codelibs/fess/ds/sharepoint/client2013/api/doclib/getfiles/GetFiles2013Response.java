@@ -33,7 +33,7 @@ public class GetFiles2013Response extends GetFilesResponse {
         final Map<String, Object> dataMap = handler.getDataMap();
 
         @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> results = (List)dataMap.get("value");
+        final List<Map<String, Object>> results = (List) dataMap.get("value");
 
         final GetFiles2013Response response = new GetFiles2013Response();
         results.stream().forEach(result -> {
@@ -97,7 +97,7 @@ public class GetFiles2013Response extends GetFilesResponse {
         public void endElement(final String uri, final String localName, final String qName) {
             if ("entry".equals(qName)) {
                 if (resultMap != null) {
-                    ((List)dataMap.get("value")).add(resultMap);
+                    ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
             } else {

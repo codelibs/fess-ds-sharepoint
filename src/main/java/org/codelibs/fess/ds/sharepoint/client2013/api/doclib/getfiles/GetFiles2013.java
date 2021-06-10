@@ -54,10 +54,8 @@ public class GetFiles2013 extends GetFiles {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet =
-                new HttpGet(siteUrl + "/"+
-                        API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) +
-                        "?" + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
+        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
+                + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
         XmlResponse xmlResponse = doXmlRequest(httpGet);
         try {
             return GetFiles2013Response.build(xmlResponse);

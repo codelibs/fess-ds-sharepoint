@@ -31,7 +31,7 @@ public class GetListItemAttachmentsResponse implements SharePointApiResponse {
         Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
         @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> valueList = (List)jsonMap.get("value");
+        final List<Map<String, Object>> valueList = (List) jsonMap.get("value");
         valueList.stream().forEach(value -> {
             final String fileName = value.get("FileName").toString();
             final String serverRelativeUrl = value.get("ServerRelativeUrl").toString();

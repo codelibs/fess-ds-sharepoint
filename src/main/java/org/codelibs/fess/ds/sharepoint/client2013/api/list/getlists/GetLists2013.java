@@ -48,7 +48,7 @@ public class GetLists2013 extends GetLists {
         final Map<String, Object> dataMap = handler.getDataMap();
 
         final List<GetLists2013Response.SharePointList> sharePointLists = new ArrayList<>();
-        final List<Map<String, Object>> valueList = (List)dataMap.get("value");
+        final List<Map<String, Object>> valueList = (List) dataMap.get("value");
         valueList.forEach(value -> {
             Object titleObj = value.get("Title");
             if (titleObj == null) {
@@ -62,7 +62,8 @@ public class GetLists2013 extends GetLists {
             if (noCrawl == null) {
                 noCrawl = "true";
             }
-            GetLists2013Response.SharePointList sharePointList = new GetLists2013Response.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
+            GetLists2013Response.SharePointList sharePointList =
+                    new GetLists2013Response.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
             sharePointLists.add(sharePointList);
         });
 
@@ -114,7 +115,7 @@ public class GetLists2013 extends GetLists {
         public void endElement(final String uri, final String localName, final String qName) {
             if ("entry".equals(qName)) {
                 if (resultMap != null) {
-                    ((List)dataMap.get("value")).add(resultMap);
+                    ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
             } else {
@@ -137,4 +138,3 @@ public class GetLists2013 extends GetLists {
         }
     }
 }
-

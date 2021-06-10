@@ -61,7 +61,8 @@ public class OAuth {
         try (final CloseableHttpResponse httpResponse = httpClient.execute(httpPost)) {
             final String body = EntityUtils.toString(httpResponse.getEntity());
             if (httpResponse.getStatusLine().getStatusCode() >= 400) {
-                throw new SharePointClientException("Failed to update access_token. http_status:" + httpResponse.getStatusLine().getStatusCode() + " body: " + body);
+                throw new SharePointClientException(
+                        "Failed to update access_token. http_status:" + httpResponse.getStatusLine().getStatusCode() + " body: " + body);
             }
             final Map<String, String> bodyMap = objectMapper.readValue(body, Map.class);
             if (!bodyMap.containsKey("access_token")) {
@@ -83,9 +84,9 @@ public class OAuth {
 
     private List<NameValuePair> buildFormParams() {
         List<NameValuePair> params = new ArrayList<>();
-        params.add(new BasicNameValuePair("grant_type","client_credentials"));
-        params.add(new BasicNameValuePair("resource","00000003-0000-0ff1-ce00-000000000000/" + tenant + ".sharepoint.com@" + realm));
-        params.add(new BasicNameValuePair("client_id",clientId + "@" + realm));
+        params.add(new BasicNameValuePair("grant_type", "client_credentials"));
+        params.add(new BasicNameValuePair("resource", "00000003-0000-0ff1-ce00-000000000000/" + tenant + ".sharepoint.com@" + realm));
+        params.add(new BasicNameValuePair("client_id", clientId + "@" + realm));
         params.add(new BasicNameValuePair("client_secret", clientSecret));
         return params;
     }

@@ -40,16 +40,9 @@ public class ListCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     private final List<String> excludeFields;
 
-    public ListCrawl(SharePointClient client,
-                     String id,
-                     String listName,
-                     int numberPerPage,
-                     Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache,
-                     boolean isSubPage,
-                     boolean skipRole,
-                     List<String> includeFields,
-                     List<String> excludeFields
-                     ) {
+    public ListCrawl(SharePointClient client, String id, String listName, int numberPerPage,
+            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, boolean isSubPage, boolean skipRole,
+            List<String> includeFields, List<String> excludeFields) {
         super(client);
         this.id = id;
         this.listName = listName;
@@ -71,10 +64,11 @@ public class ListCrawl extends SharePointCrawl {
         final GetListsResponse.SharePointList sharePointList = getListResponse.getList();
         final String listId = sharePointList.getId();
         final String listName = sharePointList.getListName();
-        for (int start=0; ;start += numberPerPage) {
+        for (int start = 0;; start += numberPerPage) {
             final GetListItemsResponse getListItemsResponse;
             if (listId != null) {
-                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage).setStart(start).execute();
+                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
+                        .setStart(start).execute();
             } else {
                 return null;
             }
@@ -87,16 +81,10 @@ public class ListCrawl extends SharePointCrawl {
                 }
 
                 final List<String> roles = getItemRoles(listId, item.getId(), sharePointGroupCache, skipRole);
-                crawlingQueue.offer(new ItemCrawl(client,
-                        listId,
-                        listName,
-                        item.getId(),
-                        roles,
-                        isSubPage,
-                        includeFields,
-                        excludeFields));
+                crawlingQueue.offer(new ItemCrawl(client, listId, listName, item.getId(), roles, isSubPage, includeFields, excludeFields));
                 if (item.hasAttachments()) {
-                    crawlingQueue.offer(new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles));
+                    crawlingQueue.offer(
+                            new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles));
                 }
             });
         }

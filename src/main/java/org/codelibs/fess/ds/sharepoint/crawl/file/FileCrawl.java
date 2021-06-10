@@ -44,7 +44,8 @@ public class FileCrawl extends SharePointCrawl {
 
     private final String defaultExtractorName = "tikaExtractor";
 
-    public FileCrawl(SharePointClient client, String fileName, String webUrl, String serverRelativeUrl, Date created, Date modified, List<String> roles) {
+    public FileCrawl(SharePointClient client, String fileName, String webUrl, String serverRelativeUrl, Date created, Date modified,
+            List<String> roles) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.webUrl = webUrl;
@@ -64,7 +65,7 @@ public class FileCrawl extends SharePointCrawl {
             logger.info("[Crawling File] [serverRelativeUrl:{}]", serverRelativeUrl);
         }
 
-        try(GetFileResponse getFileResponse = client.api().file().getFile().setServerRelativeUrl(serverRelativeUrl).execute()) {
+        try (GetFileResponse getFileResponse = client.api().file().getFile().setServerRelativeUrl(serverRelativeUrl).execute()) {
             return buildDataMap(getFileResponse);
         } catch (IOException e) {
             throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to file: " + fileName, e);

@@ -23,7 +23,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
-public class GetFile  extends SharePointApi<GetFileResponse> {
+public class GetFile extends SharePointApi<GetFileResponse> {
     private String serverRelativeUrl = null;
 
     public GetFile(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
@@ -49,10 +49,11 @@ public class GetFile  extends SharePointApi<GetFileResponse> {
         try {
             CloseableHttpResponse httpResponse = client.execute(httpGet);
             if (isErrorResponse(httpResponse)) {
-                throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode() + " body:" + EntityUtils.toString(httpResponse.getEntity()));
+                throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode()
+                        + " body:" + EntityUtils.toString(httpResponse.getEntity()));
             }
             return new GetFileResponse(httpResponse);
-        } catch(Exception e) {
+        } catch (Exception e) {
             throw new SharePointClientException("GetFile Request failure.", e);
         }
     }

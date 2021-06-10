@@ -76,19 +76,20 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
                 } else {
                     bodyMap = null;
                 }
-                throw new SharePointServerException("Api returned error. code:" + httpResponse.getStatusLine().getStatusCode() +
-                        "url:" + httpRequest.getURI().toString() + " body:" + bodyMap,
-                        httpResponse.getStatusLine().getStatusCode());
+                throw new SharePointServerException("Api returned error. code:" + httpResponse.getStatusLine().getStatusCode() + "url:"
+                        + httpRequest.getURI().toString() + " body:" + bodyMap, httpResponse.getStatusLine().getStatusCode());
             }
 
             final Map<String, Object> bodyMap = objectMapper.readValue(body, Map.class);
             if (body.contains("odata.error")) {
-                throw new SharePointServerException("Api returned error. " + " url:" + httpRequest.getURI().toString() + " body:" + bodyMap.toString(), httpResponse.getStatusLine().getStatusCode());
+                throw new SharePointServerException(
+                        "Api returned error. " + " url:" + httpRequest.getURI().toString() + " body:" + bodyMap.toString(),
+                        httpResponse.getStatusLine().getStatusCode());
             }
             return new JsonResponse(body, bodyMap, httpResponse.getStatusLine().getStatusCode());
         } catch (SharePointServerException e) {
             throw e;
-        } catch(Exception e) {
+        } catch (Exception e) {
             throw new SharePointClientException("Request failure. " + e.getMessage(), e);
         }
     }
@@ -101,18 +102,18 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
                 logger.debug("API's ResponseBody. [url:{}] [body:{}]", httpRequest.getURI().toString(), body);
             }
             if (isErrorResponse(httpResponse)) {
-                throw new SharePointServerException("Api returned error. code:" + httpResponse.getStatusLine().getStatusCode() +
-                        "url:" + httpRequest.getURI().toString() + " body:" + body,
-                        httpResponse.getStatusLine().getStatusCode());
+                throw new SharePointServerException("Api returned error. code:" + httpResponse.getStatusLine().getStatusCode() + "url:"
+                        + httpRequest.getURI().toString() + " body:" + body, httpResponse.getStatusLine().getStatusCode());
             }
 
             if (body.contains("odata.error")) {
-                throw new SharePointServerException("Api returned error. " + " url:" + httpRequest.getURI().toString() + " body:" + body, httpResponse.getStatusLine().getStatusCode());
+                throw new SharePointServerException("Api returned error. " + " url:" + httpRequest.getURI().toString() + " body:" + body,
+                        httpResponse.getStatusLine().getStatusCode());
             }
             return new XmlResponse(body, httpResponse.getStatusLine().getStatusCode());
         } catch (SharePointServerException e) {
             throw e;
-        } catch(Exception e) {
+        } catch (Exception e) {
             throw new SharePointClientException("Request failure. " + e.getMessage(), e);
         }
     }
@@ -127,7 +128,7 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     protected String encodeRelativeUrl(final String url) {
         String result = url;
         String[] array = url.split("/");
-        for (String value: array) {
+        for (String value : array) {
             result = result.replace(value, URLEncoder.encode(value, StandardCharsets.UTF_8));
         }
         return result.replace("+", "%20");

@@ -92,7 +92,7 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
         final List<GetListItemsResponse.ListItem> listItems = new ArrayList<>();
-        final List<Map<String, Object>> valueList = (List)jsonMap.get("value");
+        final List<Map<String, Object>> valueList = (List) jsonMap.get("value");
         valueList.forEach(value -> {
             try {
                 Object titleObj = value.get("Title");
@@ -127,13 +127,8 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
                 }
                 Date modified = sdf.parse(modifiedObj.toString());
 
-                GetListItemsResponse.ListItem listItem = new GetListItemsResponse.ListItem(idObj.toString(),
-                        editLinkObj.toString(),
-                        titleObj.toString(),
-                        attachments,
-                        created,
-                        modified
-                );
+                GetListItemsResponse.ListItem listItem = new GetListItemsResponse.ListItem(idObj.toString(), editLinkObj.toString(),
+                        titleObj.toString(), attachments, created, modified);
                 listItems.add(listItem);
             } catch (ParseException e) {
                 throw new SharePointClientException("Failed to get item info.", e);

@@ -41,7 +41,7 @@ public class GetFilesResponse implements SharePointApiResponse {
     public static GetFilesResponse build(SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> results = (List)jsonMap.get("value");
+        final List<Map<String, Object>> results = (List) jsonMap.get("value");
 
         final GetFilesResponse response = new GetFilesResponse();
         results.stream().forEach(result -> {
@@ -55,7 +55,7 @@ public class GetFilesResponse implements SharePointApiResponse {
     protected static DocLibFile createDocLibFile(Map<String, Object> dataMap) {
         final DocLibFile docLibFile = new DocLibFile();
         docLibFile.fileName = dataMap.get("Name").toString();
-        docLibFile.title = (String)dataMap.getOrDefault("Title", "");
+        docLibFile.title = (String) dataMap.getOrDefault("Title", "");
         docLibFile.serverRelativeUrl = dataMap.get("ServerRelativeUrl").toString();
         try {
             docLibFile.created = sdf.parse(dataMap.get("TimeCreated").toString());
@@ -92,7 +92,6 @@ public class GetFilesResponse implements SharePointApiResponse {
         public Date getModified() {
             return modified;
         }
-
 
     }
 }

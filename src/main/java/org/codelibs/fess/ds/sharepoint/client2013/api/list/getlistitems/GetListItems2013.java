@@ -93,7 +93,7 @@ public class GetListItems2013 extends GetListItems {
         final Map<String, Object> dataMap = handler.getDataMap();
 
         final List<GetListItems2013Response.ListItem> listItems = new ArrayList<>();
-        final List<Map<String, Object>> valueList = (List)dataMap.get("value");
+        final List<Map<String, Object>> valueList = (List) dataMap.get("value");
         valueList.forEach(value -> {
             try {
                 Object titleObj = value.get("Title");
@@ -128,13 +128,8 @@ public class GetListItems2013 extends GetListItems {
                 }
                 Date modified = sdf.parse(modifiedObj.toString());
 
-                GetListItems2013Response.ListItem listItem = new GetListItems2013Response.ListItem(idObj.toString(),
-                        editLinkObj.toString(),
-                        titleObj.toString(),
-                        attachments,
-                        created,
-                        modified
-                );
+                GetListItems2013Response.ListItem listItem = new GetListItems2013Response.ListItem(idObj.toString(), editLinkObj.toString(),
+                        titleObj.toString(), attachments, created, modified);
                 listItems.add(listItem);
             } catch (ParseException e) {
                 throw new SharePointClientException("Failed to get item info.", e);
@@ -199,7 +194,7 @@ public class GetListItems2013 extends GetListItems {
         public void endElement(final String uri, final String localName, final String qName) {
             if ("entry".equals(qName)) {
                 if (resultMap != null) {
-                    ((List)dataMap.get("value")).add(resultMap);
+                    ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
             } else {

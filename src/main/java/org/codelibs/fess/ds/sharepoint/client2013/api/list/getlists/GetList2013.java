@@ -35,7 +35,6 @@ public class GetList2013 extends GetList {
     private static final String API_BY_LIST_ID_PATH = "_api/web/lists(guid'{list_guid}')";
     private static final String API_BY_LIST_NAME_PATH = "_api/web/lists/GetByTitle('{list_name}')";
 
-
     protected String listId = null;
     protected String listName = null;
 
@@ -86,7 +85,8 @@ public class GetList2013 extends GetList {
         if (noCrawl == null) {
             noCrawl = "true";
         }
-        GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
+        GetListsResponse.SharePointList sharePointList =
+                new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
         return new GetListResponse(sharePointList);
     }
 
