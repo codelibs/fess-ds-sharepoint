@@ -87,9 +87,8 @@ public class FolderCrawl extends SharePointCrawl {
                             sharePointGroupCache, skipRole);
                     final String webLink =
                             getWebLink(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), serverRelativeUrl);
-                    //crawlingQueue.offer(new FileCrawl(client, file.getFileName(), client.helper().buildDocLibFileWebLink(getDoclibListItemResponse.getItemId(), file.getServerRelativeUrl(), serverRelativeUrl), file.getServerRelativeUrl(), file.getCreated(), file.getModified(), roles));
                     crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(),
-                            file.getModified(), roles));
+                            file.getModified(), roles, null));
                 });
             }
         }

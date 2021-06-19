@@ -65,9 +65,6 @@ public class SharePointCrawler {
         if (config.siteName == null) {
             throw new ValidationException("sitename param is required.");
         }
-        if (config.initialDocLibPath == null && config.initialListName == null && config.initialListId == null) {
-            throw new ValidationException("initial param is required.");
-        }
     }
 
     private SharePointClient createClient(CrawlerConfig config) {
@@ -94,8 +91,7 @@ public class SharePointCrawler {
         final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = new ConcurrentHashMap<>();
         if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null
                 && crawlerConfig.getInitialDocLibPath() == null) {
-            crawlingQueue.offer(
-                    new SiteCrawl(client, crawlerConfig.getSiteName(), crawlerConfig.getListItemNumPerPages(), sharePointGroupCache));
+            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig, sharePointGroupCache));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
                 crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(),
@@ -167,6 +163,8 @@ public class SharePointCrawler {
         private List<String> listContentIncludeFields = new ArrayList<>();
         private List<String> listContentExcludeFields = new ArrayList<>();
         private boolean skipRole = false;
+        private List<String> excludeList = new ArrayList<>();
+        private List<String> excludeFolder = new ArrayList<>();
 
         public String getUrl() {
             return url;
@@ -324,6 +322,22 @@ public class SharePointCrawler {
 
         public void setListContentExcludeFields(String listContentExcludeFields) {
             this.listContentExcludeFields = Arrays.asList(listContentExcludeFields.trim().split(","));
+        }
+
+        public List<String> getExcludeList() {
+            return excludeList;
+        }
+
+        public void setExcludeList(String excludeList) {
+            this.excludeList = Arrays.asList(excludeList.split(","));
+        }
+
+        public List<String> getExcludeFolder() {
+            return excludeFolder;
+        }
+
+        public void setExcludeFolder(String excludeFolder) {
+            this.excludeFolder = Arrays.asList(excludeFolder.split(","));
         }
 
         public boolean isSkipRole() {

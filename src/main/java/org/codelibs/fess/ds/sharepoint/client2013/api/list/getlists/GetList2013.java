@@ -81,12 +81,20 @@ public class GetList2013 extends GetList {
         if (idObj == null) {
             throw new SharePointClientException("Id is null.");
         }
+        Object entityTypeName = dataMap.get("EntityTypeName");
+        if (entityTypeName == null) {
+            throw new SharePointClientException("entityTypeName is null.");
+        }
         Object noCrawl = dataMap.get("NoCrawl");
         if (noCrawl == null) {
-            noCrawl = "true";
+            noCrawl = "false";
         }
-        GetListsResponse.SharePointList sharePointList =
-                new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
+        Object hidden = dataMap.get("Hidden");
+        if (hidden == null) {
+            hidden = "false";
+        }
+        GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
+                Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
         return new GetListResponse(sharePointList);
     }
 
@@ -113,6 +121,12 @@ public class GetList2013 extends GetList {
                 buffer.setLength(0);
             } else if ("d:NoCrawl".equals(qName)) {
                 fieldName = "NoCrawl";
+                buffer.setLength(0);
+            } else if ("d:Hidden".equals(qName)) {
+                fieldName = "Hidden";
+                buffer.setLength(0);
+            } else if ("d:EntityTypeName".equals(qName)) {
+                fieldName = "EntityTypeName";
                 buffer.setLength(0);
             }
         }

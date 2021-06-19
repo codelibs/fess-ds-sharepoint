@@ -35,6 +35,7 @@ public class ItemCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(ItemCrawl.class);
 
     private static final String ITEM_VALUE_PREFIX = "val_";
+    private boolean showFieldNameAtContent = false;
 
     private final String listId;
     private final String listName;
@@ -73,6 +74,7 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
         dataMap.put(fessConfig.getIndexFieldSite(), response.getFileRef());
         dataMap.put(fessConfig.getIndexFieldTitle(), getTitle(response));
+        dataMap.put(fessConfig.getIndexFieldTitle() + "WithListName", "[" + listName + "] " + getTitle(response));
         dataMap.put(fessConfig.getIndexFieldContent(), content);
         dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
@@ -99,10 +101,14 @@ public class ItemCrawl extends SharePointCrawl {
 
     private String buildContent(final GetListItemValueResponse response) {
         final StringBuilder sb = new StringBuilder();
-        response.getValues().entrySet().stream().filter(entry -> StringUtils.isNotBlank(entry.getValue())).filter(
-                entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey())) && !excludeFields.contains(entry.getKey()))
+        response.getValues().entrySet().stream().filter(entry -> StringUtils.isNotBlank(entry.getValue()))
+                .filter(entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey()))
+                        && !excludeFields.stream().anyMatch(exField -> entry.getKey().matches(exField)))
                 .forEach(entry -> {
-                    sb.append('[').append(normalizeKey(entry.getKey())).append("] ").append(entry.getValue()).append('\n');
+                    if (showFieldNameAtContent) {
+                        sb.append('[').append(normalizeKey(entry.getKey())).append("] ");
+                    }
+                    sb.append(entry.getValue()).append(" ");
                 });
         return sb.toString();
     }
@@ -147,7 +153,8 @@ public class ItemCrawl extends SharePointCrawl {
     }
 
     private String normalizeKey(final String key) {
-        return key.replace("_x005f_", "_");
+        //return key.replace("_x005f_", "_");
+        return key;
     }
 
     private String getFormUrl() {
@@ -164,15 +171,14 @@ public class ItemCrawl extends SharePointCrawl {
         return form.getServerRelativeUrl();
     }
 
-    private static final List<String> EXCLUDE_FIELDS = Arrays.asList(new String[] { "odata.metadata", "odata.type", "odata.id",
-            "odata.editLink", "ContentTypeId", "Title", "File_x005f_x0020_x005f_Type", "ComplianceAssetId", "ID", "Modified", "Created",
-            "Author", "Editor", "OData__x005f_HasCopyDestinations", "OData__x005f_CopySource", "owshiddenversion", "WorkflowVersion",
-            "OData__x005f_UIVersion", "OData__x005f_UIVersionString", "Attachments", "OData__x005f_ModerationStatus", "InstanceID", "Order",
-            "GUID", "WorkflowInstanceID", "FileRef", "FileDirRef", "Last_x005f_x0020_x005f_Modified", "Created_x005f_x0020_x005f_Date",
-            "FSObjType", "SortBehavior", "FileLeafRef", "UniqueId", "SyncClientId", "ProgId", "ScopeId", "MetaInfo", "OData__x005f_Level",
-            "OData__x005f_IsCurrentVersion", "ItemChildCount", "FolderChildCount", "Restricted", "OriginatorId", "NoExecute",
-            "ContentVersion", "OData__x005f_ComplianceFlags", "OData__x005f_ComplianceTag", "OData__x005f_ComplianceTagWrittenTime",
-            "OData__x005f_ComplianceTagUserId", "AccessPolicy", "OData__x005f_VirusStatus", "OData__x005f_VirusVendorID",
-            "OData__x005f_VirusInfo", "AppAuthor", "AppEditor", "SMTotalSize", "SMLastModifiedDate", "SMTotalFileStreamSize",
-            "SMTotalFileCount", "OData__x005f_ModerationComments", "Exists", "ParentItemID", "ParentFolderID" });
+    private static final List<String> EXCLUDE_FIELDS = Arrays.asList("odata.*", "OData__.*", "ContentTypeId", "Title",
+            "File_x005f_x0020_x005f_Type", "ComplianceAssetId", "ID", "Modified", "Created", "Author", "Editor", "owshiddenversion",
+            "WorkflowVersion", "Attachments", "InstanceID", "Order", "GUID", "WorkflowInstanceID", "FileRef", "FileDirRef",
+            "Last_x005f_x0020_x005f_Modified", "Created_x005f_x0020_x005f_Date", "FSObjType", "SortBehavior", "FileLeafRef", "UniqueId",
+            "SyncClientId", "ProgId", "ScopeId", "MetaInfo", "ItemChildCount", "FolderChildCount", "Restricted", "OriginatorId",
+            "NoExecute", "ContentVersion", "AccessPolicy", "AppAuthor", "AppEditor", "SMTotalSize", "SMLastModifiedDate",
+            "SMTotalFileStreamSize", "SMTotalFileCount", "Exists", "ParentItemID", "ParentFolderID", "Expires",
+            "Created_x005f_x0020_x005f_By", "PageLayoutType", "StreamHash", "PromotedState", "DocConcurrencyNumber", "ParentUniqueId",
+            "Modified_x005f_x0020_x005f_By", "VirusStatus", "IsCheckedoutToLocal", "File_x0020_Size", "BannerImageUrl",
+            "ClientSideApplicationId", "File_x005f_x0020_x005f_Size", "FirstPublishedDate");
 }

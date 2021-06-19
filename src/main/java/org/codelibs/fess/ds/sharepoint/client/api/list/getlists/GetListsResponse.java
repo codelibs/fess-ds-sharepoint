@@ -34,11 +34,16 @@ public class GetListsResponse implements SharePointApiResponse {
         private final String id;
         private final String listName;
         private final boolean noCrawl;
+        private final boolean hidden;
+        private final String entityTypeName;
 
-        public SharePointList(final String id, final String listName, final boolean noCrawl) {
+        public SharePointList(final String id, final String listName, final boolean noCrawl, final boolean hidden,
+                final String entityTypeName) {
             this.id = id;
             this.listName = listName;
             this.noCrawl = noCrawl;
+            this.hidden = hidden;
+            this.entityTypeName = entityTypeName;
         }
 
         public String getId() {
@@ -51,6 +56,14 @@ public class GetListsResponse implements SharePointApiResponse {
 
         public boolean isNoCrawl() {
             return noCrawl;
+        }
+
+        public boolean isHidden() {
+            return hidden;
+        }
+
+        public String getEntityTypeName() {
+            return entityTypeName;
         }
     }
 

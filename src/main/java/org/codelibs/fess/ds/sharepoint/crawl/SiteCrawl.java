@@ -15,7 +15,9 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl;
 
+import org.codelibs.fess.ds.sharepoint.SharePointCrawler;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
+import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFoldersResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
@@ -23,39 +25,61 @@ import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
 public class SiteCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(SiteCrawl.class);
 
-    private final String siteName;
-    private final int numberPerPage;
+    private final SharePointCrawler.CrawlerConfig config;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
 
-    public SiteCrawl(SharePointClient client, String siteName, int numberPerPage,
+    public SiteCrawl(SharePointClient client, SharePointCrawler.CrawlerConfig config,
             Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);
-        this.siteName = siteName;
-        this.numberPerPage = numberPerPage;
+        this.config = config;
+
         this.sharePointGroupCache = sharePointGroupCache;
     }
 
     @Override
     public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
-            logger.info("[Crawling Site] [siteName:{}]", siteName);
+            logger.info("[Crawling Site] [siteName:{}]", config.getSiteName());
         }
-        GetListsResponse getListsResponse = client.api().list().getLists().execute();
-        getListsResponse.getLists().stream().forEach(list -> {
-            if (list.isNoCrawl()) {
-                return;
-            }
-            crawlingQueue.offer(new ListCrawl(client, list.getId(), null, numberPerPage, sharePointGroupCache, false, false,
-                    new ArrayList<>(), new ArrayList<>()));
+        final Set<String> targetFolderName = new HashSet<>();
+        GetFoldersResponse getFoldersResponse =
+                client.api().doclib().getFolders().setServerRelativeUrl("/sites/" + config.getSiteName() + "/").execute();
+        getFoldersResponse.getFolders().stream().filter(folder -> !isExcludeFolder(folder.getName())).forEach(folder -> {
+            targetFolderName.add(folder.getName());
+            crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache));
         });
-        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + siteName + "/Shared Documents", false, sharePointGroupCache));
+        GetListsResponse getListsResponse = client.api().list().getLists().execute();
+        getListsResponse.getLists().stream().filter(list -> !list.isNoCrawl() && !list.isHidden())
+                .filter(list -> !targetFolderName.contains(list.getListName())).filter(list -> !isExcludeList(list.getEntityTypeName()))
+                .forEach(list -> crawlingQueue.offer(new ListCrawl(client, list.getId(), list.getListName(),
+                        config.getListItemNumPerPages(), sharePointGroupCache, isSubPageList(list.getEntityTypeName()), config.isSkipRole(),
+                        config.getListContentIncludeFields(), config.getListContentExcludeFields())));
+        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + config.getSiteName() + "/Shared Documents", false, sharePointGroupCache));
         return null;
     }
+
+    private boolean isExcludeList(final String listEntityName) {
+        return defaultExcludeListEntityTypes.stream().anyMatch(listEntityName::matches)
+                || config.getExcludeList().stream().anyMatch(listEntityName::matches);
+    }
+
+    private boolean isSubPageList(final String listEntityName) {
+        return "SitePages".equals(listEntityName);
+    }
+
+    private static final List<String> defaultExcludeListEntityTypes = Arrays.asList("OData__.*", "TaxonomyHiddenListList", "SiteAssets",
+            "Style_x0020_Library", "FormServerTemplates", "UserInfo", "IWConvertedForms", "Shared_x0020_Documents");
+
+    private boolean isExcludeFolder(final String folderTitle) {
+        return defaultExcludeFolderTitle.stream().anyMatch(folderTitle::matches)
+                || config.getExcludeFolder().stream().anyMatch(folderTitle::matches);
+    }
+
+    private static final List<String> defaultExcludeFolderTitle = Arrays.asList("IWConvertedForms", "_private", "Style Library",
+            "_catalogs", "FormServerTemplates", "SiteAssets", "Lists", "_cts", "_vti_pvt", "SitePages", "images");
 }
