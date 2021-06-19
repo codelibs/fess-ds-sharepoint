@@ -131,6 +131,15 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
         public String getAzureAccount() {
             return account.substring(AZURE_ACCOUNT_PREFIX.length());
         }
+
+        public String getAdAccountFromAzureAccount() {
+            final String azureAccount = getAzureAccount();
+            if (azureAccount.contains("@")) {
+                return azureAccount.substring(0, azureAccount.indexOf("@"));
+            } else {
+                return azureAccount;
+            }
+        }
     }
 
     public static class SecurityGroup {
