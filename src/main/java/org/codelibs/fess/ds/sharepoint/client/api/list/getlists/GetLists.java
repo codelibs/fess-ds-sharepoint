@@ -53,11 +53,19 @@ public class GetLists extends SharePointApi<GetListsResponse> {
             if (idObj == null) {
                 return;
             }
+            Object entityTypeName = value.get("EntityTypeName");
+            if (entityTypeName == null) {
+                return;
+            }
             Object noCrawl = value.get("NoCrawl");
             if (noCrawl == null) {
-                noCrawl = "true";
+                noCrawl = "false";
             }
-            GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.valueOf(noCrawl.toString()));
+            Object hidden = value.get("Hidden");
+            if (hidden == null) {
+                hidden = "false";
+            }
+            GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
             sharePointLists.add(sharePointList);
         });
 

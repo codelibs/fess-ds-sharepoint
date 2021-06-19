@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.file;
 
+import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.crawler.extractor.Extractor;
 import org.codelibs.fess.crawler.helper.MimeTypeHelper;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
@@ -40,11 +41,12 @@ public class FileCrawl extends SharePointCrawl {
     private final Date created;
     private final Date modified;
     private final List<String> roles;
+    private final String listName;
     private final Map<String, String> additionalProperties = new HashMap<>();
 
     private final String defaultExtractorName = "tikaExtractor";
 
-    public FileCrawl(SharePointClient client, String fileName, String webUrl, String serverRelativeUrl, Date created, Date modified, List<String> roles) {
+    public FileCrawl(SharePointClient client, String fileName, String webUrl, String serverRelativeUrl, Date created, Date modified, List<String> roles, String listName) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.webUrl = webUrl;
@@ -52,6 +54,7 @@ public class FileCrawl extends SharePointCrawl {
         this.created = created;
         this.modified = modified;
         this.roles = roles;
+        this.listName = listName;
     }
 
     public void addProperty(final String key, final String value) {
@@ -83,6 +86,11 @@ public class FileCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
         dataMap.put(fessConfig.getIndexFieldSite(), serverRelativeUrl);
         dataMap.put(fessConfig.getIndexFieldTitle(), fileName);
+        if (StringUtils.isNotBlank(listName)) {
+            dataMap.put(fessConfig.getIndexFieldTitle() + "WithListName", "[" + listName + "] " + fileName);
+        } else {
+            dataMap.put(fessConfig.getIndexFieldTitle() + "WithListName", fileName);
+        }
         dataMap.put(fessConfig.getIndexFieldMimetype(), mimeType);
         dataMap.put(fessConfig.getIndexFieldFiletype(), fileType);
         dataMap.put(fessConfig.getIndexFieldContent(), content);

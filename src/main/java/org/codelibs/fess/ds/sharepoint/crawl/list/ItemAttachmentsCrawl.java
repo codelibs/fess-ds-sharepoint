@@ -62,7 +62,8 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
                     file.getServerRelativeUrl(),
                     created,
                     modified,
-                    roles);
+                    roles,
+                    listName);
             fileCrawl.addProperty("list_name", listName);
             fileCrawl.addProperty("list_id", listId);
             fileCrawl.addProperty("item_id", itemId);
