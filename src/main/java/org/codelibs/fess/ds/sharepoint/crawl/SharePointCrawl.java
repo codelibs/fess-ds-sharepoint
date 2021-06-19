@@ -64,9 +64,19 @@ public abstract class SharePointCrawl {
                 .map(GetListItemRoleResponse.User::getAccount)
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(roles::add);
+        getListItemRoleResponse.getUsers().stream()
+                .filter(GetListItemRoleResponse.User::isAzureAccount)
+                .map(GetListItemRoleResponse.User::getAdAccountFromAzureAccount)
+                .map(systemHelper::getSearchRoleByUser)
+                .forEach(roles::add);
         getListItemRoleResponse.getSecurityGroups().stream()
                 .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
                 .map(GetListItemRoleResponse.SecurityGroup::getAzureAccount)
+                .map(systemHelper::getSearchRoleByGroup)
+                .forEach(roles::add);
+        getListItemRoleResponse.getSecurityGroups().stream()
+                .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
+                .map(GetListItemRoleResponse.SecurityGroup::getTitle)
                 .map(systemHelper::getSearchRoleByGroup)
                 .forEach(roles::add);
         getListItemRoleResponse.getSharePointGroups().stream()
@@ -95,9 +105,19 @@ public abstract class SharePointCrawl {
                 .map(GetListItemRoleResponse.User::getAzureAccount)
                 .map(systemHelper::getSearchRoleByUser)
                 .forEach(titles::add);
+        sharePointGroup.getUsers().stream()
+                .filter(GetListItemRoleResponse.User::isAzureAccount)
+                .map(GetListItemRoleResponse.User::getAdAccountFromAzureAccount)
+                .map(systemHelper::getSearchRoleByUser)
+                .forEach(titles::add);
         sharePointGroup.getSecurityGroups().stream()
                 .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
                 .map(GetListItemRoleResponse.SecurityGroup::getAzureAccount)
+                .map(systemHelper::getSearchRoleByGroup)
+                .forEach(titles::add);
+        sharePointGroup.getSecurityGroups().stream()
+                .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
+                .map(GetListItemRoleResponse.SecurityGroup::getTitle)
                 .map(systemHelper::getSearchRoleByGroup)
                 .forEach(titles::add);
 
