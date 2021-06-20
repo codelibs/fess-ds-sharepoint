@@ -54,7 +54,7 @@ public class FileCrawl extends SharePointCrawl {
         this.created = created;
         this.modified = modified;
         this.roles = roles;
-        this.listName = listName;
+        this.listName = listName != null ? listName : "";
     }
 
     public void addProperty(final String key, final String value) {
@@ -91,6 +91,7 @@ public class FileCrawl extends SharePointCrawl {
         } else {
             dataMap.put(fessConfig.getIndexFieldTitle() + "WithListName", fileName);
         }
+        dataMap.put("listName", listName);
         dataMap.put(fessConfig.getIndexFieldMimetype(), mimeType);
         dataMap.put(fessConfig.getIndexFieldFiletype(), fileType);
         dataMap.put(fessConfig.getIndexFieldContent(), content);
