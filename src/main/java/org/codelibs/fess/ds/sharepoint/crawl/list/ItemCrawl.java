@@ -49,7 +49,7 @@ public class ItemCrawl extends SharePointCrawl {
             List<String> includeFields, List<String> excludeFields) {
         super(client);
         this.listId = listId;
-        this.listName = listName;
+        this.listName = listName != null ? listName : "";
         this.itemId = itemId;
         this.roles = roles;
         this.isSubPage = isSubPage;
@@ -75,6 +75,7 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldSite(), response.getFileRef());
         dataMap.put(fessConfig.getIndexFieldTitle(), getTitle(response));
         dataMap.put(fessConfig.getIndexFieldTitle() + "WithListName", "[" + listName + "] " + getTitle(response));
+        dataMap.put("listName", listName);
         dataMap.put(fessConfig.getIndexFieldContent(), content);
         dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
