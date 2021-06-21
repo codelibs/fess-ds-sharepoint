@@ -142,7 +142,9 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
     }
 
     public static class SecurityGroup {
-        private static final String[] AZURE_ACCOUNT_PREFIXES = new String[] { "c:0o.c|federateddirectoryclaimprovider|", "c:0t.c|tenant|" };
+        private static final String AZURE_GRID_ALL_USERS_ROLE = "spo-grid-all-users";
+        private static final String AZURE_GRID_ALL_USERS_PREFIX = "c:0-.f|rolemanager|spo-grid-all-users/";
+        private static final String[] AZURE_ACCOUNT_PREFIXES = new String[]{"c:0o.c|federateddirectoryclaimprovider|", "c:0t.c|tenant|", AZURE_GRID_ALL_USERS_PREFIX};
 
         private final String id;
         private final String title;
@@ -168,13 +170,17 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
 
         public String getAzureAccount() {
             String account = loginName;
-            for (final String prefix : AZURE_ACCOUNT_PREFIXES) {
-                if (account.startsWith(prefix)) {
-                    account = account.substring(prefix.length());
-                    if (account.endsWith("_o")) {
-                        account = account.substring(0, account.length() - "_o".length());
+            if (account.startsWith(AZURE_GRID_ALL_USERS_PREFIX)) {
+                account = AZURE_GRID_ALL_USERS_ROLE;
+            } else {
+                for (String prefix : AZURE_ACCOUNT_PREFIXES) {
+                    if (account.startsWith(prefix)) {
+                        account = account.substring(prefix.length());
+                        if (account.endsWith("_o")) {
+                            account = account.substring(0, account.length() - "_o".length());
+                        }
+                        break;
                     }
-                    break;
                 }
             }
             return account;
