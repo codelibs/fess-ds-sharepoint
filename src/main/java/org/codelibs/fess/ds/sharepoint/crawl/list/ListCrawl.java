@@ -41,8 +41,8 @@ public class ListCrawl extends SharePointCrawl {
     private final List<String> excludeFields;
 
     public ListCrawl(final SharePointClient client, final String id, final String listName, final int numberPerPage,
-            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean isSubPage, final boolean skipRole,
-            final List<String> includeFields, final List<String> excludeFields) {
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean isSubPage,
+            final boolean skipRole, final List<String> includeFields, final List<String> excludeFields) {
         super(client);
         this.id = id;
         this.listName = listName;

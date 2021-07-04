@@ -28,7 +28,9 @@ public class SharePointClient {
 
     private SharePointApis sharePointApis;
     private final SharePointHelper sharePointHelper;
-    protected SharePointClient(final CloseableHttpClient httpClient, final String url, final String siteName, final OAuth oAuth, final boolean verson2013) {
+
+    protected SharePointClient(final CloseableHttpClient httpClient, final String url, final String siteName, final OAuth oAuth,
+            final boolean verson2013) {
         this.siteUrl = buildSiteUrl(url, siteName);
         this.url = url;
         this.siteName = siteName;

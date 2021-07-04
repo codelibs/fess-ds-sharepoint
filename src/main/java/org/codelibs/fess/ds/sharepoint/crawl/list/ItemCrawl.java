@@ -50,8 +50,8 @@ public class ItemCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     private final List<String> excludeFields;
 
-    public ItemCrawl(final SharePointClient client, final String listId, final String listName, final String itemId, final List<String> roles, final boolean isSubPage,
-            final List<String> includeFields, final List<String> excludeFields) {
+    public ItemCrawl(final SharePointClient client, final String listId, final String listName, final String itemId,
+            final List<String> roles, final boolean isSubPage, final List<String> includeFields, final List<String> excludeFields) {
         super(client);
         this.listId = listId;
         this.listName = listName != null ? listName : "";
@@ -145,17 +145,21 @@ public class ItemCrawl extends SharePointCrawl {
             }
             return client.getUrl() + sb.toString();
         }
+        String formUrl = getFormUrl();
+        if (formUrl == null) {
+            return null;
+        }
         if (response.getFsObjType() == 0 && StringUtils.isNotBlank(response.getParentItemId())) {
             final String dirRef = response.getFileDirRef();
-            final String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            final String serverRelativeUrl = formUrl.replace("DispForm.aspx", "Flat.aspx");
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
                     + URLEncoder.encode(dirRef, StandardCharsets.UTF_8);
         } else if (response.getFsObjType() == 1) {
-            final String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            final String serverRelativeUrl = formUrl.replace("DispForm.aspx", "Flat.aspx");
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
                     + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
         } else {
-            final String serverRelativeUrl = getFormUrl();
+            final String serverRelativeUrl = formUrl;
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
         }
     }

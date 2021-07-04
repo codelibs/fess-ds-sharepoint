@@ -50,8 +50,8 @@ public class FileCrawl extends SharePointCrawl {
 
     private final String defaultExtractorName = "tikaExtractor";
 
-    public FileCrawl(final SharePointClient client, final String fileName, final String webUrl, final String serverRelativeUrl, final Date created, final Date modified,
-            final List<String> roles, final String listName) {
+    public FileCrawl(final SharePointClient client, final String fileName, final String webUrl, final String serverRelativeUrl,
+            final Date created, final Date modified, final List<String> roles, final String listName) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.webUrl = webUrl;

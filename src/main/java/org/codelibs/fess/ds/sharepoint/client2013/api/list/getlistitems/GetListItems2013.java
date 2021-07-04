@@ -136,8 +136,8 @@ public class GetListItems2013 extends GetListItems {
                 }
                 final Date modified = sdf.parse(modifiedObj.toString());
 
-                final GetListItems2013Response.ListItem listItem = new GetListItems2013Response.ListItem(idObj.toString(), editLinkObj.toString(),
-                        titleObj.toString(), attachments, created, modified);
+                final GetListItems2013Response.ListItem listItem = new GetListItems2013Response.ListItem(idObj.toString(),
+                        editLinkObj.toString(), titleObj.toString(), attachments, created, modified);
                 listItems.add(listItem);
             } catch (final ParseException e) {
                 throw new SharePointClientException("Failed to get item info.", e);

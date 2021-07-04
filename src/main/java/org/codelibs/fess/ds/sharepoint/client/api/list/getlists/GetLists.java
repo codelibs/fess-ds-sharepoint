@@ -65,8 +65,9 @@ public class GetLists extends SharePointApi<GetListsResponse> {
             if (hidden == null) {
                 hidden = "false";
             }
-            final GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
-                    Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
+            final GetListsResponse.SharePointList sharePointList =
+                    new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(), Boolean.parseBoolean(noCrawl.toString()),
+                            Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
             sharePointLists.add(sharePointList);
         });
 

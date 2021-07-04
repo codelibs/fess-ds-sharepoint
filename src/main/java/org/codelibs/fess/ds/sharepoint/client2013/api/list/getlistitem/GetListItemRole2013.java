@@ -45,7 +45,8 @@ public class GetListItemRole2013 extends GetListItemRole {
     }
 
     @Override
-    public GetListItemRole2013 setSharePointGroupCache(final Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache) {
+    public GetListItemRole2013 setSharePointGroupCache(
+            final Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache) {
         this.sharePointGroupCache = sharePointGroupCache;
         return this;
     }
@@ -79,8 +80,8 @@ public class GetListItemRole2013 extends GetListItemRole {
             final int principalType = Integer.parseInt(memberResponseMap.get("PrincipalType").toString());
             if (principalType == 1) {
                 // User
-                final GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id, memberResponseMap.get("Title").toString(),
-                        memberResponseMap.get("LoginName").toString());
+                final GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id,
+                        memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
                 response.addUser(user);
             } else if (principalType == 8) {
                 final GetListItemRole2013Response.SharePointGroup sharePointGroup =

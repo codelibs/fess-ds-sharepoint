@@ -42,8 +42,8 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
     private final Date modified;
     private final List<String> roles;
 
-    public ItemAttachmentsCrawl(final SharePointClient client, final String listId, final String listName, final String itemId, final Date created, final Date modified,
-            final List<String> roles) {
+    public ItemAttachmentsCrawl(final SharePointClient client, final String listId, final String listName, final String itemId,
+            final Date created, final Date modified, final List<String> roles) {
         super(client);
         this.itemId = itemId;
         this.listId = listId;
@@ -61,8 +61,8 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
 
         final GetListItemAttachmentsResponse response = client.api().list().getListItemAttachments().setId(listId, itemId).execute();
         response.getFiles().forEach(file -> {
-            final FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(), getWebLink(file.getFileName()), file.getServerRelativeUrl(),
-                    created, modified, roles, listName);
+            final FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(), getWebLink(file.getFileName()),
+                    file.getServerRelativeUrl(), created, modified, roles, listName);
             fileCrawl.addProperty("list_name", listName);
             fileCrawl.addProperty("list_id", listId);
             fileCrawl.addProperty("item_id", itemId);
