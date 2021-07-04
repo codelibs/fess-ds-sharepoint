@@ -15,13 +15,13 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 
 public class GetFormsResponse implements SharePointApiResponse {
     private final List<Form> forms = new ArrayList<>();
@@ -37,9 +37,9 @@ public class GetFormsResponse implements SharePointApiResponse {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         final List<Map<String, Object>> values = (List) jsonMap.get("value");
         values.stream().forEach(value -> {
-            String id = value.get("Id").toString();
-            String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
-            int type = Integer.valueOf(value.get("FormType").toString());
+            final String id = value.get("Id").toString();
+            final String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
+            final int type = Integer.parseInt(value.get("FormType").toString());
             response.forms.add(new Form(id, serverRelativeUrl, PageType.getPageType(type)));
         });
         return response;
@@ -50,7 +50,7 @@ public class GetFormsResponse implements SharePointApiResponse {
         private final String serverRelativeUrl;
         private final PageType type;
 
-        public Form(String id, String serverRelativeUrl, PageType type) {
+        public Form(final String id, final String serverRelativeUrl, final PageType type) {
             this.id = id;
             this.serverRelativeUrl = serverRelativeUrl;
             this.type = type;

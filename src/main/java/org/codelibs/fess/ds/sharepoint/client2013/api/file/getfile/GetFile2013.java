@@ -26,10 +26,11 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 public class GetFile2013 extends GetFile {
     private String serverRelativeUrl = null;
 
-    public GetFile2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFile2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    @Override
     public GetFile2013 setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
@@ -44,18 +45,19 @@ public class GetFile2013 extends GetFile {
         final HttpGet httpGet = new HttpGet(buildUrl());
         httpGet.addHeader("Accept", "application/json");
         try {
-            CloseableHttpResponse httpResponse = client.execute(httpGet);
+            final CloseableHttpResponse httpResponse = client.execute(httpGet);
             if (isErrorResponse(httpResponse)) {
                 throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode()
                         + " body:" + EntityUtils.toString(httpResponse.getEntity()));
             }
             return new GetFile2013Response(httpResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException("Request failure.", e);
         }
     }
 
-    private String buildUrl() {
+    @Override
+    protected String buildUrl() {
         return siteUrl + "/_api/web/GetFileByServerRelativeUrl('" + encodeRelativeUrl(serverRelativeUrl) + "')/$value";
     }
 }

@@ -15,6 +15,11 @@
  */
 package org.codelibs.fess.ds.sharepoint;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.codelibs.fess.crawler.exception.CrawlingAccessException;
 import org.codelibs.fess.crawler.exception.MultipleCrawlingAccessException;
 import org.codelibs.fess.ds.AbstractDataStore;
@@ -26,11 +31,10 @@ import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-
 public class SharePointDataStore extends AbstractDataStore {
     private static final Logger logger = LoggerFactory.getLogger(SharePointDataStore.class);
 
+    @Override
     protected String getName() {
         return this.getClass().getSimpleName();
     }
@@ -96,7 +100,7 @@ public class SharePointDataStore extends AbstractDataStore {
     }
 
     private SharePointCrawler createCrawler(final Map<String, String> paramMap) {
-        SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+        final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
         config.setUrl(paramMap.get("url"));
         if (paramMap.containsKey("auth.ntlm.user")) {
             config.setNtlmUser(paramMap.get("auth.ntlm.user"));
@@ -125,7 +129,7 @@ public class SharePointDataStore extends AbstractDataStore {
             config.setExcludeFolder(paramMap.get("site.exclude_folder"));
         }
         if (paramMap.containsKey("list.items.number_per_page")) {
-            config.setListItemNumPerPages(Integer.valueOf(paramMap.get("list.items.number_per_page")));
+            config.setListItemNumPerPages(Integer.parseInt(paramMap.get("list.items.number_per_page")));
         }
         if (paramMap.containsKey("list.item.content.include_fields")) {
             config.setListContentIncludeFields(paramMap.get("list.item.content.include_fields"));
@@ -134,22 +138,22 @@ public class SharePointDataStore extends AbstractDataStore {
             config.setListContentExcludeFields(paramMap.get("list.item.content.exclude_fields"));
         }
         if (paramMap.containsKey("list.is_sub_page")) {
-            config.setSubPage(Boolean.valueOf(paramMap.get("list.is_sub_page")));
+            config.setSubPage(Boolean.parseBoolean(paramMap.get("list.is_sub_page")));
         }
         if (paramMap.containsKey("http.connection_timeout")) {
-            config.setConnectionTimeout(Integer.valueOf(paramMap.get("http.connection_timeout")));
+            config.setConnectionTimeout(Integer.parseInt(paramMap.get("http.connection_timeout")));
         }
         if (paramMap.containsKey("http.socket_timeout")) {
-            config.setSocketTimeout(Integer.valueOf(paramMap.get("http.socket_timeout")));
+            config.setSocketTimeout(Integer.parseInt(paramMap.get("http.socket_timeout")));
         }
         if (paramMap.containsKey("sp.version")) {
             config.setSharePointVersion(paramMap.get("sp.version"));
         }
         if (paramMap.containsKey("retry_limit")) {
-            config.setRetryLimit(Integer.valueOf(paramMap.get("retry_limit")));
+            config.setRetryLimit(Integer.parseInt(paramMap.get("retry_limit")));
         }
         if (paramMap.containsKey("role.skip")) {
-            config.setSkipRole(Boolean.valueOf(paramMap.get("role.skip")));
+            config.setSkipRole(Boolean.parseBoolean(paramMap.get("role.skip")));
         }
         return new SharePointCrawler(config);
     }

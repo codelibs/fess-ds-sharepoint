@@ -32,71 +32,86 @@ import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetList2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetLists2013;
 
 public class SharePoint2013Apis extends SharePointApis {
-    public SharePoint2013Apis(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public SharePoint2013Apis(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    @Override
     public ListApis list() {
         return new ListApis();
     }
 
+    @Override
     public FileApis file() {
         return new FileApis();
     }
 
+    @Override
     public DocLibApis doclib() {
         return new DocLibApis();
     }
 
     public class ListApis extends SharePointApis.ListApis {
+        @Override
         public GetList2013 getList() {
             return new GetList2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetLists2013 getLists() {
             return new GetLists2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetListItems2013 getListItems() {
             return new GetListItems2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetListItemValue2013 getListItemValue() {
             return new GetListItemValue2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetListItemAttachments2013 getListItemAttachments() {
             return new GetListItemAttachments2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetListItemRole2013 getListItemRole() {
             return new GetListItemRole2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetForms2013 getForms() {
             return new GetForms2013(client, siteUrl, oAuth);
         }
     }
 
     public class FileApis extends SharePointApis.FileApis {
+        @Override
         public GetFile2013 getFile() {
             return new GetFile2013(client, siteUrl, oAuth);
         }
     }
 
     public class DocLibApis extends SharePointApis.DocLibApis {
+        @Override
         public GetFolder2013 getFolder() {
             return new GetFolder2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetFolders2013 getFolders() {
             return new GetFolders2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetFiles2013 getFiles() {
             return new GetFiles2013(client, siteUrl, oAuth);
         }
 
+        @Override
         public GetDoclibListItem2013 getListItem() {
             return new GetDoclibListItem2013(client, siteUrl, oAuth);
         }

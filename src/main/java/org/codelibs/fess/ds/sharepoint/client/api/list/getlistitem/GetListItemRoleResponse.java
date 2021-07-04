@@ -15,11 +15,11 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
 public class GetListItemRoleResponse implements SharePointApiResponse {
     private final List<SharePointGroup> sharePointGroups = new ArrayList<>();
@@ -56,24 +56,24 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
     public static class SharePointGroup {
         private final String id;
         private final String title;
-        private List<User> users = new ArrayList<>();
-        private List<SecurityGroup> securityGroups = new ArrayList<>();
-        private List<SharePointGroup> sharePointGroups = new ArrayList<>();
+        private final List<User> users = new ArrayList<>();
+        private final List<SecurityGroup> securityGroups = new ArrayList<>();
+        private final List<SharePointGroup> sharePointGroups = new ArrayList<>();
 
-        public SharePointGroup(String id, String title) {
+        public SharePointGroup(final String id, final String title) {
             this.id = id;
             this.title = title;
         }
 
-        public void addUser(User user) {
+        public void addUser(final User user) {
             users.add(user);
         }
 
-        public void addSecurityGroup(SecurityGroup group) {
+        public void addSecurityGroup(final SecurityGroup group) {
             securityGroups.add(group);
         }
 
-        public void addSharePointGroup(SharePointGroup sharePointGroup) {
+        public void addSharePointGroup(final SharePointGroup sharePointGroup) {
             sharePointGroups.add(sharePointGroup);
         }
 
@@ -106,7 +106,7 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
         private final String title;
         private final String account;
 
-        public User(String id, String title, String account) {
+        public User(final String id, final String title, final String account) {
             this.id = id;
             this.title = title;
             this.account = account;
@@ -136,9 +136,8 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
             final String azureAccount = getAzureAccount();
             if (azureAccount.contains("@")) {
                 return azureAccount.substring(0, azureAccount.indexOf("@"));
-            } else {
-                return azureAccount;
             }
+            return azureAccount;
         }
     }
 
@@ -149,7 +148,7 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
         private final String title;
         private final String loginName;
 
-        public SecurityGroup(String id, String title, String loginName) {
+        public SecurityGroup(final String id, final String title, final String loginName) {
             this.id = id;
             this.title = title;
             this.loginName = loginName;
@@ -169,7 +168,7 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
 
         public String getAzureAccount() {
             String account = loginName;
-            for (String prefix : AZURE_ACCOUNT_PREFIXES) {
+            for (final String prefix : AZURE_ACCOUNT_PREFIXES) {
                 if (account.startsWith(prefix)) {
                     account = account.substring(prefix.length());
                     if (account.endsWith("_o")) {

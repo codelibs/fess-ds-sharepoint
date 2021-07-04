@@ -29,21 +29,24 @@ public class GetFolders2013 extends GetFolders {
     private int num = 100;
     private int start = 0;
 
-    public GetFolders2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFolders2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetFolders2013 setServerRelativeUrl(String serverRelativeUrl) {
+    @Override
+    public GetFolders2013 setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
-    public GetFolders2013 setNum(int num) {
+    @Override
+    public GetFolders2013 setNum(final int num) {
         this.num = num;
         return this;
     }
 
-    public GetFolders2013 setStart(int start) {
+    @Override
+    public GetFolders2013 setStart(final int start) {
         this.start = start;
         return this;
     }
@@ -59,7 +62,7 @@ public class GetFolders2013 extends GetFolders {
         final XmlResponse xmlResponse = doXmlRequest(httpGet);
         try {
             return GetFolders2013Response.build(xmlResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }

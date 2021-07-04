@@ -18,14 +18,16 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.doclib.getlistitem;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem.GetDoclibListItemResponse;
 
 public class GetDoclibListItem2013Response extends GetDoclibListItemResponse {
-    public GetDoclibListItem2013Response(String listId, String itemId) {
+    public GetDoclibListItem2013Response(final String listId, final String itemId) {
         super(listId, itemId);
     }
 
+    @Override
     public String getListId() {
         return listId;
     }
 
+    @Override
     public String getItemId() {
         return itemId;
     }

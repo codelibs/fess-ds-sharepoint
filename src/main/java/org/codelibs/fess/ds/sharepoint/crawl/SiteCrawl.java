@@ -15,6 +15,13 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+
 import org.codelibs.fess.ds.sharepoint.SharePointCrawler;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFoldersResponse;
@@ -25,16 +32,14 @@ import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-
 public class SiteCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(SiteCrawl.class);
 
     private final SharePointCrawler.CrawlerConfig config;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
 
-    public SiteCrawl(SharePointClient client, SharePointCrawler.CrawlerConfig config,
-            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    public SiteCrawl(final SharePointClient client, final SharePointCrawler.CrawlerConfig config,
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);
         this.config = config;
 
@@ -47,13 +52,13 @@ public class SiteCrawl extends SharePointCrawl {
             logger.info("[Crawling Site] [siteName:{}]", config.getSiteName());
         }
         final Set<String> targetFolderName = new HashSet<>();
-        GetFoldersResponse getFoldersResponse =
+        final GetFoldersResponse getFoldersResponse =
                 client.api().doclib().getFolders().setServerRelativeUrl("/sites/" + config.getSiteName() + "/").execute();
         getFoldersResponse.getFolders().stream().filter(folder -> !isExcludeFolder(folder.getName())).forEach(folder -> {
             targetFolderName.add(folder.getName());
             crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache));
         });
-        GetListsResponse getListsResponse = client.api().list().getLists().execute();
+        final GetListsResponse getListsResponse = client.api().list().getLists().execute();
         getListsResponse.getLists().stream().filter(list -> !list.isNoCrawl() && !list.isHidden())
                 .filter(list -> !targetFolderName.contains(list.getListName())).filter(list -> !isExcludeList(list.getEntityTypeName()))
                 .forEach(list -> crawlingQueue.offer(new ListCrawl(client, list.getId(), list.getListName(),

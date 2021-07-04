@@ -15,18 +15,18 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem;
 
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
-import java.util.Map;
-
 public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> {
     private String serverRelativeUrl = null;
 
-    public GetDoclibListItem(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetDoclibListItem(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
@@ -48,17 +48,17 @@ public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> 
             final String itemId = bodyMap.get("Id").toString();
             final String listId = getListId(bodyMap.get("odata.editLink").toString());
             return new GetDoclibListItemResponse(listId, itemId);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }
 
-    private String buildUrl() {
+    protected String buildUrl() {
         return siteUrl + "_api/Web/GetFolderByServerRelativePath(decodedurl='" + encodeRelativeUrl(serverRelativeUrl)
                 + "')/ListItemAllFields";
     }
 
-    private String getListId(final String editLink) {
+    protected String getListId(final String editLink) {
         return editLink.substring(editLink.indexOf("(guid'") + "(guid'".length(), editLink.indexOf("')"));
     }
 }

@@ -15,6 +15,14 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.file;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+
 import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.crawler.extractor.Extractor;
 import org.codelibs.fess.crawler.helper.MimeTypeHelper;
@@ -27,10 +35,6 @@ import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.*;
 
 public class FileCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(FileCrawl.class);
@@ -46,8 +50,8 @@ public class FileCrawl extends SharePointCrawl {
 
     private final String defaultExtractorName = "tikaExtractor";
 
-    public FileCrawl(SharePointClient client, String fileName, String webUrl, String serverRelativeUrl, Date created, Date modified,
-            List<String> roles, String listName) {
+    public FileCrawl(final SharePointClient client, final String fileName, final String webUrl, final String serverRelativeUrl, final Date created, final Date modified,
+            final List<String> roles, final String listName) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.webUrl = webUrl;
@@ -63,19 +67,19 @@ public class FileCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling File] [serverRelativeUrl:{}]", serverRelativeUrl);
         }
 
         try (GetFileResponse getFileResponse = client.api().file().getFile().setServerRelativeUrl(serverRelativeUrl).execute()) {
             return buildDataMap(getFileResponse);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to file: " + fileName, e);
         }
     }
 
-    private Map<String, Object> buildDataMap(GetFileResponse response) throws IOException {
+    private Map<String, Object> buildDataMap(final GetFileResponse response) throws IOException {
         final InputStream is = response.getFileContent();
         final String mimeType = getMimeType(fileName, is);
         final String fileType = getFileType(mimeType);

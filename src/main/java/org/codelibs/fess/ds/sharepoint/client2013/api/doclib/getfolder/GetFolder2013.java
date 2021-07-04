@@ -26,11 +26,12 @@ public class GetFolder2013 extends GetFolder {
 
     private String serverRelativeUrl = null;
 
-    public GetFolder2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFolder2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetFolder2013 setServerRelativeUrl(String serverRelativeUrl) {
+    @Override
+    public GetFolder2013 setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
@@ -42,10 +43,10 @@ public class GetFolder2013 extends GetFolder {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)));
-        XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
         try {
             return GetFolder2013Response.build(xmlResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }

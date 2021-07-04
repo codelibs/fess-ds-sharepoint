@@ -35,7 +35,7 @@ public class SharePointApis {
     protected final String siteUrl;
     protected final OAuth oAuth;
 
-    public SharePointApis(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public SharePointApis(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         this.client = client;
         this.siteUrl = siteUrl;
         this.oAuth = oAuth;

@@ -15,6 +15,10 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.list;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
@@ -23,10 +27,6 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
 
 public class ListCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(ListCrawl.class);
@@ -40,9 +40,9 @@ public class ListCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     private final List<String> excludeFields;
 
-    public ListCrawl(SharePointClient client, String id, String listName, int numberPerPage,
-            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, boolean isSubPage, boolean skipRole,
-            List<String> includeFields, List<String> excludeFields) {
+    public ListCrawl(final SharePointClient client, final String id, final String listName, final int numberPerPage,
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean isSubPage, final boolean skipRole,
+            final List<String> includeFields, final List<String> excludeFields) {
         super(client);
         this.id = id;
         this.listName = listName;
@@ -55,7 +55,7 @@ public class ListCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling List] [id:{}] [listName:{}]", id, listName);
         }
@@ -66,12 +66,11 @@ public class ListCrawl extends SharePointCrawl {
         final String listName = sharePointList.getListName();
         for (int start = 0;; start += numberPerPage) {
             final GetListItemsResponse getListItemsResponse;
-            if (listId != null) {
-                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
-                        .setStart(start).execute();
-            } else {
+            if (listId == null) {
                 return null;
             }
+            getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
+                    .setStart(start).execute();
             if (getListItemsResponse.getListItems().isEmpty()) {
                 break;
             }

@@ -22,8 +22,8 @@ import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.client.credential.SharePointCredential;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 public class SharePointClientBuilder {
     private String url = null;
@@ -38,12 +38,12 @@ public class SharePointClientBuilder {
     protected SharePointClientBuilder() {
     }
 
-    public SharePointClientBuilder setUrl(String url) {
+    public SharePointClientBuilder setUrl(final String url) {
         this.url = url.endsWith("/") ? url : url + "/";
         return this;
     }
 
-    public SharePointClientBuilder setSite(String siteName) {
+    public SharePointClientBuilder setSite(final String siteName) {
         this.siteName = siteName;
         return this;
     }
@@ -63,7 +63,7 @@ public class SharePointClientBuilder {
         return this;
     }
 
-    public SharePointClientBuilder setRequestConfig(RequestConfig requestConfig) {
+    public SharePointClientBuilder setRequestConfig(final RequestConfig requestConfig) {
         this.requestConfig = requestConfig;
         return this;
     }
@@ -96,12 +96,12 @@ public class SharePointClientBuilder {
         if (requestConfig != null) {
             builder.setDefaultRequestConfig(requestConfig);
         } else {
-            RequestConfig config = RequestConfig.custom().setSocketTimeout(30000).setConnectTimeout(30000).build();
+            final RequestConfig config = RequestConfig.custom().setSocketTimeout(30000).setConnectTimeout(30000).build();
             builder.setDefaultRequestConfig(config);
         }
 
         if (credential != null) {
-            CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+            final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
             credentialsProvider.setCredentials(AuthScope.ANY, credential.getCredential());
             builder.setDefaultCredentialsProvider(credentialsProvider);
         }

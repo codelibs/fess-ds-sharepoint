@@ -27,7 +27,7 @@ public enum PageType {
         this.typeNumber = typeNumber;
     }
 
-    private int getTypeNumber() {
+    protected int getTypeNumber() {
         return typeNumber;
     }
 

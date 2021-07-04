@@ -15,9 +15,9 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlists;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-
 import java.util.List;
+
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
 public class GetListsResponse implements SharePointApiResponse {
     protected final List<SharePointList> lists;

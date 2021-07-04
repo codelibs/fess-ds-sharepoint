@@ -15,7 +15,18 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
+import javax.xml.XMLConstants;
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpRequestBase;
@@ -23,23 +34,14 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.crawler.Constants;
-import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.xml.sax.helpers.DefaultHandler;
 
-import javax.xml.XMLConstants;
-import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.SAXParserFactory;
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public abstract class SharePointApi<T extends SharePointApiResponse> {
     private static final Logger logger = LoggerFactory.getLogger(SharePointApi.class);
@@ -50,7 +52,7 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     protected final String siteUrl;
     protected final OAuth oAuth;
 
-    public SharePointApi(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public SharePointApi(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         this.client = client;
         this.siteUrl = siteUrl;
         this.oAuth = oAuth;
@@ -87,9 +89,9 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
                         httpResponse.getStatusLine().getStatusCode());
             }
             return new JsonResponse(body, bodyMap, httpResponse.getStatusLine().getStatusCode());
-        } catch (SharePointServerException e) {
+        } catch (final SharePointServerException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException("Request failure. " + e.getMessage(), e);
         }
     }
@@ -111,9 +113,9 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
                         httpResponse.getStatusLine().getStatusCode());
             }
             return new XmlResponse(body, httpResponse.getStatusLine().getStatusCode());
-        } catch (SharePointServerException e) {
+        } catch (final SharePointServerException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException("Request failure. " + e.getMessage(), e);
         }
     }
@@ -127,8 +129,8 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
 
     protected String encodeRelativeUrl(final String url) {
         String result = url;
-        String[] array = url.split("/");
-        for (String value : array) {
+        final String[] array = url.split("/");
+        for (final String value : array) {
             result = result.replace(value, URLEncoder.encode(value, StandardCharsets.UTF_8));
         }
         return result.replace("+", "%20");
@@ -139,7 +141,7 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
         private final Map<String, Object> bodyMap;
         private final int statusCode;
 
-        private JsonResponse(String body, Map<String, Object> bodyMap, int statusCode) {
+        private JsonResponse(final String body, final Map<String, Object> bodyMap, final int statusCode) {
             this.body = body;
             this.bodyMap = bodyMap;
             this.statusCode = statusCode;
@@ -162,7 +164,7 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
         private final String body;
         private final int statusCode;
 
-        private XmlResponse(String body, int statusCode) {
+        private XmlResponse(final String body, final int statusCode) {
             this.body = body;
             this.statusCode = statusCode;
         }
@@ -183,6 +185,8 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
             final SAXParserFactory spfactory = SAXParserFactory.newInstance();
             try (InputStream is = new ByteArrayInputStream(xml.getBytes(UTF_8))) {
                 spfactory.setFeature(Constants.FEATURE_SECURE_PROCESSING, true);
+                spfactory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+                spfactory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
                 // create a sax parser
                 final SAXParser parser = spfactory.newSAXParser();
                 try {

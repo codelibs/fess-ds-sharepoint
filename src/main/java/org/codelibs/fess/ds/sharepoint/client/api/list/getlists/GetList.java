@@ -15,16 +15,16 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlists;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
-
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 public class GetList extends SharePointApi<GetListResponse> {
     private static final String API_BY_LIST_ID_PATH = "_api/web/lists(guid'{list_guid}')";
@@ -33,16 +33,16 @@ public class GetList extends SharePointApi<GetListResponse> {
     protected String listId = null;
     protected String listName = null;
 
-    public GetList(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetList(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetList setListId(String listId) {
+    public GetList setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
-    public GetList setListName(String listName) {
+    public GetList setListName(final String listName) {
         this.listName = listName;
         return this;
     }
@@ -59,22 +59,22 @@ public class GetList extends SharePointApi<GetListResponse> {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + apiPath);
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }
 
     private GetListResponse buildResponse(final JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
-        Object titleObj = jsonMap.get("Title");
+        final Object titleObj = jsonMap.get("Title");
         if (titleObj == null) {
             throw new SharePointClientException("Title is null.");
         }
-        Object idObj = jsonMap.get("Id");
+        final Object idObj = jsonMap.get("Id");
         if (idObj == null) {
             throw new SharePointClientException("Id is null.");
         }
-        Object entityTypeName = jsonMap.get("EntityTypeName");
+        final Object entityTypeName = jsonMap.get("EntityTypeName");
         if (entityTypeName == null) {
             throw new SharePointClientException("entityTypeName is null.");
         }
@@ -86,7 +86,7 @@ public class GetList extends SharePointApi<GetListResponse> {
         if (hidden == null) {
             hidden = "false";
         }
-        GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
+        final GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
                 Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
         return new GetListResponse(sharePointList);
     }

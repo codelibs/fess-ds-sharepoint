@@ -15,6 +15,14 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitems;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems;
@@ -25,13 +33,8 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
 public class GetListItems2013 extends GetListItems {
     private static final Logger logger = LoggerFactory.getLogger(GetListItems2013.class);
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Items";
     private static final String PAGING_PARAM = "%24skiptoken=Paged=TRUE%26p_ID={{start}}&%24top={{num}}";
@@ -39,12 +42,12 @@ public class GetListItems2013 extends GetListItems {
     private static final String SELECT_PARAM_SITE_PAGE = "%24select=Id,Created,Modified";
 
     private String listId = null;
-    private String listName = null;
+    private final String listName = null;
     private int num = 100;
     private int start = 0;
     private boolean isSubPage = false;
 
-    public GetListItems2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetListItems2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
@@ -62,26 +65,30 @@ public class GetListItems2013 extends GetListItems {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + selectParam);
-        XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
         return buildResponse(xmlResponse);
     }
 
+    @Override
     public GetListItems2013 setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
+    @Override
     public GetListItems2013 setNum(final int num) {
         this.num = num;
         return this;
     }
 
+    @Override
     public GetListItems2013 setStart(final int start) {
         this.start = start;
         return this;
     }
 
-    public GetListItems2013 setSubPage(boolean subPage) {
+    @Override
+    public GetListItems2013 setSubPage(final boolean subPage) {
         isSubPage = subPage;
         return this;
     }
@@ -91,6 +98,7 @@ public class GetListItems2013 extends GetListItems {
         final GetListItemsDocHandler handler = new GetListItemsDocHandler();
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
         final List<GetListItems2013Response.ListItem> listItems = new ArrayList<>();
         final List<Map<String, Object>> valueList = (List) dataMap.get("value");
@@ -100,12 +108,12 @@ public class GetListItems2013 extends GetListItems {
                 if (titleObj == null) {
                     titleObj = "";
                 }
-                Object idObj = value.get("Id");
+                final Object idObj = value.get("Id");
                 if (idObj == null) {
                     logger.warn("Id field does not contain. Skip item. " + xmlResponse.getBody());
                     return;
                 }
-                Object editLinkObj = value.get("odata.editLink");
+                final Object editLinkObj = value.get("odata.editLink");
                 if (editLinkObj == null) {
                     logger.warn("odate.editLink field does not contain. Skip item. " + xmlResponse.getBody());
                     return;
@@ -114,24 +122,24 @@ public class GetListItems2013 extends GetListItems {
                 if (attachmentsObj == null) {
                     attachmentsObj = "false";
                 }
-                boolean attachments = Boolean.valueOf(attachmentsObj.toString());
-                Object createdObj = value.get("Created");
+                final boolean attachments = Boolean.parseBoolean(attachmentsObj.toString());
+                final Object createdObj = value.get("Created");
                 if (createdObj == null) {
                     logger.warn("Created field does not contain. Skip item. " + xmlResponse.getBody());
                     return;
                 }
-                Date created = sdf.parse(createdObj.toString());
-                Object modifiedObj = value.get("Modified");
+                final Date created = sdf.parse(createdObj.toString());
+                final Object modifiedObj = value.get("Modified");
                 if (modifiedObj == null) {
                     logger.warn("Modified field does not contain. Skip item. " + xmlResponse.getBody());
                     return;
                 }
-                Date modified = sdf.parse(modifiedObj.toString());
+                final Date modified = sdf.parse(modifiedObj.toString());
 
-                GetListItems2013Response.ListItem listItem = new GetListItems2013Response.ListItem(idObj.toString(), editLinkObj.toString(),
+                final GetListItems2013Response.ListItem listItem = new GetListItems2013Response.ListItem(idObj.toString(), editLinkObj.toString(),
                         titleObj.toString(), attachments, created, modified);
                 listItems.add(listItem);
-            } catch (ParseException e) {
+            } catch (final ParseException e) {
                 throw new SharePointClientException("Failed to get item info.", e);
             }
         });
@@ -157,27 +165,25 @@ public class GetListItems2013 extends GetListItems {
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("entry".equals(qName)) {
                 resultMap = new HashMap<>();
-            } else {
-                if ("d:Id".equals(qName)) {
-                    fieldName = "Id";
-                    buffer.setLength(0);
-                } else if ("d:Title".equals(qName)) {
-                    fieldName = "Title";
-                    buffer.setLength(0);
-                } else if ("d:Attachments".equals(qName)) {
-                    fieldName = "Attachments";
-                    buffer.setLength(0);
-                } else if ("d:Created".equals(qName)) {
-                    fieldName = "Created";
-                    buffer.setLength(0);
-                } else if ("d:Modified".equals(qName)) {
-                    fieldName = "Modified";
-                    buffer.setLength(0);
-                } else if ("link".equals(qName)) {
-                    String rel = attributes.getValue("rel");
-                    if (rel != null && rel.equals("edit")) {
-                        resultMap.put("odata.editLink", attributes.getValue("href"));
-                    }
+            } else if ("d:Id".equals(qName)) {
+                fieldName = "Id";
+                buffer.setLength(0);
+            } else if ("d:Title".equals(qName)) {
+                fieldName = "Title";
+                buffer.setLength(0);
+            } else if ("d:Attachments".equals(qName)) {
+                fieldName = "Attachments";
+                buffer.setLength(0);
+            } else if ("d:Created".equals(qName)) {
+                fieldName = "Created";
+                buffer.setLength(0);
+            } else if ("d:Modified".equals(qName)) {
+                fieldName = "Modified";
+                buffer.setLength(0);
+            } else if ("link".equals(qName)) {
+                final String rel = attributes.getValue("rel");
+                if (rel != null && "edit".equals(rel)) {
+                    resultMap.put("odata.editLink", attributes.getValue("href"));
                 }
             }
         }
@@ -197,13 +203,11 @@ public class GetListItems2013 extends GetListItems {
                     ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
-            } else {
-                if (resultMap != null && fieldName != null) {
-                    if (!resultMap.containsKey(fieldName)) {
-                        resultMap.put(fieldName, buffer.toString());
-                    }
-                    fieldName = null;
+            } else if (resultMap != null && fieldName != null) {
+                if (!resultMap.containsKey(fieldName)) {
+                    resultMap.put(fieldName, buffer.toString());
                 }
+                fieldName = null;
             }
         }
 

@@ -15,6 +15,15 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.list;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+
 import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
@@ -27,15 +36,11 @@ import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-
 public class ItemCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(ItemCrawl.class);
 
     private static final String ITEM_VALUE_PREFIX = "val_";
-    private boolean showFieldNameAtContent = false;
+    private final boolean showFieldNameAtContent = false;
 
     private final String listId;
     private final String listName;
@@ -45,8 +50,8 @@ public class ItemCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     private final List<String> excludeFields;
 
-    public ItemCrawl(SharePointClient client, String listId, String listName, String itemId, List<String> roles, boolean isSubPage,
-            List<String> includeFields, List<String> excludeFields) {
+    public ItemCrawl(final SharePointClient client, final String listId, final String listName, final String itemId, final List<String> roles, final boolean isSubPage,
+            final List<String> includeFields, final List<String> excludeFields) {
         super(client);
         this.listId = listId;
         this.listName = listName != null ? listName : "";
@@ -60,7 +65,7 @@ public class ItemCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling ListItem] [listName:{}] [itemId:{}]", listName, itemId);
         }
@@ -83,7 +88,7 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
         dataMap.put(fessConfig.getIndexFieldMimetype(), "text/html");
         dataMap.put(fessConfig.getIndexFieldFiletype(), ComponentUtil.getFileTypeHelper().get("text/html"));
-        for (Map.Entry<String, String> entry : response.getValues().entrySet()) {
+        for (final Map.Entry<String, String> entry : response.getValues().entrySet()) {
             if (!dataMap.containsKey(entry.getKey())) {
                 dataMap.put(normalizeKey(entry.getKey()), entry.getValue());
             }
@@ -117,18 +122,19 @@ public class ItemCrawl extends SharePointCrawl {
     private String getTitle(final GetListItemValueResponse response) {
         if (response.getTitle().length() > 0) {
             return response.getTitle();
-        } else if (response.getFileLeafRef().length() > 0) {
+        }
+        if (response.getFileLeafRef().length() > 0) {
             return response.getFileLeafRef();
         }
         return "";
     }
 
-    private String getWebLink(GetListItemValueResponse response) {
+    private String getWebLink(final GetListItemValueResponse response) {
         if (isSubPage && StringUtils.isNotBlank(response.getFileRef())) {
-            String siteRef = response.getFileRef();
-            StringBuilder sb = new StringBuilder(siteRef.length() * 2);
+            final String siteRef = response.getFileRef();
+            final StringBuilder sb = new StringBuilder(siteRef.length() * 2);
 
-            for (String part : siteRef.split("/")) {
+            for (final String part : siteRef.split("/")) {
                 if (part.length() == 0) {
                     continue;
                 }
@@ -138,17 +144,18 @@ public class ItemCrawl extends SharePointCrawl {
                 sb.append(URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"));
             }
             return client.getUrl() + sb.toString();
-        } else if (response.getFsObjType() == 0 && StringUtils.isNotBlank(response.getParentItemId())) {
+        }
+        if (response.getFsObjType() == 0 && StringUtils.isNotBlank(response.getParentItemId())) {
             final String dirRef = response.getFileDirRef();
-            String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            final String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
                     + URLEncoder.encode(dirRef, StandardCharsets.UTF_8);
         } else if (response.getFsObjType() == 1) {
-            String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
+            final String serverRelativeUrl = getFormUrl().replace("DispForm.aspx", "Flat.aspx");
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
                     + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
         } else {
-            String serverRelativeUrl = getFormUrl();
+            final String serverRelativeUrl = getFormUrl();
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
         }
     }
@@ -164,7 +171,7 @@ public class ItemCrawl extends SharePointCrawl {
             getForms.setListId(listId);
         }
         final GetFormsResponse getFormsResponse = getForms.execute();
-        GetFormsResponse.Form form =
+        final GetFormsResponse.Form form =
                 getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
         if (form == null) {
             return null;

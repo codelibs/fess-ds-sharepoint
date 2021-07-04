@@ -19,19 +19,19 @@ public class SharePointClientException extends RuntimeException {
     public SharePointClientException() {
     }
 
-    public SharePointClientException(String message) {
+    public SharePointClientException(final String message) {
         super(message);
     }
 
-    public SharePointClientException(String message, Throwable cause) {
+    public SharePointClientException(final String message, final Throwable cause) {
         super(message, cause);
     }
 
-    public SharePointClientException(Throwable cause) {
+    public SharePointClientException(final Throwable cause) {
         super(cause);
     }
 
-    public SharePointClientException(String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
+    public SharePointClientException(final String message, final Throwable cause, final boolean enableSuppression, final boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);
     }
 }

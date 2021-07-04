@@ -15,26 +15,26 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlists;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
 public class GetLists extends SharePointApi<GetListsResponse> {
     private static final String API_PATH = "_api/lists";
 
-    public GetLists(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetLists(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
     @Override
     public GetListsResponse execute() {
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH);
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }
 
@@ -45,15 +45,15 @@ public class GetLists extends SharePointApi<GetListsResponse> {
         final List<GetListsResponse.SharePointList> sharePointLists = new ArrayList<>();
         final List<Map<String, Object>> valueList = (List) jsonMap.get("value");
         valueList.forEach(value -> {
-            Object titleObj = value.get("Title");
+            final Object titleObj = value.get("Title");
             if (titleObj == null) {
                 return;
             }
-            Object idObj = value.get("Id");
+            final Object idObj = value.get("Id");
             if (idObj == null) {
                 return;
             }
-            Object entityTypeName = value.get("EntityTypeName");
+            final Object entityTypeName = value.get("EntityTypeName");
             if (entityTypeName == null) {
                 return;
             }
@@ -65,7 +65,7 @@ public class GetLists extends SharePointApi<GetListsResponse> {
             if (hidden == null) {
                 hidden = "false";
             }
-            GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
+            final GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
                     Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
             sharePointLists.add(sharePointList);
         });

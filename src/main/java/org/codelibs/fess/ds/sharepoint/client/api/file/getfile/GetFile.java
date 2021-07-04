@@ -26,7 +26,7 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 public class GetFile extends SharePointApi<GetFileResponse> {
     private String serverRelativeUrl = null;
 
-    public GetFile(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFile(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
@@ -47,18 +47,18 @@ public class GetFile extends SharePointApi<GetFileResponse> {
             oAuth.apply(httpGet);
         }
         try {
-            CloseableHttpResponse httpResponse = client.execute(httpGet);
+            final CloseableHttpResponse httpResponse = client.execute(httpGet);
             if (isErrorResponse(httpResponse)) {
                 throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode()
                         + " body:" + EntityUtils.toString(httpResponse.getEntity()));
             }
             return new GetFileResponse(httpResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException("GetFile Request failure.", e);
         }
     }
 
-    private String buildUrl() {
+    protected String buildUrl() {
         return siteUrl + "/_api/web/GetFileByServerRelativeUrl('" + encodeRelativeUrl(serverRelativeUrl) + "')/$value";
     }
 }

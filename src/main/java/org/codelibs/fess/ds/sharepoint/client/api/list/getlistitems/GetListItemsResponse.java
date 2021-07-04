@@ -15,16 +15,16 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-
 import java.util.Date;
 import java.util.List;
+
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
 public class GetListItemsResponse implements SharePointApiResponse {
 
     protected final List<ListItem> listItems;
 
-    public GetListItemsResponse(List<ListItem> listItems) {
+    public GetListItemsResponse(final List<ListItem> listItems) {
         this.listItems = listItems;
     }
 

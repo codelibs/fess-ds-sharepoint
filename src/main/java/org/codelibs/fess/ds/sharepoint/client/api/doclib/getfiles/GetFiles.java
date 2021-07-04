@@ -29,21 +29,21 @@ public class GetFiles extends SharePointApi<GetFilesResponse> {
     private int num = 100;
     private int start = 0;
 
-    public GetFiles(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFiles(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetFiles setServerRelativeUrl(String serverRelativeUrl) {
+    public GetFiles setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
-    public GetFiles setNum(int num) {
+    public GetFiles setNum(final int num) {
         this.num = num;
         return this;
     }
 
-    public GetFiles setStart(int start) {
+    public GetFiles setStart(final int start) {
         this.start = start;
         return this;
     }
@@ -56,10 +56,10 @@ public class GetFiles extends SharePointApi<GetFilesResponse> {
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
                 + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
-        SharePointApi.JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final SharePointApi.JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFilesResponse.build(jsonResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }

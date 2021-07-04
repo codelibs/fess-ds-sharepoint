@@ -29,21 +29,24 @@ public class GetFiles2013 extends GetFiles {
     private int num = 100;
     private int start = 0;
 
-    public GetFiles2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFiles2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetFiles2013 setServerRelativeUrl(String serverRelativeUrl) {
+    @Override
+    public GetFiles2013 setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
-    public GetFiles2013 setNum(int num) {
+    @Override
+    public GetFiles2013 setNum(final int num) {
         this.num = num;
         return this;
     }
 
-    public GetFiles2013 setStart(int start) {
+    @Override
+    public GetFiles2013 setStart(final int start) {
         this.start = start;
         return this;
     }
@@ -56,10 +59,10 @@ public class GetFiles2013 extends GetFiles {
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
                 + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
-        XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
         try {
             return GetFiles2013Response.build(xmlResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }

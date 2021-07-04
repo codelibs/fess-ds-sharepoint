@@ -15,17 +15,20 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.doclib.getfolder;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
-import java.text.ParseException;
-import java.util.*;
 
 public class GetFolder2013Response extends GetFolderResponse {
 
-    public static GetFolder2013Response build(SharePointApi.XmlResponse xmlResponse) {
+    public static GetFolder2013Response build(final SharePointApi.XmlResponse xmlResponse) {
         final GetFolderDocHandler handler = new GetFolderDocHandler();
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
@@ -39,17 +42,18 @@ public class GetFolder2013Response extends GetFolderResponse {
         final GetFolder2013Response response = new GetFolder2013Response();
         response.id = dataMap.get("UniqueId").toString();
         response.name = dataMap.get("Name").toString();
-        response.exists = Boolean.valueOf(dataMap.get("Exists").toString());
+        response.exists = Boolean.parseBoolean(dataMap.get("Exists").toString());
         response.serverRelativeUrl = dataMap.get("ServerRelativeUrl").toString();
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
             if (dataMap.containsKey("TimeCreated")) {
                 response.created = sdf.parse(dataMap.get("TimeCreated").toString());
             }
             response.modified = sdf.parse(dataMap.get("TimeLastModified").toString());
-        } catch (ParseException e) {
+        } catch (final ParseException e) {
             throw new SharePointClientException(e);
         }
-        response.itemCount = Integer.valueOf(dataMap.get("ItemCount").toString());
+        response.itemCount = Integer.parseInt(dataMap.get("ItemCount").toString());
         return response;
     }
 

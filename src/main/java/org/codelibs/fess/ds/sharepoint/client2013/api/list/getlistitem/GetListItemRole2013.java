@@ -15,6 +15,11 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRole;
@@ -23,27 +28,24 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class GetListItemRole2013 extends GetListItemRole {
     private String listId = null;
     private String itemId = null;
     private Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache = null;
 
-    public GetListItemRole2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetListItemRole2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetListItemRole2013 setId(String listId, String itemId) {
+    @Override
+    public GetListItemRole2013 setId(final String listId, final String itemId) {
         this.listId = listId;
         this.itemId = itemId;
         return this;
     }
 
-    public GetListItemRole2013 setSharePointGroupCache(Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache) {
+    @Override
+    public GetListItemRole2013 setSharePointGroupCache(final Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache) {
         this.sharePointGroupCache = sharePointGroupCache;
         return this;
     }
@@ -62,7 +64,7 @@ public class GetListItemRole2013 extends GetListItemRole {
         final GetListItemRoleDocHandler getListItemRoleDocHandler = new GetListItemRoleDocHandler();
         xmlResponse.parseXml(getListItemRoleDocHandler);
         final Map<String, Object> bodyMap = getListItemRoleDocHandler.getDataMap();
-        List<Map<String, Object>> values = (List) bodyMap.get("value");
+        final List<Map<String, Object>> values = (List) bodyMap.get("value");
         values.stream().map(value -> (value.get("PrincipalId").toString())).forEach(principalId -> {
             if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
@@ -70,18 +72,18 @@ public class GetListItemRole2013 extends GetListItemRole {
             }
             final HttpGet memberRequest = new HttpGet(buildMemberUrl(principalId));
             final XmlResponse memberResponse = doXmlRequest(memberRequest);
-            MemberDocHandler memberDocHandler = new MemberDocHandler();
+            final MemberDocHandler memberDocHandler = new MemberDocHandler();
             memberResponse.parseXml(memberDocHandler);
             final Map<String, Object> memberResponseMap = memberDocHandler.getDataMap();
             final String id = memberResponseMap.get("Id").toString();
-            final int principalType = Integer.valueOf(memberResponseMap.get("PrincipalType").toString());
+            final int principalType = Integer.parseInt(memberResponseMap.get("PrincipalType").toString());
             if (principalType == 1) {
                 // User
-                GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id, memberResponseMap.get("Title").toString(),
+                final GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id, memberResponseMap.get("Title").toString(),
                         memberResponseMap.get("LoginName").toString());
                 response.addUser(user);
             } else if (principalType == 8) {
-                GetListItemRole2013Response.SharePointGroup sharePointGroup =
+                final GetListItemRole2013Response.SharePointGroup sharePointGroup =
                         buildSharePointGroup(id, memberResponseMap.get("Title").toString());
                 response.addSharePointGroup(sharePointGroup);
                 if (sharePointGroupCache != null) {
@@ -92,23 +94,27 @@ public class GetListItemRole2013 extends GetListItemRole {
         return response;
     }
 
-    private String buildBaseUrl() {
+    @Override
+    protected String buildBaseUrl() {
         return siteUrl + "_api/Web/Lists(guid'" + listId + "')/";
     }
 
-    private String buildRoleAssignmentsUrl() {
+    @Override
+    protected String buildRoleAssignmentsUrl() {
         return buildBaseUrl() + "Items(" + itemId + ")/RoleAssignments";
     }
 
-    private String buildMemberUrl(String principalId) {
+    protected String buildMemberUrl(final String principalId) {
         return buildBaseUrl() + "RoleAssignments/GetByPrincipalId(" + principalId + ")/Member";
     }
 
-    private String buildUsersUrl(String memberId) {
+    @Override
+    protected String buildUsersUrl(final String memberId) {
         return siteUrl + "_api/Web/SiteGroups/GetById(" + memberId + ")/Users";
     }
 
-    private GetListItemRole2013Response.SharePointGroup buildSharePointGroup(String id, String title) {
+    @Override
+    protected GetListItemRole2013Response.SharePointGroup buildSharePointGroup(final String id, final String title) {
         // SharePointGroup
         final GetListItemRole2013Response.SharePointGroup sharePointGroup = new GetListItemRole2013Response.SharePointGroup(id, title);
         final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
@@ -116,31 +122,37 @@ public class GetListItemRole2013 extends GetListItemRole {
         final UsersDocHandler usersDocHandler = new UsersDocHandler();
         usersResponse.parseXml(usersDocHandler);
         final Map<String, Object> usersResponseMap = usersDocHandler.getDataMap();
-        List<Map<String, Object>> usersList = (List) usersResponseMap.get("value");
+        final List<Map<String, Object>> usersList = (List) usersResponseMap.get("value");
         usersList.forEach(user -> {
-            String userId = user.get("Id").toString();
-            String userTitle = user.get("Title").toString();
-            String loginName = user.get("LoginName").toString();
-            int userPrincipalType = Integer.valueOf(user.get("PrincipalType").toString());
-            if (userPrincipalType == 1) {
+            final String userId = user.get("Id").toString();
+            final String userTitle = user.get("Title").toString();
+            final String loginName = user.get("LoginName").toString();
+            final int userPrincipalType = Integer.parseInt(user.get("PrincipalType").toString());
+            switch (userPrincipalType) {
+            case 1:
                 // user
-                GetListItemRole2013Response.User userUser = new GetListItemRole2013Response.User(userId, userTitle, loginName);
+                final GetListItemRole2013Response.User userUser = new GetListItemRole2013Response.User(userId, userTitle, loginName);
                 sharePointGroup.addUser(userUser);
-            } else if (userPrincipalType == 4) {
+                break;
+            case 4:
                 // Security Group
-                GetListItemRole2013Response.SecurityGroup securityGroup =
+                final GetListItemRole2013Response.SecurityGroup securityGroup =
                         new GetListItemRole2013Response.SecurityGroup(userId, userTitle, loginName);
                 sharePointGroup.addSecurityGroup(securityGroup);
-            } else if (userPrincipalType == 8) {
+                break;
+            case 8:
                 if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
                     sharePointGroup.addSharePointGroup(sharePointGroupCache.get(userId));
                 } else {
-                    GetListItemRole2013Response.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
+                    final GetListItemRole2013Response.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
                     sharePointGroup.addSharePointGroup(userSharePointGroup);
                     if (sharePointGroupCache != null) {
                         sharePointGroupCache.put(userId, userSharePointGroup);
                     }
                 }
+                break;
+            default:
+                break;
             }
         });
         return sharePointGroup;
@@ -164,11 +176,9 @@ public class GetListItemRole2013 extends GetListItemRole {
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("entry".equals(qName)) {
                 resultMap = new HashMap<>();
-            } else {
-                if ("d:PrincipalId".equals(qName)) {
-                    fieldName = "PrincipalId";
-                    buffer.setLength(0);
-                }
+            } else if ("d:PrincipalId".equals(qName)) {
+                fieldName = "PrincipalId";
+                buffer.setLength(0);
             }
         }
 
@@ -187,13 +197,11 @@ public class GetListItemRole2013 extends GetListItemRole {
                     ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
-            } else {
-                if (resultMap != null && fieldName != null) {
-                    if (!resultMap.containsKey(fieldName)) {
-                        resultMap.put(fieldName, buffer.toString());
-                    }
-                    fieldName = null;
+            } else if (resultMap != null && fieldName != null) {
+                if (!resultMap.containsKey(fieldName)) {
+                    resultMap.put(fieldName, buffer.toString());
                 }
+                fieldName = null;
             }
         }
 
@@ -283,20 +291,18 @@ public class GetListItemRole2013 extends GetListItemRole {
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("entry".equals(qName)) {
                 resultMap = new HashMap<>();
-            } else {
-                if ("d:Id".equals(qName)) {
-                    fieldName = "Id";
-                    buffer.setLength(0);
-                } else if ("d:Title".equals(qName)) {
-                    fieldName = "Title";
-                    buffer.setLength(0);
-                } else if ("d:PrincipalType".equals(qName)) {
-                    fieldName = "PrincipalType";
-                    buffer.setLength(0);
-                } else if ("d:LoginName".equals(qName)) {
-                    fieldName = "LoginName";
-                    buffer.setLength(0);
-                }
+            } else if ("d:Id".equals(qName)) {
+                fieldName = "Id";
+                buffer.setLength(0);
+            } else if ("d:Title".equals(qName)) {
+                fieldName = "Title";
+                buffer.setLength(0);
+            } else if ("d:PrincipalType".equals(qName)) {
+                fieldName = "PrincipalType";
+                buffer.setLength(0);
+            } else if ("d:LoginName".equals(qName)) {
+                fieldName = "LoginName";
+                buffer.setLength(0);
             }
         }
 
@@ -315,13 +321,11 @@ public class GetListItemRole2013 extends GetListItemRole {
                     ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
-            } else {
-                if (resultMap != null && fieldName != null) {
-                    if (!resultMap.containsKey(fieldName)) {
-                        resultMap.put(fieldName, buffer.toString());
-                    }
-                    fieldName = null;
+            } else if (resultMap != null && fieldName != null) {
+                if (!resultMap.containsKey(fieldName)) {
+                    resultMap.put(fieldName, buffer.toString());
                 }
+                fieldName = null;
             }
         }
 

@@ -15,20 +15,21 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistforms;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class GetForms2013Response extends GetFormsResponse {
     private final List<Form> forms = new ArrayList<>();
 
+    @Override
     public List<Form> getForms() {
         return forms;
     }
@@ -41,9 +42,9 @@ public class GetForms2013Response extends GetFormsResponse {
         final Map<String, Object> dataMap = handler.getDataMap();
         final List<Map<String, Object>> values = (List) dataMap.get("value");
         values.stream().forEach(value -> {
-            String id = value.get("Id").toString();
-            String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
-            int type = Integer.valueOf(value.get("FormType").toString());
+            final String id = value.get("Id").toString();
+            final String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
+            final int type = Integer.parseInt(value.get("FormType").toString());
             response.forms.add(new Form(id, serverRelativeUrl, PageType.getPageType(type)));
         });
         return response;
@@ -67,17 +68,15 @@ public class GetForms2013Response extends GetFormsResponse {
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("entry".equals(qName)) {
                 resultMap = new HashMap<>();
-            } else {
-                if ("d:Id".equals(qName)) {
-                    fieldName = "Id";
-                    buffer.setLength(0);
-                } else if ("d:ServerRelativeUrl".equals(qName)) {
-                    fieldName = "ServerRelativeUrl";
-                    buffer.setLength(0);
-                } else if ("d:FormType".equals(qName)) {
-                    fieldName = "FormType";
-                    buffer.setLength(0);
-                }
+            } else if ("d:Id".equals(qName)) {
+                fieldName = "Id";
+                buffer.setLength(0);
+            } else if ("d:ServerRelativeUrl".equals(qName)) {
+                fieldName = "ServerRelativeUrl";
+                buffer.setLength(0);
+            } else if ("d:FormType".equals(qName)) {
+                fieldName = "FormType";
+                buffer.setLength(0);
             }
         }
 
@@ -96,13 +95,11 @@ public class GetForms2013Response extends GetFormsResponse {
                     ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
-            } else {
-                if (resultMap != null && fieldName != null) {
-                    if (!resultMap.containsKey(fieldName)) {
-                        resultMap.put(fieldName, buffer.toString());
-                    }
-                    fieldName = null;
+            } else if (resultMap != null && fieldName != null) {
+                if (!resultMap.containsKey(fieldName)) {
+                    resultMap.put(fieldName, buffer.toString());
                 }
+                fieldName = null;
             }
         }
 

@@ -29,21 +29,21 @@ public class GetFolders extends SharePointApi<GetFoldersResponse> {
     private int num = 100;
     private int start = 0;
 
-    public GetFolders(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFolders(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetFolders setServerRelativeUrl(String serverRelativeUrl) {
+    public GetFolders setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
-    public GetFolders setNum(int num) {
+    public GetFolders setNum(final int num) {
         this.num = num;
         return this;
     }
 
-    public GetFolders setStart(int start) {
+    public GetFolders setStart(final int start) {
         this.start = start;
         return this;
     }
@@ -56,10 +56,10 @@ public class GetFolders extends SharePointApi<GetFoldersResponse> {
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
                 + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFoldersResponse.build(jsonResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }

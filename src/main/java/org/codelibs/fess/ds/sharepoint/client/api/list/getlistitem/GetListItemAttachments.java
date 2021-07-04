@@ -25,11 +25,11 @@ public class GetListItemAttachments extends SharePointApi<GetListItemAttachments
     private String listId = null;
     private String itemId = null;
 
-    public GetListItemAttachments(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetListItemAttachments(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetListItemAttachments setId(String listId, String itemId) {
+    public GetListItemAttachments setId(final String listId, final String itemId) {
         this.listId = listId;
         this.itemId = itemId;
         return this;
@@ -41,15 +41,15 @@ public class GetListItemAttachments extends SharePointApi<GetListItemAttachments
             throw new SharePointClientException("listId/itemId is required.");
         }
         final HttpGet httpGet = new HttpGet(buildUrl());
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetListItemAttachmentsResponse.build(jsonResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }
 
-    private String buildUrl() {
+    protected String buildUrl() {
         return siteUrl + "/_api/Web/Lists(guid'" + listId + "')/Items(" + itemId + ")/AttachmentFiles";
     }
 }

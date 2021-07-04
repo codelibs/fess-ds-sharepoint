@@ -15,6 +15,9 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.doclib.getlistitem;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem.GetDoclibListItem;
@@ -23,17 +26,15 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.util.HashMap;
-import java.util.Map;
-
 //TODO
 public class GetDoclibListItem2013 extends GetDoclibListItem {
     private String serverRelativeUrl = null;
 
-    public GetDoclibListItem2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetDoclibListItem2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    @Override
     public GetDoclibListItem2013 setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
@@ -54,16 +55,18 @@ public class GetDoclibListItem2013 extends GetDoclibListItem {
             final String itemId = bodyMap.get("Id").toString();
             final String listId = getListId(bodyMap.get("odata.editLink").toString());
             return new GetDoclibListItem2013Response(listId, itemId);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }
 
-    private String buildUrl() {
+    @Override
+    protected String buildUrl() {
         return siteUrl + "_api/Web/GetFolderByServerRelativeUrl('" + encodeRelativeUrl(serverRelativeUrl) + "')/ListItemAllFields";
     }
 
-    private String getListId(final String editLink) {
+    @Override
+    protected String getListId(final String editLink) {
         return editLink.substring(editLink.indexOf("(guid'") + "(guid'".length(), editLink.indexOf("')"));
     }
 
@@ -86,8 +89,8 @@ public class GetDoclibListItem2013 extends GetDoclibListItem {
                 fieldName = "Id";
                 buffer.setLength(0);
             } else if ("link".equals(qName)) {
-                String rel = attributes.getValue("rel");
-                if (rel != null && rel.equals("edit")) {
+                final String rel = attributes.getValue("rel");
+                if (rel != null && "edit".equals(rel)) {
                     dataMap.put("odata.editLink", attributes.getValue("href"));
                 }
             }

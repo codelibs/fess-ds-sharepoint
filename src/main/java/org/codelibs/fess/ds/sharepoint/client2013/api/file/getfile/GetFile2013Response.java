@@ -18,11 +18,8 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.file.getfile;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
 
-import java.io.IOException;
-import java.io.InputStream;
-
 public class GetFile2013Response extends GetFileResponse {
-    public GetFile2013Response(CloseableHttpResponse httpResponse) {
+    public GetFile2013Response(final CloseableHttpResponse httpResponse) {
         super(httpResponse);
     }
 }

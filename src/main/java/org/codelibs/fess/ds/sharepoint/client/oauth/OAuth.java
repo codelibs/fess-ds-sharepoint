@@ -15,7 +15,12 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.oauth;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.http.NameValuePair;
 import org.apache.http.client.entity.UrlEncodedFormEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -28,11 +33,7 @@ import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientExceptio
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class OAuth {
     private static final Logger logger = LoggerFactory.getLogger(OAuth.class);
@@ -69,7 +70,7 @@ public class OAuth {
                 throw new SharePointClientException("Failed to update access_token. " + body);
             }
             accessToken = bodyMap.get("access_token");
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new SharePointClientException("Failed to update access_token.", e);
         }
     }
@@ -83,7 +84,7 @@ public class OAuth {
     }
 
     private List<NameValuePair> buildFormParams() {
-        List<NameValuePair> params = new ArrayList<>();
+        final List<NameValuePair> params = new ArrayList<>();
         params.add(new BasicNameValuePair("grant_type", "client_credentials"));
         params.add(new BasicNameValuePair("resource", "00000003-0000-0ff1-ce00-000000000000/" + tenant + ".sharepoint.com@" + realm));
         params.add(new BasicNameValuePair("client_id", clientId + "@" + realm));

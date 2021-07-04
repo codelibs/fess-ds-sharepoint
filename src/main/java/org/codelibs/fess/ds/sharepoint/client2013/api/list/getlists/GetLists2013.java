@@ -15,6 +15,11 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
@@ -22,22 +27,17 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 public class GetLists2013 extends GetLists {
     private static final String API_PATH = "_api/lists";
 
-    public GetLists2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetLists2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
     @Override
     public GetLists2013Response execute() {
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH);
-        XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
         return buildResponse(xmlResponse);
     }
 
@@ -50,15 +50,15 @@ public class GetLists2013 extends GetLists {
         final List<GetLists2013Response.SharePointList> sharePointLists = new ArrayList<>();
         final List<Map<String, Object>> valueList = (List) dataMap.get("value");
         valueList.forEach(value -> {
-            Object titleObj = value.get("Title");
+            final Object titleObj = value.get("Title");
             if (titleObj == null) {
                 return;
             }
-            Object idObj = value.get("Id");
+            final Object idObj = value.get("Id");
             if (idObj == null) {
                 return;
             }
-            Object entityTypeName = dataMap.get("EntityTypeName");
+            final Object entityTypeName = dataMap.get("EntityTypeName");
             if (entityTypeName == null) {
                 return;
             }
@@ -70,7 +70,7 @@ public class GetLists2013 extends GetLists {
             if (hidden == null) {
                 hidden = "false";
             }
-            GetLists2013Response.SharePointList sharePointList =
+            final GetLists2013Response.SharePointList sharePointList =
                     new GetLists2013Response.SharePointList(idObj.toString(), titleObj.toString(), Boolean.parseBoolean(noCrawl.toString()),
                             Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
             sharePointLists.add(sharePointList);
@@ -98,23 +98,21 @@ public class GetLists2013 extends GetLists {
             if ("entry".equals(qName)) {
                 resultMap = new HashMap<>();
                 resultMap.put("Exists", true);
-            } else {
-                if ("d:Title".equals(qName)) {
-                    fieldName = "Title";
-                    buffer.setLength(0);
-                } else if ("d:Id".equals(qName)) {
-                    fieldName = "Id";
-                    buffer.setLength(0);
-                } else if ("d:NoCrawl".equals(qName)) {
-                    fieldName = "NoCrawl";
-                    buffer.setLength(0);
-                } else if ("d:Hidden".equals(qName)) {
-                    fieldName = "Hidden";
-                    buffer.setLength(0);
-                } else if ("d:EntityTypeName".equals(qName)) {
-                    fieldName = "EntityTypeName";
-                    buffer.setLength(0);
-                }
+            } else if ("d:Title".equals(qName)) {
+                fieldName = "Title";
+                buffer.setLength(0);
+            } else if ("d:Id".equals(qName)) {
+                fieldName = "Id";
+                buffer.setLength(0);
+            } else if ("d:NoCrawl".equals(qName)) {
+                fieldName = "NoCrawl";
+                buffer.setLength(0);
+            } else if ("d:Hidden".equals(qName)) {
+                fieldName = "Hidden";
+                buffer.setLength(0);
+            } else if ("d:EntityTypeName".equals(qName)) {
+                fieldName = "EntityTypeName";
+                buffer.setLength(0);
             }
         }
 
@@ -133,13 +131,11 @@ public class GetLists2013 extends GetLists {
                     ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
-            } else {
-                if (resultMap != null && fieldName != null) {
-                    if (!resultMap.containsKey(fieldName)) {
-                        resultMap.put(fieldName, buffer.toString());
-                    }
-                    fieldName = null;
+            } else if (resultMap != null && fieldName != null) {
+                if (!resultMap.containsKey(fieldName)) {
+                    resultMap.put(fieldName, buffer.toString());
                 }
+                fieldName = null;
             }
         }
 

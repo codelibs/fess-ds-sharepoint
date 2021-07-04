@@ -15,11 +15,6 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.doclib.getfiles;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -27,10 +22,13 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public class GetFilesResponse implements SharePointApiResponse {
     private static final Logger logger = LoggerFactory.getLogger(GetFilesResponse.class);
-
-    protected static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     protected final List<DocLibFile> files = new ArrayList<>();
 
@@ -38,7 +36,7 @@ public class GetFilesResponse implements SharePointApiResponse {
         return files;
     }
 
-    public static GetFilesResponse build(SharePointApi.JsonResponse jsonResponse) {
+    public static GetFilesResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> results = (List) jsonMap.get("value");
@@ -52,15 +50,16 @@ public class GetFilesResponse implements SharePointApiResponse {
         return response;
     }
 
-    protected static DocLibFile createDocLibFile(Map<String, Object> dataMap) {
+    protected static DocLibFile createDocLibFile(final Map<String, Object> dataMap) {
         final DocLibFile docLibFile = new DocLibFile();
         docLibFile.fileName = dataMap.get("Name").toString();
         docLibFile.title = (String) dataMap.getOrDefault("Title", "");
         docLibFile.serverRelativeUrl = dataMap.get("ServerRelativeUrl").toString();
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
             docLibFile.created = sdf.parse(dataMap.get("TimeCreated").toString());
             docLibFile.modified = sdf.parse(dataMap.get("TimeLastModified").toString());
-        } catch (ParseException e) {
+        } catch (final ParseException e) {
             logger.warn("Failed to parse date.", e);
         }
         return docLibFile;

@@ -15,6 +15,11 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -26,11 +31,6 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-
 public class GetList2013 extends GetList {
     private static final String API_BY_LIST_ID_PATH = "_api/web/lists(guid'{list_guid}')";
     private static final String API_BY_LIST_NAME_PATH = "_api/web/lists/GetByTitle('{list_name}')";
@@ -38,16 +38,18 @@ public class GetList2013 extends GetList {
     protected String listId = null;
     protected String listName = null;
 
-    public GetList2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetList2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetList2013 setListId(String listId) {
+    @Override
+    public GetList2013 setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
-    public GetList2013 setListName(String listName) {
+    @Override
+    public GetList2013 setListName(final String listName) {
         this.listName = listName;
         return this;
     }
@@ -64,7 +66,7 @@ public class GetList2013 extends GetList {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + apiPath);
-        XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
         return buildResponse(xmlResponse);
     }
 
@@ -73,15 +75,15 @@ public class GetList2013 extends GetList {
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
 
-        Object titleObj = dataMap.get("Title");
+        final Object titleObj = dataMap.get("Title");
         if (titleObj == null) {
             throw new SharePointClientException("Title is null.");
         }
-        Object idObj = dataMap.get("Id");
+        final Object idObj = dataMap.get("Id");
         if (idObj == null) {
             throw new SharePointClientException("Id is null.");
         }
-        Object entityTypeName = dataMap.get("EntityTypeName");
+        final Object entityTypeName = dataMap.get("EntityTypeName");
         if (entityTypeName == null) {
             throw new SharePointClientException("entityTypeName is null.");
         }
@@ -93,7 +95,7 @@ public class GetList2013 extends GetList {
         if (hidden == null) {
             hidden = "false";
         }
-        GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
+        final GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
                 Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
         return new GetListResponse(sharePointList);
     }

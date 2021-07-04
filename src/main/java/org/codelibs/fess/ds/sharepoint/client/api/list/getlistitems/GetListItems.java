@@ -15,6 +15,13 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
@@ -23,16 +30,8 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-
 public class GetListItems extends SharePointApi<GetListItemsResponse> {
     private static final Logger logger = LoggerFactory.getLogger(GetListItems.class);
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Items";
     private static final String PAGING_PARAM = "%24top={{num}}&%24skiptoken=Paged=TRUE%26p_ID={{start}}";
@@ -40,12 +39,12 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
     private static final String SELECT_PARAM_SITE_PAGE = "%24select=Id,Created,Modified";
 
     private String listId = null;
-    private String listName = null;
+    private final String listName = null;
     private int num = 100;
     private int start = 0;
     private boolean isSubPage = false;
 
-    public GetListItems(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetListItems(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
@@ -63,7 +62,7 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + selectParam);
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }
 
@@ -82,7 +81,7 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         return this;
     }
 
-    public GetListItems setSubPage(boolean subPage) {
+    public GetListItems setSubPage(final boolean subPage) {
         isSubPage = subPage;
         return this;
     }
@@ -90,6 +89,7 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
     @SuppressWarnings("unchecked")
     private GetListItemsResponse buildResponse(final JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
         final List<GetListItemsResponse.ListItem> listItems = new ArrayList<>();
         final List<Map<String, Object>> valueList = (List) jsonMap.get("value");
@@ -99,12 +99,12 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
                 if (titleObj == null) {
                     titleObj = "";
                 }
-                Object idObj = value.get("Id");
+                final Object idObj = value.get("Id");
                 if (idObj == null) {
                     logger.warn("Id field does not contain. Skip item. " + jsonResponse.getBody());
                     return;
                 }
-                Object editLinkObj = value.get("odata.editLink");
+                final Object editLinkObj = value.get("odata.editLink");
                 if (editLinkObj == null) {
                     logger.warn("odate.editLink field does not contain. Skip item. " + jsonResponse.getBody());
                     return;
@@ -113,24 +113,24 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
                 if (attachmentsObj == null) {
                     attachmentsObj = "false";
                 }
-                boolean attachments = Boolean.valueOf(attachmentsObj.toString());
-                Object createdObj = value.get("Created");
+                final boolean attachments = Boolean.parseBoolean(attachmentsObj.toString());
+                final Object createdObj = value.get("Created");
                 if (createdObj == null) {
                     logger.warn("Created field does not contain. Skip item. " + jsonResponse.getBody());
                     return;
                 }
-                Date created = sdf.parse(createdObj.toString());
-                Object modifiedObj = value.get("Modified");
+                final Date created = sdf.parse(createdObj.toString());
+                final Object modifiedObj = value.get("Modified");
                 if (modifiedObj == null) {
                     logger.warn("Modified field does not contain. Skip item. " + jsonResponse.getBody());
                     return;
                 }
-                Date modified = sdf.parse(modifiedObj.toString());
+                final Date modified = sdf.parse(modifiedObj.toString());
 
-                GetListItemsResponse.ListItem listItem = new GetListItemsResponse.ListItem(idObj.toString(), editLinkObj.toString(),
+                final GetListItemsResponse.ListItem listItem = new GetListItemsResponse.ListItem(idObj.toString(), editLinkObj.toString(),
                         titleObj.toString(), attachments, created, modified);
                 listItems.add(listItem);
-            } catch (ParseException e) {
+            } catch (final ParseException e) {
                 throw new SharePointClientException("Failed to get item info.", e);
             }
         });

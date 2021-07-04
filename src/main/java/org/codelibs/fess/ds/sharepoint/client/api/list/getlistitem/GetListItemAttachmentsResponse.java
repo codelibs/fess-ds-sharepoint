@@ -15,20 +15,20 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+
 public class GetListItemAttachmentsResponse implements SharePointApiResponse {
-    private List<AttachmentFile> files = new ArrayList<>();
+    private final List<AttachmentFile> files = new ArrayList<>();
 
-    public static GetListItemAttachmentsResponse build(SharePointApi.JsonResponse jsonResponse) {
-        GetListItemAttachmentsResponse response = new GetListItemAttachmentsResponse();
+    public static GetListItemAttachmentsResponse build(final SharePointApi.JsonResponse jsonResponse) {
+        final GetListItemAttachmentsResponse response = new GetListItemAttachmentsResponse();
 
-        Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
+        final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> valueList = (List) jsonMap.get("value");
@@ -47,7 +47,7 @@ public class GetListItemAttachmentsResponse implements SharePointApiResponse {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         files.stream().forEach(file -> {
             sb.append('[');
             sb.append("file:").append(file.getFileName());
@@ -61,7 +61,7 @@ public class GetListItemAttachmentsResponse implements SharePointApiResponse {
         private final String fileName;
         private final String serverRelativeUrl;
 
-        public AttachmentFile(String fileName, String serverRelativeUrl) {
+        public AttachmentFile(final String fileName, final String serverRelativeUrl) {
             this.fileName = fileName;
             this.serverRelativeUrl = serverRelativeUrl;
         }

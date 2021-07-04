@@ -15,24 +15,24 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachmentsResponse;
-import org.xml.sax.Attributes;
-import org.xml.sax.helpers.DefaultHandler;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class GetListItemAttachments2013Response extends GetListItemAttachmentsResponse {
-    private List<AttachmentFile> files = new ArrayList<>();
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachmentsResponse;
+import org.xml.sax.Attributes;
+import org.xml.sax.helpers.DefaultHandler;
 
-    public static GetListItemAttachments2013Response build(SharePointApi.XmlResponse xmlResponse) {
+public class GetListItemAttachments2013Response extends GetListItemAttachmentsResponse {
+    private final List<AttachmentFile> files = new ArrayList<>();
+
+    public static GetListItemAttachments2013Response build(final SharePointApi.XmlResponse xmlResponse) {
         final GetListItemAttachments2013Response response = new GetListItemAttachments2013Response();
         final GetListItemAttachmentsDocHandler handler = new GetListItemAttachmentsDocHandler();
         xmlResponse.parseXml(handler);
-        Map<String, Object> dataMap = handler.getDataMap();
+        final Map<String, Object> dataMap = handler.getDataMap();
 
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> valueList = (List) dataMap.get("value");
@@ -45,13 +45,14 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
         return response;
     }
 
+    @Override
     public List<AttachmentFile> getFiles() {
         return files;
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         files.stream().forEach(file -> {
             sb.append('[');
             sb.append("file:").append(file.getFileName());
@@ -79,14 +80,12 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("entry".equals(qName)) {
                 resultMap = new HashMap<>();
-            } else {
-                if ("d:FileName".equals(qName)) {
-                    fieldName = "FileName";
-                    buffer.setLength(0);
-                } else if ("d:ServerRelativeUrl".equals(qName)) {
-                    fieldName = "ServerRelativeUrl";
-                    buffer.setLength(0);
-                }
+            } else if ("d:FileName".equals(qName)) {
+                fieldName = "FileName";
+                buffer.setLength(0);
+            } else if ("d:ServerRelativeUrl".equals(qName)) {
+                fieldName = "ServerRelativeUrl";
+                buffer.setLength(0);
             }
         }
 
@@ -105,13 +104,11 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
                     ((List) dataMap.get("value")).add(resultMap);
                 }
                 resultMap = null;
-            } else {
-                if (resultMap != null && fieldName != null) {
-                    if (!resultMap.containsKey(fieldName)) {
-                        resultMap.put(fieldName, buffer.toString());
-                    }
-                    fieldName = null;
+            } else if (resultMap != null && fieldName != null) {
+                if (!resultMap.containsKey(fieldName)) {
+                    resultMap.put(fieldName, buffer.toString());
                 }
+                fieldName = null;
             }
         }
 

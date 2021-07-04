@@ -15,6 +15,15 @@
  */
 package org.codelibs.fess.ds.sharepoint;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+
+import javax.validation.ValidationException;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.config.RequestConfig;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
@@ -24,20 +33,12 @@ import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
-import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
-import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.SiteCrawl;
+import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
+import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.validation.ValidationException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SharePointCrawler {
     private static final Logger logger = LoggerFactory.getLogger(SharePointCrawler.class);
@@ -48,7 +49,7 @@ public class SharePointCrawler {
 
     private final CrawlerConfig config;
 
-    public SharePointCrawler(CrawlerConfig config) {
+    public SharePointCrawler(final CrawlerConfig config) {
         validate(config);
         this.client = createClient(config);
         this.config = config;
@@ -58,7 +59,7 @@ public class SharePointCrawler {
         }
     }
 
-    private void validate(CrawlerConfig config) {
+    private void validate(final CrawlerConfig config) {
         if (config.url == null) {
             throw new ValidationException("url param is required.");
         }
@@ -67,10 +68,10 @@ public class SharePointCrawler {
         }
     }
 
-    private SharePointClient createClient(CrawlerConfig config) {
-        RequestConfig requestConfig =
+    private SharePointClient createClient(final CrawlerConfig config) {
+        final RequestConfig requestConfig =
                 RequestConfig.custom().setConnectTimeout(config.getConnectionTimeout()).setSocketTimeout(config.getSocketTimeout()).build();
-        SharePointClientBuilder builder =
+        final SharePointClientBuilder builder =
                 SharePointClient.builder().setUrl(config.getUrl()).setSite(config.getSiteName()).setRequestConfig(requestConfig);
         final String ntlmUser = config.getNtlmUser();
         if (StringUtils.isNotBlank(ntlmUser)) {
@@ -87,7 +88,7 @@ public class SharePointCrawler {
         return builder.build();
     }
 
-    private void setFirstCrawl(CrawlerConfig crawlerConfig) {
+    private void setFirstCrawl(final CrawlerConfig crawlerConfig) {
         final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = new ConcurrentHashMap<>();
         if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null
                 && crawlerConfig.getInitialDocLibPath() == null) {
@@ -111,25 +112,25 @@ public class SharePointCrawler {
 
     public Map<String, Object> doCrawl() {
         while (!crawlingQueue.isEmpty()) {
-            SharePointCrawl crawl = crawlingQueue.poll();
+            final SharePointCrawl crawl = crawlingQueue.poll();
             if (crawl == null) {
                 continue;
             }
             int retryCount = 0;
             while (retryCount <= config.getRetryLimit()) {
                 try {
-                    Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
+                    final Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
                     if (dataMap != null) {
                         return dataMap;
                     }
                     break;
-                } catch (SharePointServerException e) {
+                } catch (final SharePointServerException e) {
                     if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
                     } else {
                         logger.warn("Api server error: {}", e.getMessage(), e);
                     }
-                } catch (SharePointClientException e) {
+                } catch (final SharePointClientException e) {
                     if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Error occured: {}  [Retry:{}]" + e.getMessage(), retryCount);
                     } else {
@@ -170,7 +171,7 @@ public class SharePointCrawler {
             return url;
         }
 
-        public void setUrl(String url) {
+        public void setUrl(final String url) {
             this.url = url.endsWith("/") ? url : url + "/";
         }
 
@@ -178,7 +179,7 @@ public class SharePointCrawler {
             return siteName;
         }
 
-        public void setSiteName(String siteName) {
+        public void setSiteName(final String siteName) {
             this.siteName = siteName;
         }
 
@@ -186,18 +187,15 @@ public class SharePointCrawler {
             return initialListId;
         }
 
-        public void setInitialListId(String initialListId) {
+        public void setInitialListId(final String initialListId) {
             this.initialListId = initialListId;
         }
 
         public String getInitialListName() {
-            if (initialListName == null) {
-                return null;
-            }
             return initialListName;
         }
 
-        public void setInitialListName(String initialListName) {
+        public void setInitialListName(final String initialListName) {
             this.initialListName = initialListName;
         }
 
@@ -208,7 +206,7 @@ public class SharePointCrawler {
             return "/sites/" + siteName + initialDocLibPath;
         }
 
-        public void setInitialDocLibPath(String initialDocLibPath) {
+        public void setInitialDocLibPath(final String initialDocLibPath) {
             this.initialDocLibPath = initialDocLibPath.startsWith("/") ? initialDocLibPath : "/" + initialDocLibPath;
         }
 
@@ -216,7 +214,7 @@ public class SharePointCrawler {
             return ntlmUser;
         }
 
-        public void setNtlmUser(String ntlmUser) {
+        public void setNtlmUser(final String ntlmUser) {
             this.ntlmUser = ntlmUser;
         }
 
@@ -224,7 +222,7 @@ public class SharePointCrawler {
             return ntlmPassword;
         }
 
-        public void setNtlmPassword(String ntlmPassword) {
+        public void setNtlmPassword(final String ntlmPassword) {
             this.ntlmPassword = ntlmPassword;
         }
 
@@ -232,7 +230,7 @@ public class SharePointCrawler {
             return oauthClientId;
         }
 
-        public void setOauthClientId(String oauthClientId) {
+        public void setOauthClientId(final String oauthClientId) {
             this.oauthClientId = oauthClientId;
         }
 
@@ -240,7 +238,7 @@ public class SharePointCrawler {
             return oauthClientSecret;
         }
 
-        public void setOauthClientSecret(String oauthClientSecret) {
+        public void setOauthClientSecret(final String oauthClientSecret) {
             this.oauthClientSecret = oauthClientSecret;
         }
 
@@ -248,7 +246,7 @@ public class SharePointCrawler {
             return oauthTenant;
         }
 
-        public void setOauthTenant(String oauthTenant) {
+        public void setOauthTenant(final String oauthTenant) {
             this.oauthTenant = oauthTenant;
         }
 
@@ -256,7 +254,7 @@ public class SharePointCrawler {
             return oauthRealm;
         }
 
-        public void setOauthRealm(String oauthRealm) {
+        public void setOauthRealm(final String oauthRealm) {
             this.oauthRealm = oauthRealm;
         }
 
@@ -264,7 +262,7 @@ public class SharePointCrawler {
             return connectionTimeout;
         }
 
-        public void setConnectionTimeout(int connectionTimeout) {
+        public void setConnectionTimeout(final int connectionTimeout) {
             this.connectionTimeout = connectionTimeout;
         }
 
@@ -272,7 +270,7 @@ public class SharePointCrawler {
             return socketTimeout;
         }
 
-        public void setSocketTimeout(int socketTimeout) {
+        public void setSocketTimeout(final int socketTimeout) {
             this.socketTimeout = socketTimeout;
         }
 
@@ -280,7 +278,7 @@ public class SharePointCrawler {
             return listItemNumPerPages;
         }
 
-        public void setListItemNumPerPages(int listItemNumPerPages) {
+        public void setListItemNumPerPages(final int listItemNumPerPages) {
             this.listItemNumPerPages = listItemNumPerPages;
         }
 
@@ -288,7 +286,7 @@ public class SharePointCrawler {
             return sharePointVersion;
         }
 
-        public void setSharePointVersion(String sharePointVersion) {
+        public void setSharePointVersion(final String sharePointVersion) {
             this.sharePointVersion = sharePointVersion;
         }
 
@@ -296,7 +294,7 @@ public class SharePointCrawler {
             return retryLimit;
         }
 
-        public void setRetryLimit(int retryLimit) {
+        public void setRetryLimit(final int retryLimit) {
             this.retryLimit = retryLimit;
         }
 
@@ -304,7 +302,7 @@ public class SharePointCrawler {
             return isSubPage;
         }
 
-        public void setSubPage(boolean subPage) {
+        public void setSubPage(final boolean subPage) {
             isSubPage = subPage;
         }
 
@@ -312,7 +310,7 @@ public class SharePointCrawler {
             return listContentIncludeFields;
         }
 
-        public void setListContentIncludeFields(String listContentIncludeFields) {
+        public void setListContentIncludeFields(final String listContentIncludeFields) {
             this.listContentIncludeFields = Arrays.asList(listContentIncludeFields.trim().split(","));
         }
 
@@ -320,7 +318,7 @@ public class SharePointCrawler {
             return listContentExcludeFields;
         }
 
-        public void setListContentExcludeFields(String listContentExcludeFields) {
+        public void setListContentExcludeFields(final String listContentExcludeFields) {
             this.listContentExcludeFields = Arrays.asList(listContentExcludeFields.trim().split(","));
         }
 
@@ -328,7 +326,7 @@ public class SharePointCrawler {
             return excludeList;
         }
 
-        public void setExcludeList(String excludeList) {
+        public void setExcludeList(final String excludeList) {
             this.excludeList = Arrays.asList(excludeList.split(","));
         }
 
@@ -336,7 +334,7 @@ public class SharePointCrawler {
             return excludeFolder;
         }
 
-        public void setExcludeFolder(String excludeFolder) {
+        public void setExcludeFolder(final String excludeFolder) {
             this.excludeFolder = Arrays.asList(excludeFolder.split(","));
         }
 
@@ -344,7 +342,7 @@ public class SharePointCrawler {
             return skipRole;
         }
 
-        public void setSkipRole(boolean skipRole) {
+        public void setSkipRole(final boolean skipRole) {
             this.skipRole = skipRole;
         }
     }

@@ -15,17 +15,18 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-
 public class GetListItemValue2013Response extends GetListItemValueResponse {
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
 
     private String id;
     private String title;
@@ -42,68 +43,84 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
     private String parentItemId;
     private String parentFolderId;
     private int fsObjType;
-    private Map<String, String> values = new HashMap<>();
+    private final Map<String, String> values = new HashMap<>();
 
+    @Override
     public String getId() {
         return id;
     }
 
+    @Override
     public String getTitle() {
         return title;
     }
 
+    @Override
     public Date getModified() {
         return modified;
     }
 
+    @Override
     public Date getCreated() {
         return created;
     }
 
+    @Override
     public String getAuthor() {
         return author;
     }
 
+    @Override
     public String getEditor() {
         return editor;
     }
 
+    @Override
     public boolean isHasAttachments() {
         return hasAttachments;
     }
 
+    @Override
     public long getOrder() {
         return order;
     }
 
+    @Override
     public String getEditLink() {
         return editLink;
     }
 
+    @Override
     public String getFileRef() {
         return fileRef;
     }
 
+    @Override
     public String getFileDirRef() {
         return fileDirRef;
     }
 
+    @Override
     public String getFileLeafRef() {
         return fileLeafRef;
     }
 
+    @Override
     public String getParentItemId() {
         return parentItemId;
     }
 
+    @Override
     public String getParentFolderId() {
         return parentFolderId;
     }
 
+    @Override
     public int getFsObjType() {
         return fsObjType;
     }
 
+    @Override
     public Map<String, String> getValues() {
         return values;
     }
@@ -112,8 +129,9 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         final GetListItemValueDocHandler handler = new GetListItemValueDocHandler();
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
+        final SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
 
-        GetListItemValue2013Response response = new GetListItemValue2013Response();
+        final GetListItemValue2013Response response = new GetListItemValue2013Response();
         response.id = dataMap.get("ID").toString();
         response.title = dataMap.getOrDefault("Title", "").toString();
         response.modified = sdf.parse(dataMap.get("Modified").toString());
@@ -125,11 +143,11 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         response.fileLeafRef = dataMap.getOrDefault("FileLeafRef", "").toString();
         response.parentItemId = dataMap.getOrDefault("ParentItemID", "").toString();
         response.parentFolderId = dataMap.getOrDefault("ParentFolderID", "").toString();
-        response.fsObjType = Integer.valueOf(dataMap.getOrDefault("FSObjType", "0").toString());
+        response.fsObjType = Integer.parseInt(dataMap.getOrDefault("FSObjType", "0").toString());
         if (dataMap.containsKey("Attachments")) {
-            response.hasAttachments = Boolean.valueOf(dataMap.get("Attachments").toString());
+            response.hasAttachments = Boolean.parseBoolean(dataMap.get("Attachments").toString());
         }
-        response.order = Long.valueOf(dataMap.get("Order").toString().replace(",", ""));
+        response.order = Long.parseLong(dataMap.get("Order").toString().replace(",", ""));
         response.editLink = dataMap.get("odata.editLink").toString();
 
         dataMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
@@ -139,7 +157,7 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append(String.format("[id:%s] [title:%s] [modified:%tF] [created:%tF] [author:%s] [editor:%s] [hasAttachments:%s] [order:%d]",
                 id, title, modified, created, author, editor, hasAttachments, order));
         values.entrySet().stream().forEach(entry -> {
@@ -196,8 +214,8 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
                 fieldName = "Order";
                 buffer.setLength(0);
             } else if ("link".equals(qName)) {
-                String rel = attributes.getValue("rel");
-                if (rel != null && rel.equals("edit")) {
+                final String rel = attributes.getValue("rel");
+                if (rel != null && "edit".equals(rel)) {
                     dataMap.put("odata.editLink", attributes.getValue("href"));
                 }
             } else if ("d:FileRef".equals(qName)) {

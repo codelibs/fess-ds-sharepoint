@@ -25,16 +25,16 @@ public class GetListItemValue extends SharePointApi<GetListItemValueResponse> {
     private String listId = null;
     private String itemId = null;
 
-    public GetListItemValue(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetListItemValue(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetListItemValue setListId(String listId) {
+    public GetListItemValue setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
-    public GetListItemValue setItemId(String itemId) {
+    public GetListItemValue setItemId(final String itemId) {
         this.itemId = itemId;
         return this;
     }
@@ -45,15 +45,15 @@ public class GetListItemValue extends SharePointApi<GetListItemValueResponse> {
             throw new SharePointClientException("listId/itemId is required.");
         }
         final HttpGet httpGet = new HttpGet(buildUrl());
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetListItemValueResponse.build(jsonResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }
 
-    private String buildUrl() {
+    protected String buildUrl() {
         return siteUrl + "/_api/Web/Lists(guid'" + listId + "')/Items(" + itemId + ")/FieldValuesAsText";
     }
 }

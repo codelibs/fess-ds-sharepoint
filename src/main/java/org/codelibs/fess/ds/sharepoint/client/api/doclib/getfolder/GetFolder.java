@@ -26,11 +26,11 @@ public class GetFolder extends SharePointApi<GetFolderResponse> {
 
     private String serverRelativeUrl = null;
 
-    public GetFolder(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetFolder(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetFolder setServerRelativeUrl(String serverRelativeUrl) {
+    public GetFolder setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
@@ -42,10 +42,10 @@ public class GetFolder extends SharePointApi<GetFolderResponse> {
         }
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)));
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFolderResponse.build(jsonResponse);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
     }

@@ -20,7 +20,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 public class GetListResponse implements SharePointApiResponse {
     private final GetListsResponse.SharePointList list;
 
-    public GetListResponse(GetListsResponse.SharePointList list) {
+    public GetListResponse(final GetListsResponse.SharePointList list) {
         this.list = list;
     }
 

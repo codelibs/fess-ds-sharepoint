@@ -28,7 +28,7 @@ public class GetForms extends SharePointApi<GetFormsResponse> {
     private String listId = null;
     private String listName = null;
 
-    public GetForms(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetForms(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
@@ -53,7 +53,7 @@ public class GetForms extends SharePointApi<GetFormsResponse> {
         } else {
             httpGet = new HttpGet(siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName));
         }
-        JsonResponse jsonResponse = doJsonRequest(httpGet);
+        final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return GetFormsResponse.build(jsonResponse);
     }
 }

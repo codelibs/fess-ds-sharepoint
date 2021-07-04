@@ -28,15 +28,17 @@ public class GetForms2013 extends GetForms {
     private String listId = null;
     private String listName = null;
 
-    public GetForms2013(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetForms2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    @Override
     public GetForms2013 setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
+    @Override
     public GetForms2013 setListName(final String listName) {
         this.listName = listName;
         return this;
@@ -53,7 +55,7 @@ public class GetForms2013 extends GetForms {
         } else {
             httpGet = new HttpGet(siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName));
         }
-        XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
         return GetForms2013Response.build(xmlResponse);
     }
 }

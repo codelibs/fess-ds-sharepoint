@@ -15,10 +15,10 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
-
 import java.util.ArrayList;
 import java.util.List;
+
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 
 public class GetListItemRole2013Response extends GetListItemRoleResponse {
     private final List<SharePointGroup> sharePointGroups = new ArrayList<>();
@@ -27,18 +27,22 @@ public class GetListItemRole2013Response extends GetListItemRoleResponse {
     public GetListItemRole2013Response() {
     }
 
+    @Override
     public List<SharePointGroup> getSharePointGroups() {
         return sharePointGroups;
     }
 
+    @Override
     public void addSharePointGroup(final SharePointGroup sharePointGroup) {
         sharePointGroups.add(sharePointGroup);
     }
 
+    @Override
     public List<User> getUsers() {
         return users;
     }
 
+    @Override
     public void addUser(final User user) {
         users.add(user);
     }

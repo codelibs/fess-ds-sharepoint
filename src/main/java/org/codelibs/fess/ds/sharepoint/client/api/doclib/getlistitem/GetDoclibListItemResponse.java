@@ -21,7 +21,7 @@ public class GetDoclibListItemResponse implements SharePointApiResponse {
     protected final String listId;
     protected final String itemId;
 
-    public GetDoclibListItemResponse(String listId, String itemId) {
+    public GetDoclibListItemResponse(final String listId, final String itemId) {
         this.listId = listId;
         this.itemId = itemId;
     }

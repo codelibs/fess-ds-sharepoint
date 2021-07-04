@@ -15,6 +15,14 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
@@ -23,28 +31,25 @@ import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
-import java.util.stream.Collectors;
-
 public abstract class SharePointCrawl {
     private final Logger logger = LoggerFactory.getLogger(SharePointCrawl.class);
 
     protected final SharePointClient client;
 
-    public SharePointCrawl(SharePointClient client) {
+    public SharePointCrawl(final SharePointClient client) {
         this.client = client;
     }
 
     abstract public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue);
 
-    protected List<String> getItemRoles(String listId, String itemId,
-            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, boolean skipRole) {
+    protected List<String> getItemRoles(final String listId, final String itemId,
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean skipRole) {
         if (skipRole) {
             return new ArrayList<>();
         }
         final GetListItemRoleResponse getListItemRoleResponse =
                 client.api().list().getListItemRole().setId(listId, itemId).setSharePointGroupCache(sharePointGroupCache).execute();
-        SystemHelper systemHelper = ComponentUtil.getSystemHelper();
+        final SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> roles = new HashSet<>();
         // AD
         getListItemRoleResponse.getUsers().stream().filter(user -> !user.isAzureAccount()).map(GetListItemRoleResponse.User::getAccount)
@@ -66,8 +71,8 @@ public abstract class SharePointCrawl {
     }
 
     private Set<String> getSharePointGroupTitles(final GetListItemRoleResponse.SharePointGroup sharePointGroup,
-            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
-        SystemHelper systemHelper = ComponentUtil.getSystemHelper();
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+        final SystemHelper systemHelper = ComponentUtil.getSystemHelper();
         final Set<String> titles = new HashSet<>();
         // AD
         sharePointGroup.getUsers().stream().filter(user -> !user.isAzureAccount()).map(GetListItemRoleResponse.User::getAccount)

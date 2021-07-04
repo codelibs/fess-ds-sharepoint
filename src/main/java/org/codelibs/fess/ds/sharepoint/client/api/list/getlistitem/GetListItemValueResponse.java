@@ -15,18 +15,16 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+
 public class GetListItemValueResponse implements SharePointApiResponse {
-    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm");
 
     private String id;
     private String title;
@@ -43,7 +41,7 @@ public class GetListItemValueResponse implements SharePointApiResponse {
     private String parentItemId;
     private String parentFolderId;
     private int fsObjType;
-    private Map<String, String> values = new HashMap<>();
+    private final Map<String, String> values = new HashMap<>();
 
     public String getId() {
         return id;
@@ -111,8 +109,9 @@ public class GetListItemValueResponse implements SharePointApiResponse {
 
     public static GetListItemValueResponse build(final SharePointApi.JsonResponse jsonResponse) throws ParseException {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm");
 
-        GetListItemValueResponse response = new GetListItemValueResponse();
+        final GetListItemValueResponse response = new GetListItemValueResponse();
         response.id = jsonMap.get("ID").toString();
         response.title = jsonMap.get("Title").toString();
         response.modified = sdf.parse(jsonMap.get("Modified").toString());
@@ -124,11 +123,11 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         response.fileLeafRef = jsonMap.getOrDefault("FileLeafRef", "").toString();
         response.parentItemId = jsonMap.getOrDefault("ParentItemID", "").toString();
         response.parentFolderId = jsonMap.getOrDefault("ParentFolderID", "").toString();
-        response.fsObjType = Integer.valueOf(jsonMap.getOrDefault("FSObjType", "0").toString());
+        response.fsObjType = Integer.parseInt(jsonMap.getOrDefault("FSObjType", "0").toString());
         if (jsonMap.containsKey("Attachments")) {
-            response.hasAttachments = Boolean.valueOf(jsonMap.get("Attachments").toString());
+            response.hasAttachments = Boolean.parseBoolean(jsonMap.get("Attachments").toString());
         }
-        response.order = Long.valueOf(jsonMap.get("Order").toString().replace(",", ""));
+        response.order = Long.parseLong(jsonMap.get("Order").toString().replace(",", ""));
         response.editLink = jsonMap.get("odata.editLink").toString();
 
         jsonMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
@@ -138,7 +137,7 @@ public class GetListItemValueResponse implements SharePointApiResponse {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append(String.format("[id:%s] [title:%s] [modified:%tF] [created:%tF] [author:%s] [editor:%s] [hasAttachments:%s] [order:%d]",
                 id, title, modified, created, author, editor, hasAttachments, order));
         values.entrySet().stream().forEach(entry -> {

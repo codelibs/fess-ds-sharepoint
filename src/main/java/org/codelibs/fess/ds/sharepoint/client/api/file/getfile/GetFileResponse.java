@@ -15,16 +15,16 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.file.getfile;
 
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-
 import java.io.IOException;
 import java.io.InputStream;
+
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
 public class GetFileResponse implements SharePointApiResponse {
     private final CloseableHttpResponse httpResponse;
 
-    public GetFileResponse(CloseableHttpResponse httpResponse) {
+    public GetFileResponse(final CloseableHttpResponse httpResponse) {
         this.httpResponse = httpResponse;
     }
 

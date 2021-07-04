@@ -15,9 +15,9 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists;
 
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
-
 import java.util.List;
+
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 
 public class GetLists2013Response extends GetListsResponse {
 
@@ -25,6 +25,7 @@ public class GetLists2013Response extends GetListsResponse {
         super(lists);
     }
 
+    @Override
     public List<SharePointList> getLists() {
         return lists;
     }

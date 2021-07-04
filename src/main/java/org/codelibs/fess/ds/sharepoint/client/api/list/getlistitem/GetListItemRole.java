@@ -15,15 +15,15 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
@@ -33,17 +33,17 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     private String itemId = null;
     private Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = null;
 
-    public GetListItemRole(CloseableHttpClient client, String siteUrl, OAuth oAuth) {
+    public GetListItemRole(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
-    public GetListItemRole setId(String listId, String itemId) {
+    public GetListItemRole setId(final String listId, final String itemId) {
         this.listId = listId;
         this.itemId = itemId;
         return this;
     }
 
-    public GetListItemRole setSharePointGroupCache(Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    public GetListItemRole setSharePointGroupCache(final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         this.sharePointGroupCache = sharePointGroupCache;
         return this;
     }
@@ -57,7 +57,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         final GetListItemRoleResponse response = new GetListItemRoleResponse();
         int start = 0;
         while (true) {
-            GetListItemRoleResponse getListItemRoleResponse = executeInternal(start, PAGE_SISE);
+            final GetListItemRoleResponse getListItemRoleResponse = executeInternal(start, PAGE_SISE);
             if (getListItemRoleResponse.getUsers().size() == 0 && getListItemRoleResponse.getSharePointGroups().size() == 0
                     && getListItemRoleResponse.getSecurityGroups().size() == 0) {
                 break;
@@ -70,13 +70,13 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         return response;
     }
 
-    private GetListItemRoleResponse executeInternal(int start, int num) {
+    protected GetListItemRoleResponse executeInternal(final int start, final int num) {
         final HttpGet httpGet = new HttpGet(buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num));
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
 
         final GetListItemRoleResponse response = new GetListItemRoleResponse();
         final Map<String, Object> bodyMap = jsonResponse.getBodyAsMap();
-        List<Map<String, Object>> values = (List) bodyMap.get("value");
+        final List<Map<String, Object>> values = (List) bodyMap.get("value");
         values.stream().map(value -> (value.get("PrincipalId").toString())).forEach(principalId -> {
             if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
@@ -86,53 +86,59 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             final JsonResponse memberResponse = doJsonRequest(memberRequest);
             final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
             final String id = memberResponseMap.get("Id").toString();
-            final int principalType = Integer.valueOf(memberResponseMap.get("PrincipalType").toString());
-            if (principalType == 1) {
+            final int principalType = Integer.parseInt(memberResponseMap.get("PrincipalType").toString());
+            switch (principalType) {
+            case 1:
                 // User
-                GetListItemRoleResponse.User user = new GetListItemRoleResponse.User(id, memberResponseMap.get("Title").toString(),
+                final GetListItemRoleResponse.User user = new GetListItemRoleResponse.User(id, memberResponseMap.get("Title").toString(),
                         memberResponseMap.get("LoginName").toString());
                 response.addUser(user);
-            } else if (principalType == 4) {
+                break;
+            case 4:
                 // Security Group
-                GetListItemRoleResponse.SecurityGroup securityGroup = new GetListItemRoleResponse.SecurityGroup(id,
+                final GetListItemRoleResponse.SecurityGroup securityGroup = new GetListItemRoleResponse.SecurityGroup(id,
                         memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
                 response.addSecurityGroup(securityGroup);
-            } else if (principalType == 8) {
-                GetListItemRoleResponse.SharePointGroup sharePointGroup =
+                break;
+            case 8:
+                final GetListItemRoleResponse.SharePointGroup sharePointGroup =
                         buildSharePointGroup(id, memberResponseMap.get("Title").toString());
                 response.addSharePointGroup(sharePointGroup);
                 if (sharePointGroupCache != null) {
                     sharePointGroupCache.put(principalId, sharePointGroup);
                 }
+                break;
+            default:
+                break;
             }
         });
         return response;
     }
 
-    private String buildBaseUrl() {
+    protected String buildBaseUrl() {
         return siteUrl + "/_api/Web/Lists(guid'" + listId + "')/";
     }
 
-    private String buildRoleAssignmentsUrl() {
+    protected String buildRoleAssignmentsUrl() {
         return buildBaseUrl() + "Items(" + itemId + ")/RoleAssignments";
     }
 
-    private String buildMemberUrl(String itemId, String principalId) {
+    protected String buildMemberUrl(final String itemId, final String principalId) {
         return buildBaseUrl() + "Items(" + itemId + ")/RoleAssignments/GetByPrincipalId(" + principalId + ")/Member";
     }
 
-    private String buildUsersUrl(String memberId) {
+    protected String buildUsersUrl(final String memberId) {
         return siteUrl + "/_api/Web/SiteGroups/GetById(" + memberId + ")/Users";
     }
 
-    private String getPagingParam(int start, int num) {
+    protected String getPagingParam(final int start, final int num) {
         return PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num));
     }
 
-    private GetListItemRoleResponse.SharePointGroup buildSharePointGroup(String id, String title) {
+    protected GetListItemRoleResponse.SharePointGroup buildSharePointGroup(final String id, final String title) {
         // SharePointGroup
         final GetListItemRoleResponse.SharePointGroup sharePointGroup = new GetListItemRoleResponse.SharePointGroup(id, title);
-        List<Map<String, Object>> usersList = new ArrayList<>();
+        final List<Map<String, Object>> usersList = new ArrayList<>();
 
         /* TODO need paging?
         int start = 0;
@@ -151,33 +157,39 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
         final JsonResponse usersResponse = doJsonRequest(usersRequest);
         final Map<String, Object> usersResponseMap = usersResponse.getBodyAsMap();
-        List<Map<String, Object>> users = (List) usersResponseMap.get("value");
+        final List<Map<String, Object>> users = (List) usersResponseMap.get("value");
         usersList.addAll(users);
         usersList.forEach(user -> {
-            String userId = user.get("Id").toString();
-            String userTitle = user.get("Title").toString();
-            String loginName = user.get("LoginName").toString();
-            int userPrincipalType = Integer.valueOf(user.get("PrincipalType").toString());
-            if (userPrincipalType == 1) {
+            final String userId = user.get("Id").toString();
+            final String userTitle = user.get("Title").toString();
+            final String loginName = user.get("LoginName").toString();
+            final int userPrincipalType = Integer.parseInt(user.get("PrincipalType").toString());
+            switch (userPrincipalType) {
+            case 1:
                 // user
-                GetListItemRoleResponse.User userUser = new GetListItemRoleResponse.User(userId, userTitle, loginName);
+                final GetListItemRoleResponse.User userUser = new GetListItemRoleResponse.User(userId, userTitle, loginName);
                 sharePointGroup.addUser(userUser);
-            } else if (userPrincipalType == 4) {
+                break;
+            case 4:
                 // Security Group
-                GetListItemRoleResponse.SecurityGroup securityGroup =
+                final GetListItemRoleResponse.SecurityGroup securityGroup =
                         new GetListItemRoleResponse.SecurityGroup(userId, userTitle, loginName);
                 sharePointGroup.addSecurityGroup(securityGroup);
-            } else if (userPrincipalType == 8) {
+                break;
+            case 8:
                 // SharePoint Group
                 if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
                     sharePointGroup.addSharePointGroup(sharePointGroupCache.get(userId));
                 } else {
-                    GetListItemRoleResponse.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
+                    final GetListItemRoleResponse.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
                     sharePointGroup.addSharePointGroup(userSharePointGroup);
                     if (sharePointGroupCache != null) {
                         sharePointGroupCache.put(userId, userSharePointGroup);
                     }
                 }
+                break;
+            default:
+                break;
             }
         });
         return sharePointGroup;

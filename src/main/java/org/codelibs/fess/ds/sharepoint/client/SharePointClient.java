@@ -28,14 +28,11 @@ public class SharePointClient {
 
     private SharePointApis sharePointApis;
     private final SharePointHelper sharePointHelper;
-    private final boolean verson2013;
-
-    protected SharePointClient(CloseableHttpClient httpClient, String url, String siteName, OAuth oAuth, boolean verson2013) {
+    protected SharePointClient(final CloseableHttpClient httpClient, final String url, final String siteName, final OAuth oAuth, final boolean verson2013) {
         this.siteUrl = buildSiteUrl(url, siteName);
         this.url = url;
         this.siteName = siteName;
         this.sharePointHelper = new SharePointHelper(this, verson2013);
-        this.verson2013 = verson2013;
         if (verson2013) {
             this.sharePointApis = new SharePoint2013Apis(httpClient, siteUrl, oAuth);
         } else {
@@ -67,7 +64,7 @@ public class SharePointClient {
         return new SharePointClientBuilder();
     }
 
-    private String buildSiteUrl(String url, String siteName) {
+    private String buildSiteUrl(final String url, final String siteName) {
         return url + "sites/" + siteName + "/";
     }
 }

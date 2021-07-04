@@ -15,16 +15,17 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitems;
 
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
-
 import java.util.List;
+
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
 
 public class GetListItems2013Response extends GetListItemsResponse {
 
-    public GetListItems2013Response(List<ListItem> listItems) {
+    public GetListItems2013Response(final List<ListItem> listItems) {
         super(listItems);
     }
 
+    @Override
     public List<ListItem> getListItems() {
         return listItems;
     }

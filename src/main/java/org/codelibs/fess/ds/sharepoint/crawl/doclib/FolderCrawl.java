@@ -15,6 +15,12 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.doclib;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Queue;
+
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfiles.GetFilesResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
@@ -29,12 +35,6 @@ import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
-
 public class FolderCrawl extends SharePointCrawl {
     private static final Logger logger = LoggerFactory.getLogger(FolderCrawl.class);
     private static final int PAGE_SIZE = 100;
@@ -43,8 +43,8 @@ public class FolderCrawl extends SharePointCrawl {
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
     private final boolean skipRole;
 
-    public FolderCrawl(SharePointClient client, String serverRelativeUrl, boolean skipRole,
-            Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    public FolderCrawl(final SharePointClient client, final String serverRelativeUrl, final boolean skipRole,
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.sharePointGroupCache = sharePointGroupCache;
@@ -52,16 +52,16 @@ public class FolderCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling DocLib Folder] serverRelativeUrl:{}", serverRelativeUrl);
         }
 
-        GetFolderResponse getFolderResponse = client.api().doclib().getFolder().setServerRelativeUrl(serverRelativeUrl).execute();
+        final GetFolderResponse getFolderResponse = client.api().doclib().getFolder().setServerRelativeUrl(serverRelativeUrl).execute();
         if (getFolderResponse.getItemCount() > 0) {
             int foldersStart = 0;
             while (true) {
-                GetFoldersResponse getFoldersResponse = client.api().doclib().getFolders().setServerRelativeUrl(serverRelativeUrl)
+                final GetFoldersResponse getFoldersResponse = client.api().doclib().getFolders().setServerRelativeUrl(serverRelativeUrl)
                         .setStart(foldersStart).setNum(PAGE_SIZE).execute();
                 if (getFoldersResponse.getFolders().size() == 0) {
                     break;
@@ -74,7 +74,7 @@ public class FolderCrawl extends SharePointCrawl {
 
             int filesStart = 0;
             while (true) {
-                GetFilesResponse getFilesResponse = client.api().doclib().getFiles().setServerRelativeUrl(serverRelativeUrl)
+                final GetFilesResponse getFilesResponse = client.api().doclib().getFiles().setServerRelativeUrl(serverRelativeUrl)
                         .setStart(filesStart).setNum(PAGE_SIZE).execute();
                 if (getFilesResponse.getFiles().size() == 0) {
                     break;
@@ -101,12 +101,12 @@ public class FolderCrawl extends SharePointCrawl {
             getForms.setListId(listId);
         }
         final GetFormsResponse getFormsResponse = getForms.execute();
-        GetFormsResponse.Form form =
+        final GetFormsResponse.Form form =
                 getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
         if (form == null) {
             return null;
         }
-        String serverRelativeUrl = form.getServerRelativeUrl();
+        final String serverRelativeUrl = form.getServerRelativeUrl();
         return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&SOURCE="
                 + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
     }

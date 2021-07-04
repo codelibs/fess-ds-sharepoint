@@ -15,17 +15,16 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder;
 
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
-import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
-
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map;
 
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+
 public class GetFolderResponse implements SharePointApiResponse {
-    protected static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
     protected String id = null;
     protected String name = null;
@@ -63,26 +62,27 @@ public class GetFolderResponse implements SharePointApiResponse {
         return itemCount;
     }
 
-    public static GetFolderResponse build(SharePointApi.JsonResponse jsonResponse) {
+    public static GetFolderResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         return buildFromMap(jsonMap);
     }
 
-    public static GetFolderResponse buildFromMap(Map<String, Object> jsonMap) {
+    public static GetFolderResponse buildFromMap(final Map<String, Object> jsonMap) {
         @SuppressWarnings("unchecked")
 
         final GetFolderResponse response = new GetFolderResponse();
         response.id = jsonMap.get("UniqueId").toString();
         response.name = jsonMap.get("Name").toString();
-        response.exists = Boolean.valueOf(jsonMap.get("Exists").toString());
+        response.exists = Boolean.parseBoolean(jsonMap.get("Exists").toString());
         response.serverRelativeUrl = jsonMap.get("ServerRelativeUrl").toString();
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
             response.created = sdf.parse(jsonMap.get("TimeCreated").toString());
             response.modified = sdf.parse(jsonMap.get("TimeLastModified").toString());
-        } catch (ParseException e) {
+        } catch (final ParseException e) {
             throw new SharePointClientException(e);
         }
-        response.itemCount = Integer.valueOf(jsonMap.get("ItemCount").toString());
+        response.itemCount = Integer.parseInt(jsonMap.get("ItemCount").toString());
         return response;
     }
 }

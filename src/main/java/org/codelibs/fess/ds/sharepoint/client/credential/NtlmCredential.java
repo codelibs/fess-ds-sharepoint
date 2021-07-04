@@ -24,7 +24,7 @@ public class NtlmCredential implements SharePointCredential {
     private final String hostName;
     private final String domain;
 
-    public NtlmCredential(String user, String password, String hostName, String domain) {
+    public NtlmCredential(final String user, final String password, final String hostName, final String domain) {
         this.user = user;
         this.password = password;
         this.hostName = hostName;
