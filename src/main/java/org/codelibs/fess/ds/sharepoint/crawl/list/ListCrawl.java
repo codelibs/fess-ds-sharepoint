@@ -24,6 +24,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRo
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,13 +65,21 @@ public class ListCrawl extends SharePointCrawl {
         final GetListsResponse.SharePointList sharePointList = getListResponse.getList();
         final String listId = sharePointList.getId();
         final String listName = sharePointList.getListName();
-        for (int start = 0;; start += numberPerPage) {
-            final GetListItemsResponse getListItemsResponse;
-            if (listId == null) {
+        for (int start=0; ;start += numberPerPage) {
+            GetListItemsResponse getListItemsResponse;
+            if (listId != null) {
+                try {
+                    getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage).setStart(start).execute();
+                } catch (SharePointServerException e) {
+                    if (e.getStatusCode() == 400) {
+                        getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(true).setNum(numberPerPage).setStart(start).execute();
+                    } else {
+                        throw e;
+                    }
+                }
+            } else {
                 return null;
             }
-            getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
-                    .setStart(start).execute();
             if (getListItemsResponse.getListItems().isEmpty()) {
                 break;
             }
