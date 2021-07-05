@@ -114,7 +114,7 @@ public class GetListItemValueResponse implements SharePointApiResponse {
 
         GetListItemValueResponse response = new GetListItemValueResponse();
         response.id = jsonMap.get("ID").toString();
-        response.title = jsonMap.get("Title").toString();
+        response.title = jsonMap.getOrDefault("Title", jsonMap.getOrDefault("FileLeafRef", "")).toString();
         response.modified = sdf.parse(jsonMap.get("Modified").toString());
         response.created = sdf.parse(jsonMap.get("Created").toString());
         response.author = jsonMap.get("Author").toString();
