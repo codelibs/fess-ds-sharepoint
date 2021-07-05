@@ -144,7 +144,8 @@ public class GetListItemRoleResponse implements SharePointApiResponse {
     public static class SecurityGroup {
         private static final String AZURE_GRID_ALL_USERS_ROLE = "spo-grid-all-users";
         private static final String AZURE_GRID_ALL_USERS_PREFIX = "c:0-.f|rolemanager|spo-grid-all-users/";
-        private static final String[] AZURE_ACCOUNT_PREFIXES = new String[]{"c:0o.c|federateddirectoryclaimprovider|", "c:0t.c|tenant|", AZURE_GRID_ALL_USERS_PREFIX};
+        private static final String[] AZURE_ACCOUNT_PREFIXES =
+                new String[] { "c:0o.c|federateddirectoryclaimprovider|", "c:0t.c|tenant|", AZURE_GRID_ALL_USERS_PREFIX };
 
         private final String id;
         private final String title;
