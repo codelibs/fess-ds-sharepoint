@@ -21,6 +21,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
@@ -127,7 +128,11 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         if (jsonMap.containsKey("Attachments")) {
             response.hasAttachments = Boolean.parseBoolean(jsonMap.get("Attachments").toString());
         }
-        response.order = Long.parseLong(jsonMap.get("Order").toString().replace(",", ""));
+        if (jsonMap.containsKey("Order") && StringUtils.isNotBlank(jsonMap.get("Order").toString())) {
+            response.order = Long.parseLong(jsonMap.get("Order").toString().replace(",", ""));
+        } else {
+            response.order = -1;
+        }
         response.editLink = jsonMap.get("odata.editLink").toString();
 
         jsonMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));

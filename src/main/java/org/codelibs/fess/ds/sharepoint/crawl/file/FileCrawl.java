@@ -45,13 +45,15 @@ public class FileCrawl extends SharePointCrawl {
     private final Date created;
     private final Date modified;
     private final List<String> roles;
+    private final Map<String, String> listValues;
     private final String listName;
     private final Map<String, String> additionalProperties = new HashMap<>();
 
     private final String defaultExtractorName = "tikaExtractor";
 
     public FileCrawl(final SharePointClient client, final String fileName, final String webUrl, final String serverRelativeUrl,
-            final Date created, final Date modified, final List<String> roles, final String listName) {
+            final Date created, final Date modified, final List<String> roles, final Map<String, String> listValues,
+            final String listName) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.webUrl = webUrl;
@@ -59,6 +61,7 @@ public class FileCrawl extends SharePointCrawl {
         this.created = created;
         this.modified = modified;
         this.roles = roles;
+        this.listValues = listValues;
         this.listName = listName != null ? listName : "";
     }
 
@@ -90,7 +93,11 @@ public class FileCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldUrl(), webUrl);
         dataMap.put(fessConfig.getIndexFieldHost(), client.helper().getHostName());
         dataMap.put(fessConfig.getIndexFieldSite(), serverRelativeUrl);
-        dataMap.put(fessConfig.getIndexFieldTitle(), fileName);
+        if (listValues.containsKey("Title") && StringUtils.isNotBlank(listValues.get("Title"))) {
+            dataMap.put(fessConfig.getIndexFieldTitle(), listValues.get("Title"));
+        } else {
+            dataMap.put(fessConfig.getIndexFieldTitle(), fileName);
+        }
         if (StringUtils.isNotBlank(listName)) {
             dataMap.put(fessConfig.getIndexFieldTitle() + "WithListName", "[" + listName + "] " + fileName);
         } else {
@@ -115,6 +122,8 @@ public class FileCrawl extends SharePointCrawl {
     }
 
     private String getContent(final InputStream is, final String mimeType) {
+        final StringBuilder content = new StringBuilder();
+
         try {
             Extractor extractor = ComponentUtil.getExtractorFactory().getExtractor(mimeType);
             if (extractor == null) {
@@ -123,10 +132,20 @@ public class FileCrawl extends SharePointCrawl {
                 }
                 extractor = ComponentUtil.getComponent(defaultExtractorName);
             }
-            return extractor.getText(is, null).getContent();
+            String fileText = extractor.getText(is, null).getContent();
+            if (StringUtils.isNotBlank(fileText)) {
+                content.append(fileText).append(' ');
+            }
         } catch (final Exception e) {
             throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to get contents: " + fileName, e);
         }
+        if (listValues.containsKey("Description") && StringUtils.isNotBlank(listValues.get("Description"))) {
+            content.append(listValues.get("Description")).append(' ');
+        }
+        if (listValues.containsKey("Keywords") && StringUtils.isNotBlank(listValues.get("Keywords"))) {
+            content.append(listValues.get("Keywords")).append(' ');
+        }
+        return content.toString();
     }
 
     protected String getMimeType(final String filename, final InputStream is) {

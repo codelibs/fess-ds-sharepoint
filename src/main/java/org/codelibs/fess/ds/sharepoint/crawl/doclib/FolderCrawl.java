@@ -30,6 +30,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.slf4j.Logger;
@@ -85,10 +86,13 @@ public class FolderCrawl extends SharePointCrawl {
                             client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
                     final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(),
                             sharePointGroupCache, skipRole);
+                    final GetListItemValueResponse getListItemValueResponse = client.api().list().getListItemValue()
+                            .setListId(getDoclibListItemResponse.getListId()).setItemId(getDoclibListItemResponse.getItemId()).execute();
+                    final Map<String, String> listValues = getListItemValueResponse.getValues();
                     final String webLink =
                             getWebLink(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), serverRelativeUrl);
                     crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(),
-                            file.getModified(), roles, null));
+                            file.getModified(), roles, listValues, null));
                 });
             }
         }

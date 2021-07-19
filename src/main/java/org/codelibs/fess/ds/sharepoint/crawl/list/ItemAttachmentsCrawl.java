@@ -17,10 +17,7 @@ package org.codelibs.fess.ds.sharepoint.crawl.list;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Queue;
+import java.util.*;
 
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
@@ -62,7 +59,7 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
         final GetListItemAttachmentsResponse response = client.api().list().getListItemAttachments().setId(listId, itemId).execute();
         response.getFiles().forEach(file -> {
             final FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(), getWebLink(file.getFileName()),
-                    file.getServerRelativeUrl(), created, modified, roles, listName);
+                    file.getServerRelativeUrl(), created, modified, roles, Collections.emptyMap(), listName);
             fileCrawl.addProperty("list_name", listName);
             fileCrawl.addProperty("list_id", listId);
             fileCrawl.addProperty("item_id", itemId);
