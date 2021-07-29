@@ -132,7 +132,7 @@ public class FileCrawl extends SharePointCrawl {
                 }
                 extractor = ComponentUtil.getComponent(defaultExtractorName);
             }
-            String fileText = extractor.getText(is, null).getContent();
+            final String fileText = extractor.getText(is, null).getContent();
             if (StringUtils.isNotBlank(fileText)) {
                 content.append(fileText).append(' ');
             }

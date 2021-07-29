@@ -83,8 +83,7 @@ public class SharePointClientBuilder {
         if (oAuth != null) {
             oAuth.updateAccessToken(httpClient);
         }
-        final SharePointClient client = new SharePointClient(httpClient, url, siteName, oAuth, verson2013);
-        return client;
+        return new SharePointClient(httpClient, url, siteName, oAuth, verson2013);
     }
 
     private CloseableHttpClient buildHttpClient() {

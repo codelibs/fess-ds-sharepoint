@@ -215,7 +215,7 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
                 buffer.setLength(0);
             } else if ("link".equals(qName)) {
                 final String rel = attributes.getValue("rel");
-                if (rel != null && "edit".equals(rel)) {
+                if ("edit".equals(rel)) {
                     dataMap.put("odata.editLink", attributes.getValue("href"));
                 }
             } else if ("d:FileRef".equals(qName)) {

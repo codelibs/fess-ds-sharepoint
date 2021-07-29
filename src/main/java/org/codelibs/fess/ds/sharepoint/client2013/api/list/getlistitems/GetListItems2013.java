@@ -182,7 +182,7 @@ public class GetListItems2013 extends GetListItems {
                 buffer.setLength(0);
             } else if ("link".equals(qName)) {
                 final String rel = attributes.getValue("rel");
-                if (rel != null && "edit".equals(rel)) {
+                if ("edit".equals(rel)) {
                     resultMap.put("odata.editLink", attributes.getValue("href"));
                 }
             }

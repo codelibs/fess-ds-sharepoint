@@ -67,20 +67,19 @@ public class ListCrawl extends SharePointCrawl {
         final String listName = sharePointList.getListName();
         for (int start = 0;; start += numberPerPage) {
             GetListItemsResponse getListItemsResponse;
-            if (listId != null) {
-                try {
-                    getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
-                            .setStart(start).execute();
-                } catch (SharePointServerException e) {
-                    if (e.getStatusCode() == 400) {
-                        getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(true).setNum(numberPerPage)
-                                .setStart(start).execute();
-                    } else {
-                        throw e;
-                    }
-                }
-            } else {
+            if (listId == null) {
                 return null;
+            }
+            try {
+                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
+                        .setStart(start).execute();
+            } catch (final SharePointServerException e) {
+                if (e.getStatusCode() == 400) {
+                    getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(true).setNum(numberPerPage)
+                            .setStart(start).execute();
+                } else {
+                    throw e;
+                }
             }
             if (getListItemsResponse.getListItems().isEmpty()) {
                 break;

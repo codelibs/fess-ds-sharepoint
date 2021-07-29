@@ -145,7 +145,7 @@ public class ItemCrawl extends SharePointCrawl {
             }
             return client.getUrl() + sb.toString();
         }
-        String formUrl = getFormUrl();
+        final String formUrl = getFormUrl();
         if (formUrl == null) {
             return null;
         }
@@ -154,7 +154,8 @@ public class ItemCrawl extends SharePointCrawl {
             final String serverRelativeUrl = formUrl.replace("DispForm.aspx", "Flat.aspx");
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
                     + URLEncoder.encode(dirRef, StandardCharsets.UTF_8);
-        } else if (response.getFsObjType() == 1) {
+        }
+        if (response.getFsObjType() == 1) {
             final String serverRelativeUrl = formUrl.replace("DispForm.aspx", "Flat.aspx");
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
                     + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
