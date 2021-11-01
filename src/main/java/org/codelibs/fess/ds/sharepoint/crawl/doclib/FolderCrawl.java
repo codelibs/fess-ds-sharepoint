@@ -90,7 +90,7 @@ public class FolderCrawl extends SharePointCrawl {
                             .setListId(getDoclibListItemResponse.getListId()).setItemId(getDoclibListItemResponse.getItemId()).execute();
                     final Map<String, String> listValues = getListItemValueResponse.getValues();
                     final String webLink =
-                            getWebLink(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(), serverRelativeUrl);
+                            getWebLink(getDoclibListItemResponse.getListId(), file.getServerRelativeUrl(), serverRelativeUrl);
                     crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(),
                             file.getModified(), roles, listValues, null));
                 });
@@ -99,7 +99,7 @@ public class FolderCrawl extends SharePointCrawl {
         return null;
     }
 
-    private String getWebLink(final String listId, final String itemId, final String parentUrl) {
+    private String getWebLink(final String listId, final String filePath, final String parentUrl) {
         final GetForms getForms = client.api().list().getForms();
         if (listId != null) {
             getForms.setListId(listId);
@@ -111,7 +111,7 @@ public class FolderCrawl extends SharePointCrawl {
             return null;
         }
         final String serverRelativeUrl = form.getServerRelativeUrl();
-        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&SOURCE="
+        return client.getUrl() + serverRelativeUrl.substring(1).replace("DispForm", "AllItems") + "?id=" + filePath + "&parent="
                 + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
     }
 }
