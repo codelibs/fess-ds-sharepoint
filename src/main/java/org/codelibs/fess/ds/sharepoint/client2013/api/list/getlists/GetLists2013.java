@@ -24,6 +24,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -41,38 +42,31 @@ public class GetLists2013 extends GetLists {
         return buildResponse(xmlResponse);
     }
 
-    @SuppressWarnings("unchecked")
     private GetLists2013Response buildResponse(final XmlResponse xmlResponse) {
         final GetListsDocHandler handler = new GetListsDocHandler();
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
 
         final List<GetLists2013Response.SharePointList> sharePointLists = new ArrayList<>();
-        final List<Map<String, Object>> valueList = (List) dataMap.get("value");
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> valueList = (List<Map<String, Object>>) dataMap.get("value");
         valueList.forEach(value -> {
-            final Object titleObj = value.get("Title");
+            final String titleObj = DocumentUtil.getValue(value, "Title", String.class);
             if (titleObj == null) {
                 return;
             }
-            final Object idObj = value.get("Id");
+            final String idObj = DocumentUtil.getValue(value, "Id", String.class);
             if (idObj == null) {
                 return;
             }
-            final Object entityTypeName = dataMap.get("EntityTypeName");
+            final String entityTypeName = DocumentUtil.getValue(dataMap, "EntityTypeName", String.class);
             if (entityTypeName == null) {
                 return;
             }
-            Object noCrawl = value.get("NoCrawl");
-            if (noCrawl == null) {
-                noCrawl = "true";
-            }
-            Object hidden = dataMap.get("Hidden");
-            if (hidden == null) {
-                hidden = "false";
-            }
+            final boolean noCrawl = DocumentUtil.getValue(value, "NoCrawl", Boolean.class, Boolean.TRUE);
+            final boolean hidden = DocumentUtil.getValue(dataMap, "Hidden", Boolean.class, Boolean.FALSE);
             final GetLists2013Response.SharePointList sharePointList =
-                    new GetLists2013Response.SharePointList(idObj.toString(), titleObj.toString(), Boolean.parseBoolean(noCrawl.toString()),
-                            Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
+                    new GetLists2013Response.SharePointList(idObj, titleObj, noCrawl, hidden, entityTypeName);
             sharePointLists.add(sharePointList);
         });
 

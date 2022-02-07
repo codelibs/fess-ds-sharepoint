@@ -25,6 +25,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 
 public class GetList extends SharePointApi<GetListResponse> {
     private static final String API_BY_LIST_ID_PATH = "_api/web/lists(guid'{list_guid}')";
@@ -66,28 +67,22 @@ public class GetList extends SharePointApi<GetListResponse> {
     private GetListResponse buildResponse(final JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
-        final Object titleObj = jsonMap.get("Title");
-        if (titleObj == null) {
+        final String title = DocumentUtil.getValue(jsonMap, "Title", String.class);
+        if (title == null) {
             throw new SharePointClientException("Title is null.");
         }
-        final Object idObj = jsonMap.get("Id");
-        if (idObj == null) {
+        final String id = DocumentUtil.getValue(jsonMap, "Id", String.class);
+        if (id == null) {
             throw new SharePointClientException("Id is null.");
         }
-        final Object entityTypeName = jsonMap.get("EntityTypeName");
+        final String entityTypeName = DocumentUtil.getValue(jsonMap, "EntityTypeName", String.class);
         if (entityTypeName == null) {
             throw new SharePointClientException("entityTypeName is null.");
         }
-        Object noCrawl = jsonMap.get("NoCrawl");
-        if (noCrawl == null) {
-            noCrawl = "false";
-        }
-        Object hidden = jsonMap.get("Hidden");
-        if (hidden == null) {
-            hidden = "false";
-        }
-        final GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
-                Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
+        final boolean noCrawl = DocumentUtil.getValue(jsonMap, "NoCrawl", Boolean.class, Boolean.FALSE);
+        final boolean hidden = DocumentUtil.getValue(jsonMap, "Hidden", Boolean.class, Boolean.FALSE);
+        final GetListsResponse.SharePointList sharePointList =
+                new GetListsResponse.SharePointList(id, title, noCrawl, hidden, entityTypeName);
         return new GetListResponse(sharePointList);
     }
 }

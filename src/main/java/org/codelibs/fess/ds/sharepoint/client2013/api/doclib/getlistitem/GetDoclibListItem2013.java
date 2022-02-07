@@ -23,6 +23,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem.GetDoclibListItem;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -52,8 +53,8 @@ public class GetDoclibListItem2013 extends GetDoclibListItem {
         xmlResponse.parseXml(handler);
         final Map<String, Object> bodyMap = handler.getDataMap();
         try {
-            final String itemId = bodyMap.get("Id").toString();
-            final String listId = getListId(bodyMap.get("odata.editLink").toString());
+            final String itemId = DocumentUtil.getValue(bodyMap, "Id", String.class);
+            final String listId = getListId(DocumentUtil.getValue(bodyMap, "odata.editLink", String.class));
             return new GetDoclibListItem2013Response(listId, itemId);
         } catch (final Exception e) {
             throw new SharePointClientException(e);
@@ -67,6 +68,9 @@ public class GetDoclibListItem2013 extends GetDoclibListItem {
 
     @Override
     protected String getListId(final String editLink) {
+        if (editLink == null) {
+            return null;
+        }
         return editLink.substring(editLink.indexOf("(guid'") + "(guid'".length(), editLink.indexOf("')"));
     }
 

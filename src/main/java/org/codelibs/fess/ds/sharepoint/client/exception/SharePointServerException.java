@@ -16,6 +16,8 @@
 package org.codelibs.fess.ds.sharepoint.client.exception;
 
 public class SharePointServerException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
     private final int statusCode;
 
     public SharePointServerException(final String message, final int statusCode) {

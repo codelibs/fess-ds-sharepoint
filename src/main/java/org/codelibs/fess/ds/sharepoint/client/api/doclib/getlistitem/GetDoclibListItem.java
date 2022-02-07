@@ -22,6 +22,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 
 public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> {
     private String serverRelativeUrl = null;
@@ -45,8 +46,8 @@ public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> 
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
         final Map<String, Object> bodyMap = jsonResponse.getBodyAsMap();
         try {
-            final String itemId = bodyMap.get("Id").toString();
-            final String listId = getListId(bodyMap.get("odata.editLink").toString());
+            final String itemId = DocumentUtil.getValue(bodyMap, "Id", String.class);
+            final String listId = getListId(DocumentUtil.getValue(bodyMap, "odata.editLink", String.class));
             return new GetDoclibListItemResponse(listId, itemId);
         } catch (final Exception e) {
             throw new SharePointClientException(e);
@@ -59,6 +60,9 @@ public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> 
     }
 
     protected String getListId(final String editLink) {
+        if (editLink == null) {
+            return null;
+        }
         return editLink.substring(editLink.indexOf("(guid'") + "(guid'".length(), editLink.indexOf("')"));
     }
 }

@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Queue;
 
 import org.apache.commons.lang3.StringUtils;
+import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.crawler.extractor.Extractor;
 import org.codelibs.fess.crawler.helper.MimeTypeHelper;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
@@ -62,7 +63,7 @@ public class FileCrawl extends SharePointCrawl {
         this.modified = modified;
         this.roles = roles;
         this.listValues = listValues;
-        this.listName = listName != null ? listName : "";
+        this.listName = listName != null ? listName : StringUtil.EMPTY;
     }
 
     public void addProperty(final String key, final String value) {
@@ -122,7 +123,7 @@ public class FileCrawl extends SharePointCrawl {
     }
 
     private String getContent(final InputStream is, final String mimeType) {
-        final StringBuilder content = new StringBuilder();
+        final StringBuilder content = new StringBuilder(1000);
 
         try {
             Extractor extractor = ComponentUtil.getExtractorFactory().getExtractor(mimeType);

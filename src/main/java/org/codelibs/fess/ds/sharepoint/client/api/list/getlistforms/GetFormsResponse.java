@@ -22,6 +22,7 @@ import java.util.Map;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
+import org.codelibs.fess.util.DocumentUtil;
 
 public class GetFormsResponse implements SharePointApiResponse {
     private final List<Form> forms = new ArrayList<>();
@@ -30,16 +31,16 @@ public class GetFormsResponse implements SharePointApiResponse {
         return forms;
     }
 
-    @SuppressWarnings("unchecked")
     protected static GetFormsResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final GetFormsResponse response = new GetFormsResponse();
 
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
-        final List<Map<String, Object>> values = (List) jsonMap.get("value");
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> values = (List<Map<String, Object>>) jsonMap.get("value");
         values.stream().forEach(value -> {
-            final String id = value.get("Id").toString();
-            final String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
-            final int type = Integer.parseInt(value.get("FormType").toString());
+            final String id = DocumentUtil.getValue(value, "Id", String.class);
+            final String serverRelativeUrl = DocumentUtil.getValue(value, "ServerRelativeUrl", String.class);
+            final int type = DocumentUtil.getValue(value, "FormType", Integer.class);
             response.forms.add(new Form(id, serverRelativeUrl, PageType.getPageType(type)));
         });
         return response;

@@ -22,8 +22,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+import org.codelibs.fess.util.DocumentUtil;
 
 public class GetListItemValueResponse implements SharePointApiResponse {
 
@@ -113,27 +115,29 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm");
 
         final GetListItemValueResponse response = new GetListItemValueResponse();
-        response.id = jsonMap.get("ID").toString();
-        response.title = jsonMap.getOrDefault("Title", jsonMap.getOrDefault("FileLeafRef", "")).toString();
-        response.modified = sdf.parse(jsonMap.get("Modified").toString());
-        response.created = sdf.parse(jsonMap.get("Created").toString());
-        response.author = jsonMap.get("Author").toString();
-        response.editor = jsonMap.get("Editor").toString();
-        response.fileRef = jsonMap.getOrDefault("FileRef", "").toString();
-        response.fileDirRef = jsonMap.getOrDefault("FileDirRef", "").toString();
-        response.fileLeafRef = jsonMap.getOrDefault("FileLeafRef", "").toString();
-        response.parentItemId = jsonMap.getOrDefault("ParentItemID", "").toString();
-        response.parentFolderId = jsonMap.getOrDefault("ParentFolderID", "").toString();
-        response.fsObjType = Integer.parseInt(jsonMap.getOrDefault("FSObjType", "0").toString());
+        response.id = DocumentUtil.getValue(jsonMap, "ID", String.class);
+        response.title = DocumentUtil.getValue(jsonMap, "Title", String.class,
+                DocumentUtil.getValue(jsonMap, "FileLeafRef", String.class, StringUtil.EMPTY));
+        response.modified = sdf.parse(DocumentUtil.getValue(jsonMap, "Modified", String.class));
+        response.created = sdf.parse(DocumentUtil.getValue(jsonMap, "Created", String.class));
+        response.author = DocumentUtil.getValue(jsonMap, "Author", String.class);
+        response.editor = DocumentUtil.getValue(jsonMap, "Editor", String.class);
+        response.fileRef = DocumentUtil.getValue(jsonMap, "FileRef", String.class, StringUtil.EMPTY);
+        response.fileDirRef = DocumentUtil.getValue(jsonMap, "FileDirRef", String.class, StringUtil.EMPTY);
+        response.fileLeafRef = DocumentUtil.getValue(jsonMap, "FileLeafRef", String.class, StringUtil.EMPTY);
+        response.parentItemId = DocumentUtil.getValue(jsonMap, "ParentItemID", String.class, StringUtil.EMPTY);
+        response.parentFolderId = DocumentUtil.getValue(jsonMap, "ParentFolderID", String.class, StringUtil.EMPTY);
+        response.fsObjType = DocumentUtil.getValue(jsonMap, "FSObjType", Integer.class, 0);
         if (jsonMap.containsKey("Attachments")) {
-            response.hasAttachments = Boolean.parseBoolean(jsonMap.get("Attachments").toString());
+            response.hasAttachments = DocumentUtil.getValue(jsonMap, "Attachments", Boolean.class);
         }
-        if (jsonMap.containsKey("Order") && StringUtils.isNotBlank(jsonMap.get("Order").toString())) {
-            response.order = Long.parseLong(jsonMap.get("Order").toString().replace(",", ""));
+        final String order = DocumentUtil.getValue(jsonMap, "Order", String.class);
+        if (StringUtils.isNotBlank(order)) {
+            response.order = Long.parseLong(order.replace(",", StringUtil.EMPTY));
         } else {
             response.order = -1;
         }
-        response.editLink = jsonMap.get("odata.editLink").toString();
+        response.editLink = DocumentUtil.getValue(jsonMap, "odata.editLink", String.class);
 
         jsonMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
 
@@ -142,7 +146,7 @@ public class GetListItemValueResponse implements SharePointApiResponse {
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder(100);
         sb.append(String.format("[id:%s] [title:%s] [modified:%tF] [created:%tF] [author:%s] [editor:%s] [hasAttachments:%s] [order:%d]",
                 id, title, modified, created, author, editor, hasAttachments, order));
         values.entrySet().stream().forEach(entry -> {

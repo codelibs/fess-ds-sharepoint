@@ -33,7 +33,7 @@ public class GetFoldersResponse implements SharePointApiResponse {
     public static GetFoldersResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> results = (List) jsonMap.get("value");
+        final List<Map<String, Object>> results = (List<Map<String, Object>>) jsonMap.get("value");
 
         final GetFoldersResponse response = new GetFoldersResponse();
         results.stream().forEach(result -> {

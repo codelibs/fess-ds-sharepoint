@@ -25,6 +25,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRole;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -52,7 +53,6 @@ public class GetListItemRole2013 extends GetListItemRole {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public GetListItemRole2013Response execute() {
         if (listId == null || itemId == null) {
             throw new SharePointClientException("listId/itemId is required.");
@@ -65,8 +65,9 @@ public class GetListItemRole2013 extends GetListItemRole {
         final GetListItemRoleDocHandler getListItemRoleDocHandler = new GetListItemRoleDocHandler();
         xmlResponse.parseXml(getListItemRoleDocHandler);
         final Map<String, Object> bodyMap = getListItemRoleDocHandler.getDataMap();
-        final List<Map<String, Object>> values = (List) bodyMap.get("value");
-        values.stream().map(value -> (value.get("PrincipalId").toString())).forEach(principalId -> {
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> values = (List<Map<String, Object>>) bodyMap.get("value");
+        values.stream().map(value -> (DocumentUtil.getValue(value, "PrincipalId", String.class))).forEach(principalId -> {
             if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
                 return;
@@ -76,16 +77,17 @@ public class GetListItemRole2013 extends GetListItemRole {
             final MemberDocHandler memberDocHandler = new MemberDocHandler();
             memberResponse.parseXml(memberDocHandler);
             final Map<String, Object> memberResponseMap = memberDocHandler.getDataMap();
-            final String id = memberResponseMap.get("Id").toString();
-            final int principalType = Integer.parseInt(memberResponseMap.get("PrincipalType").toString());
+            final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
+            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class);
             if (principalType == 1) {
                 // User
-                final GetListItemRole2013Response.User user = new GetListItemRole2013Response.User(id,
-                        memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
+                final GetListItemRole2013Response.User user =
+                        new GetListItemRole2013Response.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+                                DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
                 response.addUser(user);
             } else if (principalType == 8) {
                 final GetListItemRole2013Response.SharePointGroup sharePointGroup =
-                        buildSharePointGroup(id, memberResponseMap.get("Title").toString());
+                        buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
                 response.addSharePointGroup(sharePointGroup);
                 if (sharePointGroupCache != null) {
                     sharePointGroupCache.put(principalId, sharePointGroup);
@@ -123,12 +125,13 @@ public class GetListItemRole2013 extends GetListItemRole {
         final UsersDocHandler usersDocHandler = new UsersDocHandler();
         usersResponse.parseXml(usersDocHandler);
         final Map<String, Object> usersResponseMap = usersDocHandler.getDataMap();
-        final List<Map<String, Object>> usersList = (List) usersResponseMap.get("value");
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> usersList = (List<Map<String, Object>>) usersResponseMap.get("value");
         usersList.forEach(user -> {
-            final String userId = user.get("Id").toString();
-            final String userTitle = user.get("Title").toString();
-            final String loginName = user.get("LoginName").toString();
-            final int userPrincipalType = Integer.parseInt(user.get("PrincipalType").toString());
+            final String userId = DocumentUtil.getValue(user, "Id", String.class);
+            final String userTitle = DocumentUtil.getValue(user, "Title", String.class);
+            final String loginName = DocumentUtil.getValue(user, "LoginName", String.class);
+            final int userPrincipalType = DocumentUtil.getValue(user, "PrincipalType", Integer.class);
             switch (userPrincipalType) {
             case 1:
                 // user

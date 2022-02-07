@@ -23,6 +23,7 @@ import java.util.Map;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.util.DocumentUtil;
 
 public class GetFolderResponse implements SharePointApiResponse {
 
@@ -69,18 +70,24 @@ public class GetFolderResponse implements SharePointApiResponse {
 
     public static GetFolderResponse buildFromMap(final Map<String, Object> jsonMap) {
         final GetFolderResponse response = new GetFolderResponse();
-        response.id = (String) jsonMap.get("UniqueId");
-        response.name = (String) jsonMap.get("Name");
-        response.exists = Boolean.parseBoolean((String) jsonMap.get("Exists"));
-        response.serverRelativeUrl = (String) jsonMap.get("ServerRelativeUrl");
+        response.id = DocumentUtil.getValue(jsonMap, "UniqueId", String.class);
+        response.name = DocumentUtil.getValue(jsonMap, "Name", String.class);
+        response.exists = DocumentUtil.getValue(jsonMap, "Exists", Boolean.class);
+        response.serverRelativeUrl = DocumentUtil.getValue(jsonMap, "ServerRelativeUrl", String.class);
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
-            response.created = sdf.parse((String) jsonMap.get("TimeCreated"));
-            response.modified = sdf.parse((String) jsonMap.get("TimeLastModified"));
+            final String created = DocumentUtil.getValue(jsonMap, "TimeCreated", String.class);
+            if (created != null) {
+                response.created = sdf.parse(created);
+            }
+            final String modified = DocumentUtil.getValue(jsonMap, "TimeLastModified", String.class);
+            if (modified != null) {
+                response.modified = sdf.parse(modified);
+            }
         } catch (final ParseException e) {
             throw new SharePointClientException(e);
         }
-        response.itemCount = Integer.parseInt((String) jsonMap.get("ItemCount"));
+        response.itemCount = DocumentUtil.getValue(jsonMap, "ItemCount", Integer.class);
         return response;
     }
 }

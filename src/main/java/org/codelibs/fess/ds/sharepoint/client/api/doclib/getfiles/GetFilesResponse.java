@@ -22,8 +22,10 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
+import org.codelibs.fess.util.DocumentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +41,7 @@ public class GetFilesResponse implements SharePointApiResponse {
     public static GetFilesResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> results = (List) jsonMap.get("value");
+        final List<Map<String, Object>> results = (List<Map<String, Object>>) jsonMap.get("value");
 
         final GetFilesResponse response = new GetFilesResponse();
         results.stream().forEach(result -> {
@@ -52,13 +54,19 @@ public class GetFilesResponse implements SharePointApiResponse {
 
     protected static DocLibFile createDocLibFile(final Map<String, Object> dataMap) {
         final DocLibFile docLibFile = new DocLibFile();
-        docLibFile.fileName = (String) dataMap.get("Name");
-        docLibFile.title = (String) dataMap.getOrDefault("Title", "");
-        docLibFile.serverRelativeUrl = (String) dataMap.get("ServerRelativeUrl");
+        docLibFile.fileName = DocumentUtil.getValue(dataMap, "Name", String.class);
+        docLibFile.title = DocumentUtil.getValue(dataMap, "Title", String.class, StringUtil.EMPTY);
+        docLibFile.serverRelativeUrl = DocumentUtil.getValue(dataMap, "ServerRelativeUrl", String.class);
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
-            docLibFile.created = sdf.parse((String) dataMap.get("TimeCreated"));
-            docLibFile.modified = sdf.parse((String) dataMap.get("TimeLastModified"));
+            final String created = DocumentUtil.getValue(dataMap, "TimeCreated", String.class);
+            if (created != null) {
+                docLibFile.created = sdf.parse(created);
+            }
+            final String modified = DocumentUtil.getValue(dataMap, "TimeLastModified", String.class);
+            if (modified != null) {
+                docLibFile.modified = sdf.parse(modified);
+            }
         } catch (final ParseException e) {
             logger.warn("Failed to parse date.", e);
         }

@@ -22,6 +22,7 @@ import java.util.Map;
 
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachmentsResponse;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -35,10 +36,10 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
         final Map<String, Object> dataMap = handler.getDataMap();
 
         @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> valueList = (List) dataMap.get("value");
+        final List<Map<String, Object>> valueList = (List<Map<String, Object>>) dataMap.get("value");
         valueList.stream().forEach(value -> {
-            final String fileName = value.get("FileName").toString();
-            final String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
+            final String fileName = DocumentUtil.getValue(value, "FileName", String.class);
+            final String serverRelativeUrl = DocumentUtil.getValue(value, "ServerRelativeUrl", String.class);
             response.files.add(new AttachmentFile(fileName, serverRelativeUrl));
         });
 
@@ -52,7 +53,7 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder(100);
         files.stream().forEach(file -> {
             sb.append('[');
             sb.append("file:").append(file.getFileName());

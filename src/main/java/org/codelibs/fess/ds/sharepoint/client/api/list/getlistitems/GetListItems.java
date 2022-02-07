@@ -24,9 +24,11 @@ import java.util.Map;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -92,43 +94,36 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
         final List<GetListItemsResponse.ListItem> listItems = new ArrayList<>();
-        final List<Map<String, Object>> valueList = (List) jsonMap.get("value");
+        final List<Map<String, Object>> valueList = (List<Map<String, Object>>) jsonMap.get("value");
         valueList.forEach(value -> {
             try {
-                Object titleObj = value.get("Title");
-                if (titleObj == null) {
-                    titleObj = "";
-                }
-                final Object idObj = value.get("Id");
-                if (idObj == null) {
-                    logger.warn("Id field does not contain. Skip item. " + jsonResponse.getBody());
+                final String title = DocumentUtil.getValue(value, "Title", String.class, StringUtil.EMPTY);
+                final String id = DocumentUtil.getValue(value, "Id", String.class);
+                if (id == null) {
+                    logger.warn("Id field does not contain. Skip item. {}", jsonResponse.getBody());
                     return;
                 }
-                final Object editLinkObj = value.get("odata.editLink");
-                if (editLinkObj == null) {
-                    logger.warn("odate.editLink field does not contain. Skip item. " + jsonResponse.getBody());
+                final String editLink = DocumentUtil.getValue(value, "odata.editLink", String.class);
+                if (editLink == null) {
+                    logger.warn("odate.editLink field does not contain. Skip item. {}", jsonResponse.getBody());
                     return;
                 }
-                Object attachmentsObj = value.get("Attachments");
-                if (attachmentsObj == null) {
-                    attachmentsObj = "false";
-                }
-                final boolean attachments = Boolean.parseBoolean(attachmentsObj.toString());
-                final Object createdObj = value.get("Created");
+                final boolean attachments = DocumentUtil.getValue(value, "Attachments", Boolean.class, Boolean.FALSE);
+                final String createdObj = DocumentUtil.getValue(value, "Created", String.class);
                 if (createdObj == null) {
-                    logger.warn("Created field does not contain. Skip item. " + jsonResponse.getBody());
+                    logger.warn("Created field does not contain. Skip item. {}", jsonResponse.getBody());
                     return;
                 }
-                final Date created = sdf.parse(createdObj.toString());
-                final Object modifiedObj = value.get("Modified");
+                final Date created = sdf.parse(createdObj);
+                final String modifiedObj = DocumentUtil.getValue(value, "Modified", String.class);
                 if (modifiedObj == null) {
-                    logger.warn("Modified field does not contain. Skip item. " + jsonResponse.getBody());
+                    logger.warn("Modified field does not contain. Skip item. {}", jsonResponse.getBody());
                     return;
                 }
-                final Date modified = sdf.parse(modifiedObj.toString());
+                final Date modified = sdf.parse(modifiedObj);
 
-                final GetListItemsResponse.ListItem listItem = new GetListItemsResponse.ListItem(idObj.toString(), editLinkObj.toString(),
-                        titleObj.toString(), attachments, created, modified);
+                final GetListItemsResponse.ListItem listItem =
+                        new GetListItemsResponse.ListItem(id, editLink, title, attachments, created, modified);
                 listItems.add(listItem);
             } catch (final ParseException e) {
                 throw new SharePointClientException("Failed to get item info.", e);

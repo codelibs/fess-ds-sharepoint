@@ -28,6 +28,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -75,28 +76,22 @@ public class GetList2013 extends GetList {
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
 
-        final Object titleObj = dataMap.get("Title");
-        if (titleObj == null) {
+        final String title = DocumentUtil.getValue(dataMap, "Title", String.class);
+        if (title == null) {
             throw new SharePointClientException("Title is null.");
         }
-        final Object idObj = dataMap.get("Id");
-        if (idObj == null) {
+        final String id = DocumentUtil.getValue(dataMap, "Id", String.class);
+        if (id == null) {
             throw new SharePointClientException("Id is null.");
         }
-        final Object entityTypeName = dataMap.get("EntityTypeName");
+        final String entityTypeName = DocumentUtil.getValue(dataMap, "EntityTypeName", String.class);
         if (entityTypeName == null) {
             throw new SharePointClientException("entityTypeName is null.");
         }
-        Object noCrawl = dataMap.get("NoCrawl");
-        if (noCrawl == null) {
-            noCrawl = "false";
-        }
-        Object hidden = dataMap.get("Hidden");
-        if (hidden == null) {
-            hidden = "false";
-        }
-        final GetListsResponse.SharePointList sharePointList = new GetListsResponse.SharePointList(idObj.toString(), titleObj.toString(),
-                Boolean.parseBoolean(noCrawl.toString()), Boolean.parseBoolean(hidden.toString()), entityTypeName.toString());
+        final boolean noCrawl = DocumentUtil.getValue(dataMap, "NoCrawl", Boolean.class, Boolean.FALSE);
+        final boolean hidden = DocumentUtil.getValue(dataMap, "Hidden", Boolean.class, Boolean.FALSE);
+        final GetListsResponse.SharePointList sharePointList =
+                new GetListsResponse.SharePointList(id, title, noCrawl, hidden, entityTypeName);
         return new GetListResponse(sharePointList);
     }
 

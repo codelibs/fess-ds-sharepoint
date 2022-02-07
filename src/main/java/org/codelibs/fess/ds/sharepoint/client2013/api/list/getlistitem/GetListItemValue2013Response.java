@@ -21,8 +21,10 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -132,23 +134,23 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         final SimpleDateFormat sdf = new SimpleDateFormat("MM/dd/yyyy HH:mm");
 
         final GetListItemValue2013Response response = new GetListItemValue2013Response();
-        response.id = dataMap.get("ID").toString();
-        response.title = dataMap.getOrDefault("Title", "").toString();
-        response.modified = sdf.parse(dataMap.get("Modified").toString());
-        response.created = sdf.parse(dataMap.get("Created").toString());
-        response.author = dataMap.get("Author").toString();
-        response.editor = dataMap.get("Editor").toString();
-        response.fileRef = dataMap.getOrDefault("FileRef", "").toString();
-        response.fileDirRef = dataMap.getOrDefault("FileDirRef", "").toString();
-        response.fileLeafRef = dataMap.getOrDefault("FileLeafRef", "").toString();
-        response.parentItemId = dataMap.getOrDefault("ParentItemID", "").toString();
-        response.parentFolderId = dataMap.getOrDefault("ParentFolderID", "").toString();
-        response.fsObjType = Integer.parseInt(dataMap.getOrDefault("FSObjType", "0").toString());
+        response.id = DocumentUtil.getValue(dataMap, "ID", String.class);
+        response.title = DocumentUtil.getValue(dataMap, "Title", String.class, StringUtil.EMPTY);
+        response.modified = sdf.parse(DocumentUtil.getValue(dataMap, "Modified", String.class));
+        response.created = sdf.parse(DocumentUtil.getValue(dataMap, "Created", String.class));
+        response.author = DocumentUtil.getValue(dataMap, "Author", String.class, StringUtil.EMPTY);
+        response.editor = DocumentUtil.getValue(dataMap, "Editor", String.class, StringUtil.EMPTY);
+        response.fileRef = DocumentUtil.getValue(dataMap, "FileRef", String.class, StringUtil.EMPTY);
+        response.fileDirRef = DocumentUtil.getValue(dataMap, "FileDirRef", String.class, StringUtil.EMPTY);
+        response.fileLeafRef = DocumentUtil.getValue(dataMap, "FileLeafRef", String.class, StringUtil.EMPTY);
+        response.parentItemId = DocumentUtil.getValue(dataMap, "ParentItemID", String.class, StringUtil.EMPTY);
+        response.parentFolderId = DocumentUtil.getValue(dataMap, "ParentFolderID", String.class, StringUtil.EMPTY);
+        response.fsObjType = DocumentUtil.getValue(dataMap, "FSObjType", Integer.class, 0);
         if (dataMap.containsKey("Attachments")) {
-            response.hasAttachments = Boolean.parseBoolean(dataMap.get("Attachments").toString());
+            response.hasAttachments = DocumentUtil.getValue(dataMap, "Attachments", Boolean.class);
         }
-        response.order = Long.parseLong(dataMap.get("Order").toString().replace(",", ""));
-        response.editLink = dataMap.get("odata.editLink").toString();
+        response.order = Long.parseLong(DocumentUtil.getValue(dataMap, "Order", String.class).replace(",", StringUtil.EMPTY));
+        response.editLink = DocumentUtil.getValue(dataMap, "odata.editLink", String.class);
 
         dataMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
 
@@ -157,7 +159,7 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
 
     @Override
     public String toString() {
-        final StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder(100);
         sb.append(String.format("[id:%s] [title:%s] [modified:%tF] [created:%tF] [author:%s] [editor:%s] [hasAttachments:%s] [order:%d]",
                 id, title, modified, created, author, editor, hasAttachments, order));
         values.entrySet().stream().forEach(entry -> {

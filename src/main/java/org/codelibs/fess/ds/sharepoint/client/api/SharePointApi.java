@@ -27,7 +27,6 @@ import javax.xml.XMLConstants;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -52,15 +51,14 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     protected final String siteUrl;
     protected final OAuth oAuth;
 
-    public SharePointApi(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
+    protected SharePointApi(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         this.client = client;
         this.siteUrl = siteUrl;
         this.oAuth = oAuth;
     }
 
-    abstract public T execute();
+    public abstract T execute();
 
-    @SuppressWarnings("unchecked")
     protected JsonResponse doJsonRequest(final HttpRequestBase httpRequest) {
         httpRequest.addHeader("Accept", "application/json");
         if (oAuth != null) {
@@ -72,16 +70,13 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
                 logger.debug("API's ResponseBody. [url:{}] [body:{}]", httpRequest.getURI().toString(), body);
             }
             if (isErrorResponse(httpResponse)) {
-                final Map<String, Object> bodyMap;
-                if (StringUtils.isNotBlank(body)) {
-                    bodyMap = objectMapper.readValue(body, Map.class);
-                } else {
-                    bodyMap = null;
-                }
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> bodyMap = StringUtil.isNotBlank(body) ? objectMapper.readValue(body, Map.class) : null;
                 throw new SharePointServerException("Api returned error. code:" + httpResponse.getStatusLine().getStatusCode() + "url:"
                         + httpRequest.getURI().toString() + " body:" + bodyMap, httpResponse.getStatusLine().getStatusCode());
             }
 
+            @SuppressWarnings("unchecked")
             final Map<String, Object> bodyMap = objectMapper.readValue(body, Map.class);
             if (body.contains("odata.error")) {
                 throw new SharePointServerException(

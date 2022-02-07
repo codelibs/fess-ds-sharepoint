@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Queue;
 
 import org.apache.commons.lang3.StringUtils;
+import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
@@ -54,7 +55,7 @@ public class ItemCrawl extends SharePointCrawl {
             final List<String> roles, final boolean isSubPage, final List<String> includeFields, final List<String> excludeFields) {
         super(client);
         this.listId = listId;
-        this.listName = listName != null ? listName : "";
+        this.listName = listName != null ? listName : StringUtil.EMPTY;
         this.itemId = itemId;
         this.roles = roles;
         this.isSubPage = isSubPage;
@@ -106,7 +107,7 @@ public class ItemCrawl extends SharePointCrawl {
     }
 
     private String buildContent(final GetListItemValueResponse response) {
-        final StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder(1000);
         response.getValues().entrySet().stream().filter(entry -> StringUtils.isNotBlank(entry.getValue()))
                 .filter(entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey()))
                         && !excludeFields.stream().anyMatch(exField -> entry.getKey().matches(exField)))
@@ -126,7 +127,7 @@ public class ItemCrawl extends SharePointCrawl {
         if (response.getFileLeafRef().length() > 0) {
             return response.getFileLeafRef();
         }
-        return "";
+        return StringUtil.EMPTY;
     }
 
     private String getWebLink(final GetListItemValueResponse response) {

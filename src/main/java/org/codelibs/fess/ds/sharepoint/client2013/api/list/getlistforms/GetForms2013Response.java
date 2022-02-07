@@ -23,6 +23,7 @@ import java.util.Map;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -34,17 +35,17 @@ public class GetForms2013Response extends GetFormsResponse {
         return forms;
     }
 
-    @SuppressWarnings("unchecked")
     protected static GetForms2013Response build(final SharePointApi.XmlResponse xmlResponse) {
         final GetForms2013Response response = new GetForms2013Response();
         final GetFormsDocHandler handler = new GetFormsDocHandler();
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
-        final List<Map<String, Object>> values = (List) dataMap.get("value");
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> values = (List<Map<String, Object>>) dataMap.get("value");
         values.stream().forEach(value -> {
-            final String id = value.get("Id").toString();
-            final String serverRelativeUrl = value.get("ServerRelativeUrl").toString();
-            final int type = Integer.parseInt(value.get("FormType").toString());
+            final String id = DocumentUtil.getValue(value, "Id", String.class);
+            final String serverRelativeUrl = DocumentUtil.getValue(value, "ServerRelativeUrl", String.class);
+            final int type = DocumentUtil.getValue(value, "FormType", Integer.class);
             response.forms.add(new Form(id, serverRelativeUrl, PageType.getPageType(type)));
         });
         return response;

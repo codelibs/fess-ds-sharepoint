@@ -24,6 +24,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.util.DocumentUtil;
 
 public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
@@ -49,7 +50,6 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public GetListItemRoleResponse execute() {
         if (listId == null || itemId == null) {
             throw new SharePointClientException("listId/itemId is required.");
@@ -58,8 +58,8 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         int start = 0;
         while (true) {
             final GetListItemRoleResponse getListItemRoleResponse = executeInternal(start, PAGE_SISE);
-            if (getListItemRoleResponse.getUsers().size() == 0 && getListItemRoleResponse.getSharePointGroups().size() == 0
-                    && getListItemRoleResponse.getSecurityGroups().size() == 0) {
+            if (getListItemRoleResponse.getUsers().isEmpty() && getListItemRoleResponse.getSharePointGroups().isEmpty()
+                    && getListItemRoleResponse.getSecurityGroups().isEmpty()) {
                 break;
             }
             getListItemRoleResponse.getUsers().stream().forEach(response::addUser);
@@ -76,7 +76,8 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
 
         final GetListItemRoleResponse response = new GetListItemRoleResponse();
         final Map<String, Object> bodyMap = jsonResponse.getBodyAsMap();
-        final List<Map<String, Object>> values = (List) bodyMap.get("value");
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> values = (List<Map<String, Object>>) bodyMap.get("value");
         values.stream().map(value -> (value.get("PrincipalId").toString())).forEach(principalId -> {
             if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
@@ -85,24 +86,26 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             final HttpGet memberRequest = new HttpGet(buildMemberUrl(itemId, principalId));
             final JsonResponse memberResponse = doJsonRequest(memberRequest);
             final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
-            final String id = memberResponseMap.get("Id").toString();
-            final int principalType = Integer.parseInt(memberResponseMap.get("PrincipalType").toString());
+            final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
+            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class);
             switch (principalType) {
             case 1:
                 // User
-                final GetListItemRoleResponse.User user = new GetListItemRoleResponse.User(id, memberResponseMap.get("Title").toString(),
-                        memberResponseMap.get("LoginName").toString());
+                final GetListItemRoleResponse.User user =
+                        new GetListItemRoleResponse.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+                                DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
                 response.addUser(user);
                 break;
             case 4:
                 // Security Group
-                final GetListItemRoleResponse.SecurityGroup securityGroup = new GetListItemRoleResponse.SecurityGroup(id,
-                        memberResponseMap.get("Title").toString(), memberResponseMap.get("LoginName").toString());
+                final GetListItemRoleResponse.SecurityGroup securityGroup =
+                        new GetListItemRoleResponse.SecurityGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+                                DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
                 response.addSecurityGroup(securityGroup);
                 break;
             case 8:
                 final GetListItemRoleResponse.SharePointGroup sharePointGroup =
-                        buildSharePointGroup(id, memberResponseMap.get("Title").toString());
+                        buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
                 response.addSharePointGroup(sharePointGroup);
                 if (sharePointGroupCache != null) {
                     sharePointGroupCache.put(principalId, sharePointGroup);
@@ -157,13 +160,14 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
         final JsonResponse usersResponse = doJsonRequest(usersRequest);
         final Map<String, Object> usersResponseMap = usersResponse.getBodyAsMap();
-        final List<Map<String, Object>> users = (List) usersResponseMap.get("value");
+        @SuppressWarnings("unchecked")
+        final List<Map<String, Object>> users = (List<Map<String, Object>>) usersResponseMap.get("value");
         usersList.addAll(users);
         usersList.forEach(user -> {
-            final String userId = user.get("Id").toString();
-            final String userTitle = user.get("Title").toString();
-            final String loginName = user.get("LoginName").toString();
-            final int userPrincipalType = Integer.parseInt(user.get("PrincipalType").toString());
+            final String userId = DocumentUtil.getValue(user, "Id", String.class);
+            final String userTitle = DocumentUtil.getValue(user, "Title", String.class);
+            final String loginName = DocumentUtil.getValue(user, "LoginName", String.class);
+            final int userPrincipalType = DocumentUtil.getValue(user, "PrincipalType", Integer.class);
             switch (userPrincipalType) {
             case 1:
                 // user

@@ -23,6 +23,7 @@ import java.util.Map;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
@@ -38,22 +39,21 @@ public class GetFolder2013Response extends GetFolderResponse {
 
     public static GetFolder2013Response build(final Map<String, Object> dataMap) {
 
-        @SuppressWarnings("unchecked")
         final GetFolder2013Response response = new GetFolder2013Response();
-        response.id = dataMap.get("UniqueId").toString();
-        response.name = dataMap.get("Name").toString();
-        response.exists = Boolean.parseBoolean(dataMap.get("Exists").toString());
-        response.serverRelativeUrl = dataMap.get("ServerRelativeUrl").toString();
+        response.id = DocumentUtil.getValue(dataMap, "UniqueId", String.class);
+        response.name = DocumentUtil.getValue(dataMap, "Name", String.class);
+        response.exists = DocumentUtil.getValue(dataMap, "Exists", Boolean.class);
+        response.serverRelativeUrl = DocumentUtil.getValue(dataMap, "ServerRelativeUrl", String.class);
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
             if (dataMap.containsKey("TimeCreated")) {
-                response.created = sdf.parse(dataMap.get("TimeCreated").toString());
+                response.created = sdf.parse(DocumentUtil.getValue(dataMap, "TimeCreated", String.class));
             }
-            response.modified = sdf.parse(dataMap.get("TimeLastModified").toString());
+            response.modified = sdf.parse(DocumentUtil.getValue(dataMap, "TimeLastModified", String.class));
         } catch (final ParseException e) {
             throw new SharePointClientException(e);
         }
-        response.itemCount = Integer.parseInt(dataMap.get("ItemCount").toString());
+        response.itemCount = DocumentUtil.getValue(dataMap, "ItemCount", Integer.class);
         return response;
     }
 
