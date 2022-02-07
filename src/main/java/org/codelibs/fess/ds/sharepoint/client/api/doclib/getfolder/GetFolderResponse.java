@@ -68,21 +68,19 @@ public class GetFolderResponse implements SharePointApiResponse {
     }
 
     public static GetFolderResponse buildFromMap(final Map<String, Object> jsonMap) {
-        @SuppressWarnings("unchecked")
-
         final GetFolderResponse response = new GetFolderResponse();
-        response.id = jsonMap.get("UniqueId").toString();
-        response.name = jsonMap.get("Name").toString();
-        response.exists = Boolean.parseBoolean(jsonMap.get("Exists").toString());
-        response.serverRelativeUrl = jsonMap.get("ServerRelativeUrl").toString();
+        response.id = (String) jsonMap.get("UniqueId");
+        response.name = (String) jsonMap.get("Name");
+        response.exists = Boolean.parseBoolean((String) jsonMap.get("Exists"));
+        response.serverRelativeUrl = (String) jsonMap.get("ServerRelativeUrl");
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
-            response.created = sdf.parse(jsonMap.get("TimeCreated").toString());
-            response.modified = sdf.parse(jsonMap.get("TimeLastModified").toString());
+            response.created = sdf.parse((String) jsonMap.get("TimeCreated"));
+            response.modified = sdf.parse((String) jsonMap.get("TimeLastModified"));
         } catch (final ParseException e) {
             throw new SharePointClientException(e);
         }
-        response.itemCount = Integer.parseInt(jsonMap.get("ItemCount").toString());
+        response.itemCount = Integer.parseInt((String) jsonMap.get("ItemCount"));
         return response;
     }
 }

@@ -52,13 +52,13 @@ public class GetFilesResponse implements SharePointApiResponse {
 
     protected static DocLibFile createDocLibFile(final Map<String, Object> dataMap) {
         final DocLibFile docLibFile = new DocLibFile();
-        docLibFile.fileName = dataMap.get("Name").toString();
+        docLibFile.fileName = (String) dataMap.get("Name");
         docLibFile.title = (String) dataMap.getOrDefault("Title", "");
-        docLibFile.serverRelativeUrl = dataMap.get("ServerRelativeUrl").toString();
+        docLibFile.serverRelativeUrl = (String) dataMap.get("ServerRelativeUrl");
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
-            docLibFile.created = sdf.parse(dataMap.get("TimeCreated").toString());
-            docLibFile.modified = sdf.parse(dataMap.get("TimeLastModified").toString());
+            docLibFile.created = sdf.parse((String) dataMap.get("TimeCreated"));
+            docLibFile.modified = sdf.parse((String) dataMap.get("TimeLastModified"));
         } catch (final ParseException e) {
             logger.warn("Failed to parse date.", e);
         }
