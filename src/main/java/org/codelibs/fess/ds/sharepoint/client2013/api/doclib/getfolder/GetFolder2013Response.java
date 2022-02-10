@@ -42,7 +42,7 @@ public class GetFolder2013Response extends GetFolderResponse {
         final GetFolder2013Response response = new GetFolder2013Response();
         response.id = DocumentUtil.getValue(dataMap, "UniqueId", String.class);
         response.name = DocumentUtil.getValue(dataMap, "Name", String.class);
-        response.exists = DocumentUtil.getValue(dataMap, "Exists", Boolean.class);
+        response.exists = DocumentUtil.getValue(dataMap, "Exists", Boolean.class, false);
         response.serverRelativeUrl = DocumentUtil.getValue(dataMap, "ServerRelativeUrl", String.class);
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
@@ -53,7 +53,7 @@ public class GetFolder2013Response extends GetFolderResponse {
         } catch (final ParseException e) {
             throw new SharePointClientException(e);
         }
-        response.itemCount = DocumentUtil.getValue(dataMap, "ItemCount", Integer.class);
+        response.itemCount = DocumentUtil.getValue(dataMap, "ItemCount", Integer.class, 0);
         return response;
     }
 

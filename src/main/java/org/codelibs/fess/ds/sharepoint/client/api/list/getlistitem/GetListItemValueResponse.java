@@ -129,7 +129,7 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         response.parentFolderId = DocumentUtil.getValue(jsonMap, "ParentFolderID", String.class, StringUtil.EMPTY);
         response.fsObjType = DocumentUtil.getValue(jsonMap, "FSObjType", Integer.class, 0);
         if (jsonMap.containsKey("Attachments")) {
-            response.hasAttachments = DocumentUtil.getValue(jsonMap, "Attachments", Boolean.class);
+            response.hasAttachments = DocumentUtil.getValue(jsonMap, "Attachments", Boolean.class, false);
         }
         final String order = DocumentUtil.getValue(jsonMap, "Order", String.class);
         if (StringUtils.isNotBlank(order)) {

@@ -147,7 +147,7 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         response.parentFolderId = DocumentUtil.getValue(dataMap, "ParentFolderID", String.class, StringUtil.EMPTY);
         response.fsObjType = DocumentUtil.getValue(dataMap, "FSObjType", Integer.class, 0);
         if (dataMap.containsKey("Attachments")) {
-            response.hasAttachments = DocumentUtil.getValue(dataMap, "Attachments", Boolean.class);
+            response.hasAttachments = DocumentUtil.getValue(dataMap, "Attachments", Boolean.class, false);
         }
         response.order = Long.parseLong(DocumentUtil.getValue(dataMap, "Order", String.class).replace(",", StringUtil.EMPTY));
         response.editLink = DocumentUtil.getValue(dataMap, "odata.editLink", String.class);

@@ -40,7 +40,7 @@ public class GetFormsResponse implements SharePointApiResponse {
         values.stream().forEach(value -> {
             final String id = DocumentUtil.getValue(value, "Id", String.class);
             final String serverRelativeUrl = DocumentUtil.getValue(value, "ServerRelativeUrl", String.class);
-            final int type = DocumentUtil.getValue(value, "FormType", Integer.class);
+            final int type = DocumentUtil.getValue(value, "FormType", Integer.class, 0);
             response.forms.add(new Form(id, serverRelativeUrl, PageType.getPageType(type)));
         });
         return response;

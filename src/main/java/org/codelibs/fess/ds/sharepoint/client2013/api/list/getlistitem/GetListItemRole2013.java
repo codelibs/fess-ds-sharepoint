@@ -78,7 +78,7 @@ public class GetListItemRole2013 extends GetListItemRole {
             memberResponse.parseXml(memberDocHandler);
             final Map<String, Object> memberResponseMap = memberDocHandler.getDataMap();
             final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
-            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class);
+            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
             if (principalType == 1) {
                 // User
                 final GetListItemRole2013Response.User user =
@@ -131,7 +131,7 @@ public class GetListItemRole2013 extends GetListItemRole {
             final String userId = DocumentUtil.getValue(user, "Id", String.class);
             final String userTitle = DocumentUtil.getValue(user, "Title", String.class);
             final String loginName = DocumentUtil.getValue(user, "LoginName", String.class);
-            final int userPrincipalType = DocumentUtil.getValue(user, "PrincipalType", Integer.class);
+            final int userPrincipalType = DocumentUtil.getValue(user, "PrincipalType", Integer.class, 0);
             switch (userPrincipalType) {
             case 1:
                 // user

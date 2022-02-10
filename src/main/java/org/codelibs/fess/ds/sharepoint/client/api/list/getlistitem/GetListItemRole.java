@@ -87,7 +87,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             final JsonResponse memberResponse = doJsonRequest(memberRequest);
             final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
             final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
-            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class);
+            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
             switch (principalType) {
             case 1:
                 // User
@@ -167,7 +167,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             final String userId = DocumentUtil.getValue(user, "Id", String.class);
             final String userTitle = DocumentUtil.getValue(user, "Title", String.class);
             final String loginName = DocumentUtil.getValue(user, "LoginName", String.class);
-            final int userPrincipalType = DocumentUtil.getValue(user, "PrincipalType", Integer.class);
+            final int userPrincipalType = DocumentUtil.getValue(user, "PrincipalType", Integer.class, 0);
             switch (userPrincipalType) {
             case 1:
                 // user

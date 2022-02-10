@@ -72,7 +72,7 @@ public class GetFolderResponse implements SharePointApiResponse {
         final GetFolderResponse response = new GetFolderResponse();
         response.id = DocumentUtil.getValue(jsonMap, "UniqueId", String.class);
         response.name = DocumentUtil.getValue(jsonMap, "Name", String.class);
-        response.exists = DocumentUtil.getValue(jsonMap, "Exists", Boolean.class);
+        response.exists = DocumentUtil.getValue(jsonMap, "Exists", Boolean.class, false);
         response.serverRelativeUrl = DocumentUtil.getValue(jsonMap, "ServerRelativeUrl", String.class);
         final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
         try {
@@ -87,7 +87,7 @@ public class GetFolderResponse implements SharePointApiResponse {
         } catch (final ParseException e) {
             throw new SharePointClientException(e);
         }
-        response.itemCount = DocumentUtil.getValue(jsonMap, "ItemCount", Integer.class);
+        response.itemCount = DocumentUtil.getValue(jsonMap, "ItemCount", Integer.class, 0);
         return response;
     }
 }
