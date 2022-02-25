@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 CodeLibs Project and the Others.
+ * Copyright 2012-2022 CodeLibs Project and the Others.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -160,10 +160,9 @@ public class ItemCrawl extends SharePointCrawl {
             final String serverRelativeUrl = formUrl.replace("DispForm.aspx", "Flat.aspx");
             return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&RootFolder="
                     + URLEncoder.encode(response.getFileRef(), StandardCharsets.UTF_8);
-        } else {
-            final String serverRelativeUrl = formUrl;
-            return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
         }
+        final String serverRelativeUrl = formUrl;
+        return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId;
     }
 
     private String normalizeKey(final String key) {

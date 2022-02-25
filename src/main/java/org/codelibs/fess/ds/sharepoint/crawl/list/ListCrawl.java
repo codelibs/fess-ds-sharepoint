@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2021 CodeLibs Project and the Others.
+ * Copyright 2012-2022 CodeLibs Project and the Others.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,12 +74,11 @@ public class ListCrawl extends SharePointCrawl {
                 getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
                         .setStart(start).execute();
             } catch (final SharePointServerException e) {
-                if (e.getStatusCode() == 400) {
-                    getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(true).setNum(numberPerPage)
-                            .setStart(start).execute();
-                } else {
+                if (e.getStatusCode() != 400) {
                     throw e;
                 }
+                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(true).setNum(numberPerPage)
+                        .setStart(start).execute();
             }
             if (getListItemsResponse.getListItems().isEmpty()) {
                 break;
