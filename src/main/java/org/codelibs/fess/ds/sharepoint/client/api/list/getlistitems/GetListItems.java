@@ -63,7 +63,11 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
             selectParam = SELECT_PARAM;
         }
 
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + selectParam);
+        final String buildUrl = siteUrl + "/" + API_PATH.replace("{{id}}", listId) + "?" + pagingParam + "&" + selectParam;
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUrl: {}", buildUrl);
+        }
+        final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }

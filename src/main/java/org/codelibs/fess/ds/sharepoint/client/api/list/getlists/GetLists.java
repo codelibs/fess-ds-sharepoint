@@ -24,8 +24,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GetLists extends SharePointApi<GetListsResponse> {
+    private static final Logger logger = LoggerFactory.getLogger(GetLists.class);
+
     private static final String API_PATH = "_api/lists";
 
     public GetLists(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
@@ -34,7 +38,11 @@ public class GetLists extends SharePointApi<GetListsResponse> {
 
     @Override
     public GetListsResponse execute() {
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH);
+        final String buildUrl = siteUrl + "/" + API_PATH;
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUrl: {}", buildUrl);
+        }
+        final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }

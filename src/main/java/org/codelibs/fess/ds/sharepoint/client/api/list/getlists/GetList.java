@@ -26,8 +26,12 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GetList extends SharePointApi<GetListResponse> {
+    private static final Logger logger = LoggerFactory.getLogger(GetList.class);
+
     private static final String API_BY_LIST_ID_PATH = "_api/web/lists(guid'{list_guid}')";
     private static final String API_BY_LIST_NAME_PATH = "_api/web/lists/GetByTitle('{list_name}')";
 
@@ -59,7 +63,11 @@ public class GetList extends SharePointApi<GetListResponse> {
             throw new SharePointClientException("[GetList] listId/listName is required.");
         }
 
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + apiPath);
+        final String buildUrl = siteUrl + "/" + apiPath;
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUrl: {}", buildUrl);
+        }
+        final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return buildResponse(jsonResponse);
     }

@@ -25,8 +25,12 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
+    private static final Logger logger = LoggerFactory.getLogger(GetListItemRole.class);
+
     private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
     private static final int PAGE_SISE = 200;
 
@@ -71,7 +75,11 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     }
 
     protected GetListItemRoleResponse executeInternal(final int start, final int num) {
-        final HttpGet httpGet = new HttpGet(buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num));
+        final String buildUrl = buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num);
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUrl: {}", buildUrl);
+        }
+        final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
 
         final GetListItemRoleResponse response = new GetListItemRoleResponse();
@@ -83,7 +91,11 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                 response.addSharePointGroup(sharePointGroupCache.get(principalId));
                 return;
             }
-            final HttpGet memberRequest = new HttpGet(buildMemberUrl(itemId, principalId));
+            final String buildMemberUrl = buildMemberUrl(itemId, principalId);
+            if (logger.isDebugEnabled()) {
+                logger.debug("buildMemberUrl: {}", buildMemberUrl);
+            }
+            final HttpGet memberRequest = new HttpGet(buildMemberUrl);
             final JsonResponse memberResponse = doJsonRequest(memberRequest);
             final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
             final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
@@ -157,7 +169,11 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             start += PAGE_SISE;
         }
          */
-        final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
+        final String buildUsersUrl = buildUsersUrl(id);
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUsersUrl: {}", buildUsersUrl);
+        }
+        final HttpGet usersRequest = new HttpGet(buildUsersUrl);
         final JsonResponse usersResponse = doJsonRequest(usersRequest);
         final Map<String, Object> usersResponseMap = usersResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")

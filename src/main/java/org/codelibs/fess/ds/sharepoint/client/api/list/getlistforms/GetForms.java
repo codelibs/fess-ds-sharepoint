@@ -20,8 +20,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GetForms extends SharePointApi<GetFormsResponse> {
+    private static final Logger logger = LoggerFactory.getLogger(GetForms.class);
+
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Forms";
     private static final String GETBYTITLE_API_PATH = "_api/lists/getbytitle('{{list_name}}')/Forms";
 
@@ -49,9 +53,17 @@ public class GetForms extends SharePointApi<GetFormsResponse> {
         }
         final HttpGet httpGet;
         if (listId != null) {
-            httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId));
+            final String buildUrl = siteUrl + "/" + API_PATH.replace("{{id}}", listId);
+            if (logger.isDebugEnabled()) {
+                logger.debug("buildUrl: {}", buildUrl);
+            }
+            httpGet = new HttpGet(buildUrl);
         } else {
-            httpGet = new HttpGet(siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName));
+            final String buildUrl = siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName);
+            if (logger.isDebugEnabled()) {
+                logger.debug("buildUrl: {}", buildUrl);
+            }
+            httpGet = new HttpGet(buildUrl);
         }
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
         return GetFormsResponse.build(jsonResponse);

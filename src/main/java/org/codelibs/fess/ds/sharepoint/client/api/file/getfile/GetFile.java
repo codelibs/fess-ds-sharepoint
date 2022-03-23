@@ -22,8 +22,12 @@ import org.apache.http.util.EntityUtils;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GetFile extends SharePointApi<GetFileResponse> {
+    private static final Logger logger = LoggerFactory.getLogger(GetFile.class);
+
     private String serverRelativeUrl = null;
 
     public GetFile(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
@@ -41,7 +45,11 @@ public class GetFile extends SharePointApi<GetFileResponse> {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet = new HttpGet(buildUrl());
+        final String buildUrl = buildUrl();
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUrl: {}", buildUrl);
+        }
+        final HttpGet httpGet = new HttpGet(buildUrl);
         httpGet.addHeader("Accept", "application/json");
         if (oAuth != null) {
             oAuth.apply(httpGet);

@@ -20,8 +20,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GetFolders extends SharePointApi<GetFoldersResponse> {
+    private static final Logger logger = LoggerFactory.getLogger(GetFolders.class);
+
     private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')/Folders";
     private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
 
@@ -54,13 +58,21 @@ public class GetFolders extends SharePointApi<GetFoldersResponse> {
             throw new SharePointClientException("serverRelativeUrl is required.");
         }
 
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
-                + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num)));
+        final String buildUrl = buildUrl();
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUrl: {}", buildUrl);
+        }
+        final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetFoldersResponse.build(jsonResponse);
         } catch (final Exception e) {
             throw new SharePointClientException(e);
         }
+    }
+
+    private String buildUrl() {
+        return siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl)) + "?"
+                + PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num));
     }
 }

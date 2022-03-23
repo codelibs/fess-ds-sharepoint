@@ -20,8 +20,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GetListItemAttachments extends SharePointApi<GetListItemAttachmentsResponse> {
+    private static final Logger logger = LoggerFactory.getLogger(GetListItemAttachments.class);
+
     private String listId = null;
     private String itemId = null;
 
@@ -40,7 +44,11 @@ public class GetListItemAttachments extends SharePointApi<GetListItemAttachments
         if (listId == null || itemId == null) {
             throw new SharePointClientException("listId/itemId is required.");
         }
-        final HttpGet httpGet = new HttpGet(buildUrl());
+        final String buildUrl = buildUrl();
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildUrl: {}", buildUrl);
+        }
+        final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
         try {
             return GetListItemAttachmentsResponse.build(jsonResponse);
