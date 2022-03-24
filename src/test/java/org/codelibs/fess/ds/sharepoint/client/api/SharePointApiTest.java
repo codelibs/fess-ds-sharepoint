@@ -50,6 +50,15 @@ public class SharePointApiTest extends LastaFluteTestCase {
             }
         };
 
-        assertEquals("%E3%82%AF%E3%83%AD%E3%83%BC%E3%83%AB%E6%A4%9C%E8%A8%BC%E7%94%A8.txt", sharePointApi.encodeRelativeUrl("クロール検証用.txt"));
+        assertNull(sharePointApi.encodeRelativeUrl(null));
+        assertEquals("", sharePointApi.encodeRelativeUrl(""));
+        assertEquals("%20", sharePointApi.encodeRelativeUrl(" "));
+        assertEquals("abc123%21.txt", sharePointApi.encodeRelativeUrl("abc123!.txt"));
+        assertEquals("%E3%83%86%E3%82%B9%E3%83%88.txt", sharePointApi.encodeRelativeUrl("テスト.txt"));
+        assertEquals("%E3%83%86%E3%82%B9%E3%83%88//%E3%83%86%E3%82%B9%E3%83%88", sharePointApi.encodeRelativeUrl("テスト//テスト"));
+        assertEquals("///%E3%83%86%E3%82%B9%E3%83%88.txt///", sharePointApi.encodeRelativeUrl("///テスト.txt///"));
+        assertEquals("/%E3%83%86%E3%82%B9%E3%83%88/%E3%83%86%E3%82%B9%E3%83%88.txt", sharePointApi.encodeRelativeUrl("/テスト/テスト.txt"));
+        assertEquals("/%E3%83%86%E3%82%B9%E3%83%88/%E3%83%86%E3%82%B9%E3%83%88%E3%81%A6%E3%81%99%E3%81%A8.txt",
+                sharePointApi.encodeRelativeUrl("/テスト/テストてすと.txt"));
     }
 }
