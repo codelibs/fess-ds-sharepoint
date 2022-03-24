@@ -22,16 +22,19 @@ import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
 import org.codelibs.core.lang.StringUtil;
+import org.codelibs.core.stream.StreamUtil;
 import org.codelibs.fess.crawler.Constants;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
@@ -123,12 +126,12 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     }
 
     protected String encodeRelativeUrl(final String url) {
-        String result = url;
-        final String[] array = url.split("/");
-        for (final String value : array) {
-            result = result.replace(value, URLEncoder.encode(value, StandardCharsets.UTF_8));
+        if (url == null) {
+            return null;
         }
-        return result.replace("+", "%20");
+        return StreamUtil.stream(StringUtils.splitPreserveAllTokens(url, '/'))
+                .get(stream -> stream.map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)).collect(Collectors.joining("/")))
+                .replace("+", "%20");
     }
 
     public static class JsonResponse {
