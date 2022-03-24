@@ -126,7 +126,7 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
         String result = url;
         final String[] array = url.split("/");
         for (final String value : array) {
-            result = result.replace(value, URLEncoder.encode(value, StandardCharsets.UTF_8));
+            result = result.replaceFirst(value, URLEncoder.encode(value, StandardCharsets.UTF_8));
         }
         return result.replace("+", "%20");
     }
