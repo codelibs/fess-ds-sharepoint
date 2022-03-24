@@ -54,6 +54,7 @@ public class SharePointApiTest extends LastaFluteTestCase {
         assertEquals("", sharePointApi.encodeRelativeUrl(""));
         assertEquals("%20", sharePointApi.encodeRelativeUrl(" "));
         assertEquals("abc123%21.txt", sharePointApi.encodeRelativeUrl("abc123!.txt"));
+        assertEquals("a%20b%20c/a%20b%20c", sharePointApi.encodeRelativeUrl("a b c/a b c"));
         assertEquals("%E3%83%86%E3%82%B9%E3%83%88.txt", sharePointApi.encodeRelativeUrl("テスト.txt"));
         assertEquals("%E3%83%86%E3%82%B9%E3%83%88//%E3%83%86%E3%82%B9%E3%83%88", sharePointApi.encodeRelativeUrl("テスト//テスト"));
         assertEquals("///%E3%83%86%E3%82%B9%E3%83%88.txt///", sharePointApi.encodeRelativeUrl("///テスト.txt///"));
