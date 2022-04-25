@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -26,6 +27,7 @@ import javax.validation.ValidationException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.config.RequestConfig;
+import org.codelibs.core.misc.Pair;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
@@ -37,6 +39,11 @@ import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.SiteCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
+import org.codelibs.fess.exception.DataStoreCrawlingException;
+import org.codelibs.fess.helper.CrawlerStatsHelper;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
+import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -110,18 +117,22 @@ public class SharePointCrawler {
         return !crawlingQueue.isEmpty();
     }
 
-    public Map<String, Object> doCrawl() {
+    public Pair<Map<String, Object>, StatsKeyObject> doCrawl() {
+        final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
         while (!crawlingQueue.isEmpty()) {
             final SharePointCrawl crawl = crawlingQueue.poll();
             if (crawl == null) {
                 continue;
             }
+            final StatsKeyObject statsKey = crawl.getStatsKey();
+            crawlerStatsHelper.begin(statsKey);
             int retryCount = 0;
             while (retryCount <= config.getRetryLimit()) {
                 try {
                     final Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
+                    crawlerStatsHelper.record(statsKey, StatsAction.ACCESSED);
                     if (dataMap != null) {
-                        return dataMap;
+                        return new Pair<>(dataMap, statsKey);
                     }
                     break;
                 } catch (final SharePointServerException e) {
@@ -132,13 +143,18 @@ public class SharePointCrawler {
                     }
                 } catch (final SharePointClientException e) {
                     if (retryCount + 1 <= config.getRetryLimit()) {
-                        logger.warn("Error occured: {}  [Retry:{}]" + e.getMessage(), retryCount);
+                        logger.warn("Error occured: {}  [Retry:{}]", e.getMessage(), retryCount);
                     } else {
-                        logger.warn("Error occured. " + e.getMessage(), e);
+                        logger.warn("Error occured. {}", e.getMessage(), e);
                     }
+                } catch (final Exception e) {
+                    crawlerStatsHelper.discard(statsKey);
+                    throw new DataStoreCrawlingException(statsKey.getId(), "Failed to crawl " + statsKey.getId(), e);
                 }
                 retryCount++;
+                crawlerStatsHelper.record(statsKey, StatsAction.EXCEPTION.name().toLowerCase(Locale.ENGLISH) + "@" + retryCount);
             }
+            crawlerStatsHelper.done(statsKey);
         }
         return null;
     }

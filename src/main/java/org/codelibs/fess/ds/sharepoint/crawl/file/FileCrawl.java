@@ -31,6 +31,7 @@ import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.helper.FileTypeHelper;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
@@ -64,6 +65,7 @@ public class FileCrawl extends SharePointCrawl {
         this.roles = roles;
         this.listValues = listValues;
         this.listName = listName != null ? listName : StringUtil.EMPTY;
+        statsKey = new StatsKeyObject("file#" + serverRelativeUrl);
     }
 
     public void addProperty(final String key, final String value) {

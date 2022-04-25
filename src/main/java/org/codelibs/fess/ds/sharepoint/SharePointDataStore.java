@@ -20,12 +20,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.codelibs.core.misc.Pair;
 import org.codelibs.fess.crawler.exception.CrawlingAccessException;
 import org.codelibs.fess.crawler.exception.MultipleCrawlingAccessException;
 import org.codelibs.fess.ds.AbstractDataStore;
 import org.codelibs.fess.ds.callback.IndexUpdateCallback;
+import org.codelibs.fess.entity.DataStoreParams;
 import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
+import org.codelibs.fess.helper.CrawlerStatsHelper;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
@@ -40,9 +45,10 @@ public class SharePointDataStore extends AbstractDataStore {
     }
 
     @Override
-    protected void storeData(final DataConfig dataConfig, final IndexUpdateCallback callback, final Map<String, String> paramMap,
+    protected void storeData(final DataConfig dataConfig, final IndexUpdateCallback callback, final DataStoreParams paramMap,
             final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
+        final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
         final String roleField = fessConfig.getIndexFieldRole();
         final SharePointCrawler crawler = createCrawler(paramMap);
         final long readInterval = getReadInterval(paramMap);
@@ -50,44 +56,55 @@ public class SharePointDataStore extends AbstractDataStore {
         boolean running = true;
         while (running && crawler.hasCrawlTarget()) {
             try {
-                final Map<String, Object> resultMap = crawler.doCrawl();
+                final Pair<Map<String, Object>, StatsKeyObject> result = crawler.doCrawl();
                 if (logger.isDebugEnabled()) {
-                    logger.debug("ResultMap: " + resultMap);
+                    logger.debug("result: {}", result);
                 }
-                if (resultMap != null) {
+                if (result != null) {
                     final Map<String, Object> dataMap = new HashMap<>(defaultDataMap);
-                    if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
-                        final List<Object> roles = new ArrayList<>((List) dataMap.get(roleField));
-                        roles.addAll((List) resultMap.get(roleField));
-                        dataMap.put(roleField, roles);
-                    } else {
-                        dataMap.put(roleField, resultMap.get(roleField));
-                    }
-                    resultMap.remove(roleField);
-                    for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
-                        final Object convertValue = convertValue(scriptType, entry.getValue(), resultMap);
-                        if (convertValue != null) {
-                            dataMap.put(entry.getKey(), convertValue);
+                    final Map<String, Object> resultMap = result.getFirst();
+                    final StatsKeyObject statsKey = result.getSecond();
+                    try {
+                        if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
+                            final List<Object> roles = new ArrayList<>();
+                            if (dataMap.get(roleField) instanceof List<?> roleList) {
+                                roles.addAll(roleList);
+                            }
+                            if (resultMap.get(roleField) instanceof List<?> roleList) {
+                                roles.addAll(roleList);
+                            }
+                            dataMap.put(roleField, roles);
+                        } else {
+                            dataMap.put(roleField, resultMap.get(roleField));
                         }
+                        resultMap.remove(roleField);
+                        crawlerStatsHelper.record(statsKey, StatsAction.PREPARED);
+                        for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
+                            final Object convertValue = convertValue(scriptType, entry.getValue(), resultMap);
+                            if (convertValue != null) {
+                                dataMap.put(entry.getKey(), convertValue);
+                            }
+                        }
+                        crawlerStatsHelper.record(statsKey, StatsAction.EVALUATED);
+                        callback.store(paramMap, dataMap);
+                        crawlerStatsHelper.record(statsKey, StatsAction.FINISHED);
+                    } finally {
+                        crawlerStatsHelper.done(statsKey);
                     }
-                    callback.store(paramMap, dataMap);
                 }
             } catch (final CrawlingAccessException e) {
                 logger.warn("Crawling Access Exception: ", e);
 
                 Throwable target = e;
-                if (target instanceof MultipleCrawlingAccessException) {
-                    final Throwable[] causes = ((MultipleCrawlingAccessException) target).getCauses();
+                if (target instanceof MultipleCrawlingAccessException ex) {
+                    final Throwable[] causes = ex.getCauses();
                     if (causes.length > 0) {
                         target = causes[causes.length - 1];
                     }
                 }
 
-                if (target instanceof DataStoreCrawlingException) {
-                    final DataStoreCrawlingException dce = (DataStoreCrawlingException) target;
-                    if (dce.aborted()) {
-                        running = false;
-                    }
+                if (target instanceof DataStoreCrawlingException dce && dce.aborted()) {
+                    running = false;
                 }
             } catch (final Throwable t) {
                 logger.warn("Crawling Access Exception: ", t);
@@ -99,61 +116,61 @@ public class SharePointDataStore extends AbstractDataStore {
         callback.commit();
     }
 
-    private SharePointCrawler createCrawler(final Map<String, String> paramMap) {
+    private SharePointCrawler createCrawler(final DataStoreParams paramMap) {
         final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
-        config.setUrl(paramMap.get("url"));
+        config.setUrl(paramMap.getAsString("url"));
         if (paramMap.containsKey("auth.ntlm.user")) {
-            config.setNtlmUser(paramMap.get("auth.ntlm.user"));
-            config.setNtlmPassword(paramMap.get("auth.ntlm.password"));
+            config.setNtlmUser(paramMap.getAsString("auth.ntlm.user"));
+            config.setNtlmPassword(paramMap.getAsString("auth.ntlm.password"));
         }
         if (paramMap.containsKey("auth.oauth.client_id")) {
-            config.setOauthClientId(paramMap.get("auth.oauth.client_id"));
-            config.setOauthClientSecret(paramMap.get("auth.oauth.client_secret"));
-            config.setOauthTenant(paramMap.get("auth.oauth.tenant"));
-            config.setOauthRealm(paramMap.get("auth.oauth.realm"));
+            config.setOauthClientId(paramMap.getAsString("auth.oauth.client_id"));
+            config.setOauthClientSecret(paramMap.getAsString("auth.oauth.client_secret"));
+            config.setOauthTenant(paramMap.getAsString("auth.oauth.tenant"));
+            config.setOauthRealm(paramMap.getAsString("auth.oauth.realm"));
         }
-        config.setSiteName(paramMap.get("site.name"));
+        config.setSiteName(paramMap.getAsString("site.name"));
         if (paramMap.containsKey("site.list_id")) {
-            config.setInitialListId(paramMap.get("site.list_id"));
+            config.setInitialListId(paramMap.getAsString("site.list_id"));
         }
         if (paramMap.containsKey("site.list_name")) {
-            config.setInitialListName(paramMap.get("site.list_name"));
+            config.setInitialListName(paramMap.getAsString("site.list_name"));
         }
         if (paramMap.containsKey("site.doclib_path")) {
-            config.setInitialDocLibPath(paramMap.get("site.doclib_path"));
+            config.setInitialDocLibPath(paramMap.getAsString("site.doclib_path"));
         }
         if (paramMap.containsKey("site.exclude_list")) {
-            config.setExcludeList(paramMap.get("site.exclude_list"));
+            config.setExcludeList(paramMap.getAsString("site.exclude_list"));
         }
         if (paramMap.containsKey("site.exclude_folder")) {
-            config.setExcludeFolder(paramMap.get("site.exclude_folder"));
+            config.setExcludeFolder(paramMap.getAsString("site.exclude_folder"));
         }
         if (paramMap.containsKey("list.items.number_per_page")) {
-            config.setListItemNumPerPages(Integer.parseInt(paramMap.get("list.items.number_per_page")));
+            config.setListItemNumPerPages(Integer.parseInt(paramMap.getAsString("list.items.number_per_page")));
         }
         if (paramMap.containsKey("list.item.content.include_fields")) {
-            config.setListContentIncludeFields(paramMap.get("list.item.content.include_fields"));
+            config.setListContentIncludeFields(paramMap.getAsString("list.item.content.include_fields"));
         }
         if (paramMap.containsKey("list.item.content.exclude_fields")) {
-            config.setListContentExcludeFields(paramMap.get("list.item.content.exclude_fields"));
+            config.setListContentExcludeFields(paramMap.getAsString("list.item.content.exclude_fields"));
         }
         if (paramMap.containsKey("list.is_sub_page")) {
-            config.setSubPage(Boolean.parseBoolean(paramMap.get("list.is_sub_page")));
+            config.setSubPage(Boolean.parseBoolean(paramMap.getAsString("list.is_sub_page")));
         }
         if (paramMap.containsKey("http.connection_timeout")) {
-            config.setConnectionTimeout(Integer.parseInt(paramMap.get("http.connection_timeout")));
+            config.setConnectionTimeout(Integer.parseInt(paramMap.getAsString("http.connection_timeout")));
         }
         if (paramMap.containsKey("http.socket_timeout")) {
-            config.setSocketTimeout(Integer.parseInt(paramMap.get("http.socket_timeout")));
+            config.setSocketTimeout(Integer.parseInt(paramMap.getAsString("http.socket_timeout")));
         }
         if (paramMap.containsKey("sp.version")) {
-            config.setSharePointVersion(paramMap.get("sp.version"));
+            config.setSharePointVersion(paramMap.getAsString("sp.version"));
         }
         if (paramMap.containsKey("retry_limit")) {
-            config.setRetryLimit(Integer.parseInt(paramMap.get("retry_limit")));
+            config.setRetryLimit(Integer.parseInt(paramMap.getAsString("retry_limit")));
         }
         if (paramMap.containsKey("role.skip")) {
-            config.setSkipRole(Boolean.parseBoolean(paramMap.get("role.skip")));
+            config.setSkipRole(Boolean.parseBoolean(paramMap.getAsString("role.skip")));
         }
         return new SharePointCrawler(config);
     }

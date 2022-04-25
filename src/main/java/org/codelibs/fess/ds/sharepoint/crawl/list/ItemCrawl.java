@@ -32,6 +32,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
@@ -63,6 +64,7 @@ public class ItemCrawl extends SharePointCrawl {
         final List<String> exList = new ArrayList<>(excludeFields);
         exList.addAll(EXCLUDE_FIELDS);
         this.excludeFields = exList;
+        statsKey = new StatsKeyObject("item#" + listName + ":" + itemId);
     }
 
     @Override

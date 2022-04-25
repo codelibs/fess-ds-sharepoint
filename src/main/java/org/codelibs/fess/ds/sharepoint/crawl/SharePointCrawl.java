@@ -26,21 +26,21 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.util.ComponentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public abstract class SharePointCrawl {
-    private final Logger logger = LoggerFactory.getLogger(SharePointCrawl.class);
 
     protected final SharePointClient client;
 
-    public SharePointCrawl(final SharePointClient client) {
+    protected StatsKeyObject statsKey;
+
+    protected SharePointCrawl(final SharePointClient client) {
         this.client = client;
     }
 
-    abstract public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue);
+    public abstract Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue);
 
     protected List<String> getItemRoles(final String listId, final String itemId,
             final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean skipRole) {
@@ -98,5 +98,9 @@ public abstract class SharePointCrawl {
     protected String buildDigest(final String content) {
         final int maxLength = ComponentUtil.getFessConfig().getCrawlerDocumentFileMaxDigestLengthAsInteger();
         return StringUtils.abbreviate(content, maxLength);
+    }
+
+    public StatsKeyObject getStatsKey() {
+        return statsKey;
     }
 }
