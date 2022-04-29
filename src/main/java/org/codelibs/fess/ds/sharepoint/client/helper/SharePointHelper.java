@@ -75,7 +75,7 @@ public class SharePointHelper {
             final URL url = new URL(client.getSiteUrl());
             return url.getHost();
         } catch (final MalformedURLException e) {
-            logger.warn("Failed to parser url. " + client.getSiteUrl(), e);
+            logger.warn("Failed to parser url: {}", client.getSiteUrl(), e);
             return client.getSiteUrl();
         }
     }
