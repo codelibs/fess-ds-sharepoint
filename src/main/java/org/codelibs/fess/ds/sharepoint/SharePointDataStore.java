@@ -56,7 +56,7 @@ public class SharePointDataStore extends AbstractDataStore {
         boolean running = true;
         while (running && crawler.hasCrawlTarget()) {
             try {
-                final Pair<Map<String, Object>, StatsKeyObject> result = crawler.doCrawl();
+                final Pair<Map<String, Object>, StatsKeyObject> result = crawler.doCrawl(dataConfig);
                 if (logger.isDebugEnabled()) {
                     logger.debug("result: {}", result);
                 }

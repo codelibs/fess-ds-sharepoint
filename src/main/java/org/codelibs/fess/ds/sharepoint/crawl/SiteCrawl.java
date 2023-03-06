@@ -29,6 +29,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRo
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
+import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,7 +50,7 @@ public class SiteCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling Site] [siteName:{}]", config.getSiteName());
         }

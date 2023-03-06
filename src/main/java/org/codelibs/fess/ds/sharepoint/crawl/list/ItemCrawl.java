@@ -32,6 +32,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
+import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
@@ -68,7 +69,7 @@ public class ItemCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling ListItem] [listName:{}] [itemId:{}]", listName, itemId);
         }

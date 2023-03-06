@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
+import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.util.ComponentUtil;
@@ -40,7 +41,7 @@ public abstract class SharePointCrawl {
         this.client = client;
     }
 
-    public abstract Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue);
+    public abstract Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue);
 
     protected List<String> getItemRoles(final String listId, final String itemId,
             final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean skipRole) {

@@ -30,6 +30,7 @@ import org.codelibs.fess.crawler.helper.MimeTypeHelper;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
+import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.helper.FileTypeHelper;
@@ -51,7 +52,7 @@ public class FileCrawl extends SharePointCrawl {
     private final String listName;
     private final Map<String, String> additionalProperties = new HashMap<>();
 
-    private final String defaultExtractorName = "tikaExtractor";
+    private static final String DEFAULT_EXTRACTOR_NAME = "tikaExtractor";
 
     public FileCrawl(final SharePointClient client, final String fileName, final String webUrl, final String serverRelativeUrl,
             final Date created, final Date modified, final List<String> roles, final Map<String, String> listValues,
@@ -73,19 +74,19 @@ public class FileCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling File] [serverRelativeUrl:{}]", serverRelativeUrl);
         }
 
         try (GetFileResponse getFileResponse = client.api().file().getFile().setServerRelativeUrl(serverRelativeUrl).execute()) {
-            return buildDataMap(getFileResponse);
+            return buildDataMap(dataConfig, getFileResponse);
         } catch (final IOException e) {
             throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to file: " + fileName, e);
         }
     }
 
-    private Map<String, Object> buildDataMap(final GetFileResponse response) throws IOException {
+    private Map<String, Object> buildDataMap(final DataConfig dataConfig, final GetFileResponse response) throws IOException {
         final InputStream is = response.getFileContent();
         final String mimeType = getMimeType(fileName, is);
         final String fileType = getFileType(mimeType);
@@ -128,25 +129,19 @@ public class FileCrawl extends SharePointCrawl {
         final StringBuilder content = new StringBuilder(1000);
 
         try {
-            Extractor extractor = ComponentUtil.getExtractorFactory().getExtractor(mimeType);
-            if (extractor == null) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("use a defautl extractor as {} by {}", defaultExtractorName, mimeType);
-                }
-                extractor = ComponentUtil.getComponent(defaultExtractorName);
-            }
-            final String fileText = extractor.getText(is, null).getContent();
+            final String fileText = ComponentUtil.getExtractorFactory().builder(is, null).extractorName(DEFAULT_EXTRACTOR_NAME)
+                    .mimeType(mimeType).extract().getContent();
             if (StringUtils.isNotBlank(fileText)) {
-                content.append(fileText).append(' ');
+                content.append(fileText);
             }
         } catch (final Exception e) {
             throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to get contents: " + fileName, e);
         }
         if (listValues.containsKey("Description") && StringUtils.isNotBlank(listValues.get("Description"))) {
-            content.append(listValues.get("Description")).append(' ');
+            content.append(' ').append(listValues.get("Description"));
         }
         if (listValues.containsKey("Keywords") && StringUtils.isNotBlank(listValues.get("Keywords"))) {
-            content.append(listValues.get("Keywords")).append(' ');
+            content.append(' ').append(listValues.get("Keywords"));
         }
         return content.toString();
     }

@@ -33,6 +33,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRo
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
+import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,7 +56,7 @@ public class FolderCrawl extends SharePointCrawl {
     }
 
     @Override
-    public Map<String, Object> doCrawl(final Queue<SharePointCrawl> crawlingQueue) {
+    public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling DocLib Folder] serverRelativeUrl:{}", serverRelativeUrl);
         }

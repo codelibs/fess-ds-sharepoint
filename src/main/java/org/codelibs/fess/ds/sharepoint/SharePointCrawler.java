@@ -39,6 +39,7 @@ import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.SiteCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
+import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
@@ -117,7 +118,7 @@ public class SharePointCrawler {
         return !crawlingQueue.isEmpty();
     }
 
-    public Pair<Map<String, Object>, StatsKeyObject> doCrawl() {
+    public Pair<Map<String, Object>, StatsKeyObject> doCrawl(final DataConfig dataConfig) {
         final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
         while (!crawlingQueue.isEmpty()) {
             final SharePointCrawl crawl = crawlingQueue.poll();
@@ -129,7 +130,7 @@ public class SharePointCrawler {
             int retryCount = 0;
             while (retryCount <= config.getRetryLimit()) {
                 try {
-                    final Map<String, Object> dataMap = crawl.doCrawl(crawlingQueue);
+                    final Map<String, Object> dataMap = crawl.doCrawl(dataConfig, crawlingQueue);
                     crawlerStatsHelper.record(statsKey, StatsAction.ACCESSED);
                     if (dataMap != null) {
                         return new Pair<>(dataMap, statsKey);
