@@ -25,7 +25,6 @@ import java.util.Queue;
 
 import org.apache.commons.lang3.StringUtils;
 import org.codelibs.core.lang.StringUtil;
-import org.codelibs.fess.crawler.extractor.Extractor;
 import org.codelibs.fess.crawler.helper.MimeTypeHelper;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
@@ -135,7 +134,14 @@ public class FileCrawl extends SharePointCrawl {
                 content.append(fileText);
             }
         } catch (final Exception e) {
-            throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to get contents: " + fileName, e);
+            if (!ComponentUtil.getFessConfig().isCrawlerIgnoreContentException()) {
+                throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to get contents: " + fileName, e);
+            }
+            if (logger.isDebugEnabled()) {
+                logger.warn("Could not get a text.", e);
+            } else {
+                logger.warn("Could not get a text. {}", e.getMessage());
+            }
         }
         if (listValues.containsKey("Description") && StringUtils.isNotBlank(listValues.get("Description"))) {
             content.append(' ').append(listValues.get("Description"));
