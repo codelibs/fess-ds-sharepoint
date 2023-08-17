@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 public class GetFiles extends SharePointApi<GetFilesResponse> {
     private static final Logger logger = LoggerFactory.getLogger(GetFiles.class);
 
-    private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')/Files";
+    private static final String API_PATH = "_api/web/GetFolderByServerRelativePath(decodedUrl='{{url}}')/Files";
     private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
 
     private String serverRelativeUrl = null;

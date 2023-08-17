@@ -26,7 +26,7 @@ import org.slf4j.LoggerFactory;
 public class GetFolder extends SharePointApi<GetFolderResponse> {
     private static final Logger logger = LoggerFactory.getLogger(GetFolder.class);
 
-    private static final String API_PATH = "_api/web/GetFolderByServerRelativeUrl('{{url}}')";
+    private static final String API_PATH = "_api/web/GetFolderByServerRelativePath(decodedUrl='{{url}}')";
 
     private String serverRelativeUrl = null;
 

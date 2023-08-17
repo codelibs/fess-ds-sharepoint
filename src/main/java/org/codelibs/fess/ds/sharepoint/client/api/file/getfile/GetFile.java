@@ -67,6 +67,6 @@ public class GetFile extends SharePointApi<GetFileResponse> {
     }
 
     protected String buildUrl() {
-        return siteUrl + "/_api/web/GetFileByServerRelativeUrl('" + encodeRelativeUrl(serverRelativeUrl) + "')/$value";
+        return siteUrl + "/_api/web/GetFileByServerRelativePath(decodedUrl='" + encodeRelativeUrl(serverRelativeUrl) + "')/$value";
     }
 }
