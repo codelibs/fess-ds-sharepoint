@@ -23,8 +23,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import javax.validation.ValidationException;
-
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.config.RequestConfig;
 import org.codelibs.core.misc.Pair;
@@ -47,6 +45,8 @@ import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import jakarta.validation.ValidationException;
 
 public class SharePointCrawler {
     private static final Logger logger = LoggerFactory.getLogger(SharePointCrawler.class);
