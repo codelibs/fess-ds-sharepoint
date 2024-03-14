@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Queue;
 
 import org.apache.commons.lang3.StringUtils;
+import org.codelibs.core.exception.IORuntimeException;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.crawler.helper.MimeTypeHelper;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
@@ -86,10 +87,9 @@ public class FileCrawl extends SharePointCrawl {
     }
 
     private Map<String, Object> buildDataMap(final DataConfig dataConfig, final GetFileResponse response) throws IOException {
-        final InputStream is = response.getFileContent();
-        final String mimeType = getMimeType(fileName, is);
+        final String mimeType = getMimeType(fileName, response);
         final String fileType = getFileType(mimeType);
-        final String content = getContent(is, mimeType);
+        final String content = getContent(response, mimeType);
 
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
         final Map<String, Object> dataMap = new HashMap<>();
@@ -124,10 +124,10 @@ public class FileCrawl extends SharePointCrawl {
         return dataMap;
     }
 
-    private String getContent(final InputStream is, final String mimeType) {
+    private String getContent(final GetFileResponse response, final String mimeType) {
         final StringBuilder content = new StringBuilder(1000);
 
-        try {
+        try (final InputStream is = response.getFileContent()) {
             final String fileText = ComponentUtil.getExtractorFactory().builder(is, null).extractorName(DEFAULT_EXTRACTOR_NAME)
                     .mimeType(mimeType).extract().getContent();
             if (StringUtils.isNotBlank(fileText)) {
@@ -152,9 +152,13 @@ public class FileCrawl extends SharePointCrawl {
         return content.toString();
     }
 
-    protected String getMimeType(final String filename, final InputStream is) {
-        final MimeTypeHelper mimeTypeHelper = ComponentUtil.getComponent(MimeTypeHelper.class);
-        return mimeTypeHelper.getContentType(is, filename);
+    protected String getMimeType(final String filename, final GetFileResponse response) {
+        try (final InputStream is = response.getFileContent()) {
+            final MimeTypeHelper mimeTypeHelper = ComponentUtil.getComponent(MimeTypeHelper.class);
+            return mimeTypeHelper.getContentType(is, filename);
+        } catch (final IOException e) {
+            throw new IORuntimeException(e);
+        }
     }
 
     protected String getFileType(final String mimeType) {
