@@ -4,7 +4,7 @@
 	<artifactId>fess-ds-sharepoint</artifactId>
 	<packaging>jar</packaging>
 	<name>Sharepoint Data Store</name>
-	<version>14.9.1</version>
+	<version>14.9.2-SNAPSHOT</version>
 	<scm>
 		<connection>scm:git:git@github.com:codelibs/fess-ds-sharepoint.git</connection>
 		<developerConnection>scm:git:git@github.com:codelibs/fess-ds-sharepoint.git</developerConnection>
