@@ -17,14 +17,14 @@ package org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GetFolders extends SharePointApi<GetFoldersResponse> {
-    private static final Logger logger = LoggerFactory.getLogger(GetFolders.class);
+    private static final Logger logger = LogManager.getLogger(GetFolders.class);
 
     private static final String API_PATH = "_api/web/GetFolderByServerRelativePath(decodedUrl='{{url}}')/Folders";
     private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";

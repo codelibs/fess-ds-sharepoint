@@ -24,16 +24,16 @@ import java.util.Map;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GetListItems extends SharePointApi<GetListItemsResponse> {
-    private static final Logger logger = LoggerFactory.getLogger(GetListItems.class);
+    private static final Logger logger = LogManager.getLogger(GetListItems.class);
 
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Items";
     private static final String PAGING_PARAM = "%24top={{num}}&%24skiptoken=Paged=TRUE%26p_ID={{start}}";

@@ -33,20 +33,20 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.core.stream.StreamUtil;
 import org.codelibs.fess.crawler.Constants;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.xml.sax.helpers.DefaultHandler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public abstract class SharePointApi<T extends SharePointApiResponse> {
-    private static final Logger logger = LoggerFactory.getLogger(SharePointApi.class);
+    private static final Logger logger = LogManager.getLogger(SharePointApi.class);
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 

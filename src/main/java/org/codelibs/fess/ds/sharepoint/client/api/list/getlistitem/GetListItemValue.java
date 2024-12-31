@@ -17,14 +17,14 @@ package org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GetListItemValue extends SharePointApi<GetListItemValueResponse> {
-    private static final Logger logger = LoggerFactory.getLogger(GetListItemValue.class);
+    private static final Logger logger = LogManager.getLogger(GetListItemValue.class);
 
     private String listId = null;
     private String itemId = null;

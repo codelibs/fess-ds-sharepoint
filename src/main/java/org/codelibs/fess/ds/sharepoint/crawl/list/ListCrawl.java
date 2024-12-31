@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
@@ -28,11 +30,9 @@ import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerExceptio
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ListCrawl extends SharePointCrawl {
-    private static final Logger logger = LoggerFactory.getLogger(ListCrawl.class);
+    private static final Logger logger = LogManager.getLogger(ListCrawl.class);
 
     private final String id;
     private final String listName;

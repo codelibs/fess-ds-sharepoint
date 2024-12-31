@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.Queue;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
@@ -36,11 +38,9 @@ import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ItemCrawl extends SharePointCrawl {
-    private static final Logger logger = LoggerFactory.getLogger(ItemCrawl.class);
+    private static final Logger logger = LogManager.getLogger(ItemCrawl.class);
 
     private static final String ITEM_VALUE_PREFIX = "val_";
     private final boolean showFieldNameAtContent = false;

@@ -27,6 +27,8 @@ import javax.validation.ValidationException;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.misc.Pair;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
@@ -45,11 +47,9 @@ import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.util.ComponentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class SharePointCrawler {
-    private static final Logger logger = LoggerFactory.getLogger(SharePointCrawler.class);
+    private static final Logger logger = LogManager.getLogger(SharePointCrawler.class);
 
     private final SharePointClient client;
 

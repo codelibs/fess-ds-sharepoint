@@ -22,15 +22,15 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 import org.codelibs.fess.util.DocumentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GetFilesResponse implements SharePointApiResponse {
-    private static final Logger logger = LoggerFactory.getLogger(GetFilesResponse.class);
+    private static final Logger logger = LogManager.getLogger(GetFilesResponse.class);
 
     protected final List<DocLibFile> files = new ArrayList<>();
 

@@ -24,6 +24,8 @@ import java.util.Map;
 import java.util.Queue;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.exception.IORuntimeException;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.crawler.helper.MimeTypeHelper;
@@ -36,11 +38,9 @@ import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.helper.FileTypeHelper;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class FileCrawl extends SharePointCrawl {
-    private static final Logger logger = LoggerFactory.getLogger(FileCrawl.class);
+    private static final Logger logger = LogManager.getLogger(FileCrawl.class);
 
     private final String fileName;
     private final String webUrl;

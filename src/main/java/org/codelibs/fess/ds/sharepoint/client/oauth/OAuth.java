@@ -29,14 +29,14 @@ import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class OAuth {
-    private static final Logger logger = LoggerFactory.getLogger(OAuth.class);
+    private static final Logger logger = LogManager.getLogger(OAuth.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String ACCESS_CTL_URL = "https://accounts.accesscontrol.windows.net/";

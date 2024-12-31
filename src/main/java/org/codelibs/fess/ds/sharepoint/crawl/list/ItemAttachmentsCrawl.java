@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
@@ -32,11 +34,9 @@ import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ItemAttachmentsCrawl extends SharePointCrawl {
-    private static final Logger logger = LoggerFactory.getLogger(ItemAttachmentsCrawl.class);
+    private static final Logger logger = LogManager.getLogger(ItemAttachmentsCrawl.class);
 
     private final String listId;
     private final String listName;

@@ -20,13 +20,13 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class SharePointHelper {
-    private static final Logger logger = LoggerFactory.getLogger(SharePointHelper.class);
+    private static final Logger logger = LogManager.getLogger(SharePointHelper.class);
 
     private final SharePointClient client;
 

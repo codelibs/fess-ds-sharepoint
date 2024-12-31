@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.SharePointCrawler;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFoldersResponse;
@@ -31,11 +33,9 @@ import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class SiteCrawl extends SharePointCrawl {
-    private static final Logger logger = LoggerFactory.getLogger(SiteCrawl.class);
+    private static final Logger logger = LogManager.getLogger(SiteCrawl.class);
 
     private final SharePointCrawler.CrawlerConfig config;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;

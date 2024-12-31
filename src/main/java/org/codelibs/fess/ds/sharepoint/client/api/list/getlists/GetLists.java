@@ -21,14 +21,14 @@ import java.util.Map;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GetLists extends SharePointApi<GetListsResponse> {
-    private static final Logger logger = LoggerFactory.getLogger(GetLists.class);
+    private static final Logger logger = LogManager.getLogger(GetLists.class);
 
     private static final String API_PATH = "_api/lists";
 

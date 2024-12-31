@@ -19,15 +19,15 @@ import java.util.Map;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> {
-    private static final Logger logger = LoggerFactory.getLogger(GetDoclibListItem.class);
+    private static final Logger logger = LogManager.getLogger(GetDoclibListItem.class);
 
     private String serverRelativeUrl = null;
 
