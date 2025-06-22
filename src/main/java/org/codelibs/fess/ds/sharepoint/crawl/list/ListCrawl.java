@@ -28,8 +28,8 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
-import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
+import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 
 public class ListCrawl extends SharePointCrawl {
     private static final Logger logger = LogManager.getLogger(ListCrawl.class);

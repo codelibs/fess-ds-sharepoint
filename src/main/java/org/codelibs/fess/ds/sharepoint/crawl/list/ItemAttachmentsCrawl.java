@@ -32,8 +32,8 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResp
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachmentsResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
-import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
+import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 
 public class ItemAttachmentsCrawl extends SharePointCrawl {
     private static final Logger logger = LogManager.getLogger(ItemAttachmentsCrawl.class);
