@@ -18,12 +18,32 @@ package org.codelibs.fess.ds.sharepoint.client.credential;
 import org.apache.http.auth.Credentials;
 import org.apache.http.auth.NTCredentials;
 
+/**
+ * NTLM authentication credential implementation for SharePoint authentication.
+ * This class encapsulates NTLM authentication parameters including username,
+ * password, hostname, and domain information required for Windows authentication.
+ *
+ * @see SharePointCredential
+ * @see NTCredentials
+ */
 public class NtlmCredential implements SharePointCredential {
+    /** The username for NTLM authentication */
     private final String user;
+    /** The password for NTLM authentication */
     private final String password;
+    /** The hostname for NTLM authentication */
     private final String hostName;
+    /** The domain for NTLM authentication */
     private final String domain;
 
+    /**
+     * Constructs a new NtlmCredential instance.
+     *
+     * @param user the username for NTLM authentication
+     * @param password the password for NTLM authentication
+     * @param hostName the hostname for NTLM authentication
+     * @param domain the domain for NTLM authentication
+     */
     public NtlmCredential(final String user, final String password, final String hostName, final String domain) {
         this.user = user;
         this.password = password;
@@ -31,6 +51,11 @@ public class NtlmCredential implements SharePointCredential {
         this.domain = domain;
     }
 
+    /**
+     * Gets the NTLM credentials for SharePoint authentication.
+     *
+     * @return NTCredentials instance configured with the provided authentication parameters
+     */
     @Override
     public Credentials getCredential() {
         return new NTCredentials(user, password, hostName, domain);

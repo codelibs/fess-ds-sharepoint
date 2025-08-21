@@ -21,6 +21,10 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
+/**
+ * SharePoint 2013 implementation for retrieving list forms.
+ * This class extends GetForms to provide SharePoint 2013-specific XML-based API functionality.
+ */
 public class GetForms2013 extends GetForms {
     private static final String API_PATH = "_api/Web/Lists(guid'{{id}}')/Forms";
     private static final String GETBYTITLE_API_PATH = "_api/lists/getbytitle('{{list_name}}')/Forms";
@@ -28,6 +32,13 @@ public class GetForms2013 extends GetForms {
     private String listId = null;
     private String listName = null;
 
+    /**
+     * Constructs a new GetForms2013 instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication object
+     */
     public GetForms2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }

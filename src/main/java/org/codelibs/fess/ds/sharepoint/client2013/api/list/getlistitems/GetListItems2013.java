@@ -35,6 +35,11 @@ import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013 specific implementation for retrieving list items.
+ * This class extends the base GetListItems functionality with XML-based communication
+ * suitable for SharePoint 2013 environments.
+ */
 public class GetListItems2013 extends GetListItems {
     private static final Logger logger = LogManager.getLogger(GetListItems2013.class);
 
@@ -49,10 +54,24 @@ public class GetListItems2013 extends GetListItems {
     private int start = 0;
     private boolean isSubPage = false;
 
+    /**
+     * Constructs a new GetListItems2013 instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication handler
+     */
     public GetListItems2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Executes the request to retrieve list items from SharePoint 2013.
+     * Uses XML-based communication instead of JSON.
+     *
+     * @return the response containing the list items
+     * @throws SharePointClientException if the listId is not set or if the request fails
+     */
     @Override
     public GetListItems2013Response execute() {
         if (listId == null && listName == null) {
@@ -71,30 +90,61 @@ public class GetListItems2013 extends GetListItems {
         return buildResponse(xmlResponse);
     }
 
+    /**
+     * Sets the list ID for the SharePoint list to query.
+     *
+     * @param listId the unique identifier of the SharePoint list
+     * @return this instance for method chaining
+     */
     @Override
     public GetListItems2013 setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
+    /**
+     * Sets the maximum number of items to retrieve per request.
+     *
+     * @param num the maximum number of items (default is 100)
+     * @return this instance for method chaining
+     */
     @Override
     public GetListItems2013 setNum(final int num) {
         this.num = num;
         return this;
     }
 
+    /**
+     * Sets the starting index for pagination.
+     *
+     * @param start the starting index for retrieving items
+     * @return this instance for method chaining
+     */
     @Override
     public GetListItems2013 setStart(final int start) {
         this.start = start;
         return this;
     }
 
+    /**
+     * Sets whether this request is for a sub-page, which affects the field selection.
+     *
+     * @param subPage true if this is a sub-page request, false otherwise
+     * @return this instance for method chaining
+     */
     @Override
     public GetListItems2013 setSubPage(final boolean subPage) {
         isSubPage = subPage;
         return this;
     }
 
+    /**
+     * Builds the response object from the XML response received from SharePoint 2013.
+     *
+     * @param xmlResponse the XML response from the SharePoint API
+     * @return the parsed response containing list items
+     * @throws SharePointClientException if parsing fails
+     */
     private GetListItems2013Response buildResponse(final XmlResponse xmlResponse) {
         final GetListItemsDocHandler handler = new GetListItemsDocHandler();
         xmlResponse.parseXml(handler);
@@ -142,6 +192,10 @@ public class GetListItems2013 extends GetListItems {
         return new GetListItems2013Response(listItems);
     }
 
+    /**
+     * SAX document handler for parsing SharePoint 2013 XML responses.
+     * Extracts list item data from the XML structure.
+     */
     private static class GetListItemsDocHandler extends DefaultHandler {
         private final Map<String, Object> dataMap = new HashMap<>();
         private Map<String, Object> resultMap = null;
@@ -150,12 +204,23 @@ public class GetListItems2013 extends GetListItems {
 
         private final StringBuilder buffer = new StringBuilder(1000);
 
+        /**
+         * Initializes the data map when starting document parsing.
+         */
         @Override
         public void startDocument() {
             dataMap.clear();
             dataMap.put("value", new ArrayList<>());
         }
 
+        /**
+         * Handles the start of XML elements during parsing.
+         *
+         * @param uri the namespace URI
+         * @param localName the local name
+         * @param qName the qualified name
+         * @param attributes the element attributes
+         */
         @Override
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("entry".equals(qName)) {
@@ -183,6 +248,13 @@ public class GetListItems2013 extends GetListItems {
             }
         }
 
+        /**
+         * Handles character data within XML elements.
+         *
+         * @param ch the character array
+         * @param offset the start offset in the array
+         * @param length the number of characters to read
+         */
         @Override
         public void characters(final char[] ch, final int offset, final int length) {
             if (fieldName != null) {
@@ -190,6 +262,13 @@ public class GetListItems2013 extends GetListItems {
             }
         }
 
+        /**
+         * Handles the end of XML elements during parsing.
+         *
+         * @param uri the namespace URI
+         * @param localName the local name
+         * @param qName the qualified name
+         */
         @Override
         @SuppressWarnings("unchecked")
         public void endElement(final String uri, final String localName, final String qName) {
@@ -206,11 +285,19 @@ public class GetListItems2013 extends GetListItems {
             }
         }
 
+        /**
+         * Called when document parsing is complete.
+         */
         @Override
         public void endDocument() {
             // nothing
         }
 
+        /**
+         * Returns the parsed data map containing list items.
+         *
+         * @return the data map with parsed content
+         */
         public Map<String, Object> getDataMap() {
             return dataMap;
         }

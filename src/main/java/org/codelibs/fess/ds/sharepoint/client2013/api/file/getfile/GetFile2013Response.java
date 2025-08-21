@@ -18,7 +18,17 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.file.getfile;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
 
+/**
+ * SharePoint 2013 specific response wrapper for file download operations.
+ * This class extends the base GetFileResponse functionality with any
+ * SharePoint 2013 specific handling requirements.
+ */
 public class GetFile2013Response extends GetFileResponse {
+    /**
+     * Constructs a new GetFile2013Response.
+     *
+     * @param httpResponse the HTTP response from the SharePoint 2013 file download request
+     */
     public GetFile2013Response(final CloseableHttpResponse httpResponse) {
         super(httpResponse);
     }

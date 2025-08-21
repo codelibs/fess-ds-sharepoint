@@ -17,9 +17,36 @@ package org.codelibs.fess.ds.sharepoint.client.api.list;
 
 import java.util.Arrays;
 
+/**
+ * Enumeration representing different types of SharePoint pages.
+ */
 public enum PageType {
-    DEFAULT(0), DIALOG_VIEW(2), DISPLAY_FORM(4), DISPLAY_FORM_DIALOG(5), EDIT_FORM(6), EDIT_FORM_DIALOG(7), INVALID(-1), NEW_FORM(
-            8), NEW_FORM_DIALOG(9), NORMAL_VIEW(1), PAGE_MAXITEMS(11), SOLUTION_FORM(10), VIEW(3),;
+    /** Default page type. */
+    DEFAULT(0),
+    /** Dialog view page type. */
+    DIALOG_VIEW(2),
+    /** Display form page type. */
+    DISPLAY_FORM(4),
+    /** Display form dialog page type. */
+    DISPLAY_FORM_DIALOG(5),
+    /** Edit form page type. */
+    EDIT_FORM(6),
+    /** Edit form dialog page type. */
+    EDIT_FORM_DIALOG(7),
+    /** Invalid page type. */
+    INVALID(-1),
+    /** New form page type. */
+    NEW_FORM(8),
+    /** New form dialog page type. */
+    NEW_FORM_DIALOG(9),
+    /** Normal view page type. */
+    NORMAL_VIEW(1),
+    /** Page max items page type. */
+    PAGE_MAXITEMS(11),
+    /** Solution form page type. */
+    SOLUTION_FORM(10),
+    /** View page type. */
+    VIEW(3);
 
     private final int typeNumber;
 
@@ -27,10 +54,21 @@ public enum PageType {
         this.typeNumber = typeNumber;
     }
 
+    /**
+     * Gets the type number for this page type.
+     *
+     * @return the type number
+     */
     protected int getTypeNumber() {
         return typeNumber;
     }
 
+    /**
+     * Gets the PageType enum for the given type number.
+     *
+     * @param type the type number
+     * @return the corresponding PageType, or INVALID if not found
+     */
     public static PageType getPageType(final int type) {
         return Arrays.stream(PageType.values()).filter(value -> value.typeNumber == type).findFirst().orElse(INVALID);
     }

@@ -27,11 +27,21 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
 
+/**
+ * API class for retrieving SharePoint lists.
+ */
 public class GetLists extends SharePointApi<GetListsResponse> {
     private static final Logger logger = LogManager.getLogger(GetLists.class);
 
     private static final String API_PATH = "_api/lists";
 
+    /**
+     * Constructor.
+     *
+     * @param client HTTP client
+     * @param siteUrl SharePoint site URL
+     * @param oAuth OAuth authentication
+     */
     public GetLists(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }

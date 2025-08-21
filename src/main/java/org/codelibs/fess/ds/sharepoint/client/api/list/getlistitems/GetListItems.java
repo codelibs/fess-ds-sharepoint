@@ -32,6 +32,10 @@ import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientExceptio
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
 
+/**
+ * API class for retrieving list items from SharePoint.
+ * This class provides functionality to fetch items from SharePoint lists with pagination support.
+ */
 public class GetListItems extends SharePointApi<GetListItemsResponse> {
     private static final Logger logger = LogManager.getLogger(GetListItems.class);
 
@@ -46,10 +50,23 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
     private int start = 0;
     private boolean isSubPage = false;
 
+    /**
+     * Constructs a new GetListItems instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication handler
+     */
     public GetListItems(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Executes the request to retrieve list items from SharePoint.
+     *
+     * @return the response containing the list items
+     * @throws SharePointClientException if the listId is not set or if the request fails
+     */
     @Override
     public GetListItemsResponse execute() {
         if (listId == null && listName == null) {
@@ -72,26 +89,57 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
         return buildResponse(jsonResponse);
     }
 
+    /**
+     * Sets the list ID for the SharePoint list to query.
+     *
+     * @param listId the unique identifier of the SharePoint list
+     * @return this instance for method chaining
+     */
     public GetListItems setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
+    /**
+     * Sets the maximum number of items to retrieve per request.
+     *
+     * @param num the maximum number of items (default is 100)
+     * @return this instance for method chaining
+     */
     public GetListItems setNum(final int num) {
         this.num = num;
         return this;
     }
 
+    /**
+     * Sets the starting index for pagination.
+     *
+     * @param start the starting index for retrieving items
+     * @return this instance for method chaining
+     */
     public GetListItems setStart(final int start) {
         this.start = start;
         return this;
     }
 
+    /**
+     * Sets whether this request is for a sub-page, which affects the field selection.
+     *
+     * @param subPage true if this is a sub-page request, false otherwise
+     * @return this instance for method chaining
+     */
     public GetListItems setSubPage(final boolean subPage) {
         isSubPage = subPage;
         return this;
     }
 
+    /**
+     * Builds the response object from the JSON response received from SharePoint.
+     *
+     * @param jsonResponse the JSON response from the SharePoint API
+     * @return the parsed response containing list items
+     * @throws SharePointClientException if parsing fails
+     */
     @SuppressWarnings("unchecked")
     private GetListItemsResponse buildResponse(final JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();

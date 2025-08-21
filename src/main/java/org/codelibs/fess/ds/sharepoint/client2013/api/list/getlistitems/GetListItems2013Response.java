@@ -19,12 +19,26 @@ import java.util.List;
 
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
 
+/**
+ * SharePoint 2013 specific response class for GetListItems API.
+ * Extends the base GetListItemsResponse with SharePoint 2013 specific behavior.
+ */
 public class GetListItems2013Response extends GetListItemsResponse {
 
+    /**
+     * Constructs a new GetListItems2013Response with the provided list items.
+     *
+     * @param listItems the list of items retrieved from SharePoint 2013
+     */
     public GetListItems2013Response(final List<ListItem> listItems) {
         super(listItems);
     }
 
+    /**
+     * Returns the list of items retrieved from SharePoint 2013.
+     *
+     * @return the list of SharePoint list items
+     */
     @Override
     public List<ListItem> getListItems() {
         return listItems;

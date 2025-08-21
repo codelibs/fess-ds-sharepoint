@@ -25,20 +25,47 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
+/**
+ * SharePoint API client for downloading individual files from SharePoint.
+ * This class provides functionality to retrieve file content by server-relative URL
+ * using SharePoint's REST API.
+ */
 public class GetFile extends SharePointApi<GetFileResponse> {
+    /** Logger for this class. */
     private static final Logger logger = LogManager.getLogger(GetFile.class);
 
+    /** The server-relative URL of the file to download. */
     private String serverRelativeUrl = null;
 
+    /**
+     * Constructs a new GetFile API client.
+     *
+     * @param client the HTTP client to use for requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication provider
+     */
     public GetFile(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Sets the server-relative URL of the file to download.
+     *
+     * @param serverRelativeUrl the server-relative URL of the target file
+     * @return this instance for method chaining
+     */
     public GetFile setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
+    /**
+     * Executes the file download request to SharePoint.
+     *
+     * @return a GetFileResponse containing the downloaded file content
+     * @throws SharePointClientException if the server-relative URL is not set,
+     *         if the request fails, or if an error response is received
+     */
     @Override
     public GetFileResponse execute() {
         if (serverRelativeUrl == null) {
@@ -66,6 +93,11 @@ public class GetFile extends SharePointApi<GetFileResponse> {
         }
     }
 
+    /**
+     * Builds the SharePoint REST API URL for downloading a file by server-relative path.
+     *
+     * @return the complete API URL for the file download request
+     */
     protected String buildUrl() {
         return siteUrl + "/_api/web/GetFileByServerRelativePath(decodedUrl='" + encodeRelativeUrl(serverRelativeUrl) + "')/$value";
     }

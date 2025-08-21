@@ -21,10 +21,21 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAt
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
+/**
+ * SharePoint 2013 implementation for retrieving list item attachments.
+ * This class extends GetListItemAttachments to provide SharePoint 2013-specific XML-based API functionality.
+ */
 public class GetListItemAttachments2013 extends GetListItemAttachments {
     private String listId = null;
     private String itemId = null;
 
+    /**
+     * Constructs a new GetListItemAttachments2013 instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication object
+     */
     public GetListItemAttachments2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }

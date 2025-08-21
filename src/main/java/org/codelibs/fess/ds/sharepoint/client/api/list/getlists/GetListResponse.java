@@ -17,13 +17,26 @@ package org.codelibs.fess.ds.sharepoint.client.api.list.getlists;
 
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
+/**
+ * Response class for a single SharePoint list.
+ */
 public class GetListResponse implements SharePointApiResponse {
     private final GetListsResponse.SharePointList list;
 
+    /**
+     * Constructor.
+     *
+     * @param list the SharePoint list
+     */
     public GetListResponse(final GetListsResponse.SharePointList list) {
         this.list = list;
     }
 
+    /**
+     * Gets the SharePoint list.
+     *
+     * @return the SharePoint list
+     */
     public GetListsResponse.SharePointList getList() {
         return list;
     }

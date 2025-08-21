@@ -15,16 +15,38 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.exception;
 
+/**
+ * Exception thrown when SharePoint server returns an HTTP error status.
+ * This exception captures both the error message and the HTTP status code
+ * returned by the SharePoint server to help with debugging and error handling.
+ *
+ * <p>This exception typically indicates server-side issues such as
+ * authentication failures, permission denied, resource not found, or
+ * internal server errors.</p>
+ */
 public class SharePointServerException extends RuntimeException {
+    /** Serial version UID for serialization */
     private static final long serialVersionUID = 1L;
 
+    /** HTTP status code returned by the SharePoint server */
     private final int statusCode;
 
+    /**
+     * Constructs a new SharePointServerException with the specified message and status code.
+     *
+     * @param message the detail message explaining the server error
+     * @param statusCode the HTTP status code returned by the SharePoint server
+     */
     public SharePointServerException(final String message, final int statusCode) {
         super(message);
         this.statusCode = statusCode;
     }
 
+    /**
+     * Gets the HTTP status code returned by the SharePoint server.
+     *
+     * @return the HTTP status code
+     */
     public int getStatusCode() {
         return statusCode;
     }

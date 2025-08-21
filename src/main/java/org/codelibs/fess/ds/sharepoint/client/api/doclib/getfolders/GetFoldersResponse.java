@@ -23,13 +23,37 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
 
+/**
+ * Response class for GetFolders API that contains a list of folders
+ * retrieved from SharePoint document libraries.
+ */
 public class GetFoldersResponse implements SharePointApiResponse {
+    /** List of folder responses */
     private final List<GetFolderResponse> folders = new ArrayList<>();
 
+    /**
+     * Default constructor for GetFoldersResponse.
+     * Creates an empty response instance that can be populated with folder data.
+     */
+    public GetFoldersResponse() {
+        // Default constructor - no initialization needed beyond field declarations
+    }
+
+    /**
+     * Gets the list of folders retrieved from SharePoint.
+     *
+     * @return list of GetFolderResponse objects
+     */
     public List<GetFolderResponse> getFolders() {
         return folders;
     }
 
+    /**
+     * Builds a GetFoldersResponse from a JSON response.
+     *
+     * @param jsonResponse the JSON response from SharePoint API
+     * @return GetFoldersResponse instance containing parsed folder data
+     */
     public static GetFoldersResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")

@@ -32,13 +32,26 @@ import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013 implementation for retrieving a single list.
+ * This class extends GetList to provide SharePoint 2013-specific XML-based API functionality.
+ */
 public class GetList2013 extends GetList {
     private static final String API_BY_LIST_ID_PATH = "_api/web/lists(guid'{list_guid}')";
     private static final String API_BY_LIST_NAME_PATH = "_api/web/lists/GetByTitle('{list_name}')";
 
+    /** The GUID of the SharePoint list to retrieve. */
     protected String listId = null;
+    /** The name of the SharePoint list to retrieve. */
     protected String listName = null;
 
+    /**
+     * Constructs a new GetList2013 instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication object
+     */
     public GetList2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }

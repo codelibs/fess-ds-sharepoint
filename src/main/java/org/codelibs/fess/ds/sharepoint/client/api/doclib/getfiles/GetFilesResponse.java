@@ -29,15 +29,39 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 import org.codelibs.fess.util.DocumentUtil;
 
+/**
+ * Response class for SharePoint document library file retrieval operations.
+ * Contains a list of files retrieved from a SharePoint document library.
+ */
 public class GetFilesResponse implements SharePointApiResponse {
     private static final Logger logger = LogManager.getLogger(GetFilesResponse.class);
 
+    /** List of files retrieved from the SharePoint document library */
     protected final List<DocLibFile> files = new ArrayList<>();
 
+    /**
+     * Default constructor for GetFilesResponse.
+     * Creates an empty response instance that can be populated with file data.
+     */
+    public GetFilesResponse() {
+        // Default constructor - no initialization needed beyond field declarations
+    }
+
+    /**
+     * Gets the list of files retrieved from the SharePoint document library.
+     *
+     * @return list of document library files
+     */
     public List<DocLibFile> getFiles() {
         return files;
     }
 
+    /**
+     * Builds a GetFilesResponse from a JSON response received from SharePoint API.
+     *
+     * @param jsonResponse the JSON response from SharePoint API
+     * @return constructed GetFilesResponse containing parsed file information
+     */
     public static GetFilesResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")
@@ -52,6 +76,12 @@ public class GetFilesResponse implements SharePointApiResponse {
         return response;
     }
 
+    /**
+     * Creates a DocLibFile instance from SharePoint API data map.
+     *
+     * @param dataMap map containing file data from SharePoint API
+     * @return DocLibFile instance with populated file information
+     */
     protected static DocLibFile createDocLibFile(final Map<String, Object> dataMap) {
         final DocLibFile docLibFile = new DocLibFile();
         docLibFile.fileName = DocumentUtil.getValue(dataMap, "Name", String.class);
@@ -73,6 +103,9 @@ public class GetFilesResponse implements SharePointApiResponse {
         return docLibFile;
     }
 
+    /**
+     * Represents a file in a SharePoint document library with metadata.
+     */
     public static class DocLibFile {
         private String fileName;
         private String title;
@@ -80,22 +113,55 @@ public class GetFilesResponse implements SharePointApiResponse {
         private Date created;
         private Date modified;
 
+        /**
+         * Default constructor for DocLibFile.
+         * Creates an empty file instance that can be populated with file metadata.
+         */
+        public DocLibFile() {
+            // Default constructor - no initialization needed beyond field declarations
+        }
+
+        /**
+         * Gets the file name.
+         *
+         * @return the file name
+         */
         public String getFileName() {
             return fileName;
         }
 
+        /**
+         * Gets the file title.
+         *
+         * @return the file title
+         */
         public String getTitle() {
             return title;
         }
 
+        /**
+         * Gets the server relative URL of the file.
+         *
+         * @return the server relative URL
+         */
         public String getServerRelativeUrl() {
             return serverRelativeUrl;
         }
 
+        /**
+         * Gets the file creation date.
+         *
+         * @return the creation date
+         */
         public Date getCreated() {
             return created;
         }
 
+        /**
+         * Gets the file last modification date.
+         *
+         * @return the last modification date
+         */
         public Date getModified() {
             return modified;
         }

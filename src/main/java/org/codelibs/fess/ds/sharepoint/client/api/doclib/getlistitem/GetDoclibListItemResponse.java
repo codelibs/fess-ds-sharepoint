@@ -17,19 +17,41 @@ package org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem;
 
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
+/**
+ * Response object containing document library list item metadata retrieved from SharePoint.
+ * This response includes the list ID and item ID for a specific file or folder.
+ */
 public class GetDoclibListItemResponse implements SharePointApiResponse {
+    /** The unique identifier of the SharePoint list containing the item. */
     protected final String listId;
+    /** The unique identifier of the specific list item. */
     protected final String itemId;
 
+    /**
+     * Constructs a new GetDoclibListItemResponse with the specified list and item IDs.
+     *
+     * @param listId the unique identifier of the SharePoint list
+     * @param itemId the unique identifier of the list item
+     */
     public GetDoclibListItemResponse(final String listId, final String itemId) {
         this.listId = listId;
         this.itemId = itemId;
     }
 
+    /**
+     * Returns the unique identifier of the SharePoint list.
+     *
+     * @return the list ID
+     */
     public String getListId() {
         return listId;
     }
 
+    /**
+     * Returns the unique identifier of the list item.
+     *
+     * @return the item ID
+     */
     public String getItemId() {
         return itemId;
     }

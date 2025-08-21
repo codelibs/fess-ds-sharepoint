@@ -27,8 +27,34 @@ import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013-specific response object for folder information retrieved from document libraries.
+ * This class extends the base GetFolderResponse and provides XML parsing capabilities
+ * specific to SharePoint 2013's response format.
+ *
+ * <p>Unlike newer SharePoint versions that return JSON, SharePoint 2013 returns XML responses
+ * that require specialized parsing using SAX handlers.</p>
+ *
+ * @see GetFolderResponse
+ * @see GetFolder2013
+ */
 public class GetFolder2013Response extends GetFolderResponse {
 
+    /**
+     * Default constructor for GetFolder2013Response.
+     * Creates an empty response instance that can be populated with folder data.
+     */
+    public GetFolder2013Response() {
+        super();
+    }
+
+    /**
+     * Builds a GetFolder2013Response from an XML response.
+     * This method parses the XML using a custom SAX handler to extract folder data.
+     *
+     * @param xmlResponse the XML response from SharePoint 2013 API
+     * @return a new GetFolder2013Response instance populated with folder data
+     */
     public static GetFolder2013Response build(final SharePointApi.XmlResponse xmlResponse) {
         final GetFolderDocHandler handler = new GetFolderDocHandler();
         xmlResponse.parseXml(handler);
@@ -37,6 +63,15 @@ public class GetFolder2013Response extends GetFolderResponse {
 
     }
 
+    /**
+     * Builds a GetFolder2013Response from a map containing folder data.
+     * This method extracts folder properties specific to SharePoint 2013 format
+     * and creates a response object with parsed timestamps and metadata.
+     *
+     * @param dataMap the map containing folder data parsed from SharePoint 2013 XML
+     * @return a new GetFolder2013Response instance populated with the data
+     * @throws SharePointClientException if date parsing fails
+     */
     public static GetFolder2013Response build(final Map<String, Object> dataMap) {
 
         final GetFolder2013Response response = new GetFolder2013Response();
@@ -57,19 +92,37 @@ public class GetFolder2013Response extends GetFolderResponse {
         return response;
     }
 
+    /**
+     * SAX handler for parsing SharePoint 2013 XML responses containing folder information.
+     * This handler extracts folder properties from the XML structure and builds a data map.
+     */
     private static class GetFolderDocHandler extends DefaultHandler {
+        /** Map to store extracted folder data */
         private final Map<String, Object> dataMap = new HashMap<>();
 
+        /** Current field name being processed */
         private String fieldName;
 
+        /** Buffer for accumulating character data */
         private final StringBuilder buffer = new StringBuilder(1000);
 
+        /**
+         * Initializes the document parsing by clearing the data map and setting default values.
+         */
         @Override
         public void startDocument() {
             dataMap.clear();
             dataMap.put("Exists", true);
         }
 
+        /**
+         * Processes the start of an XML element and identifies folder properties to extract.
+         *
+         * @param uri the namespace URI
+         * @param localName the local name
+         * @param qName the qualified name
+         * @param attributes the element attributes
+         */
         @Override
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("id".equals(qName)) {
@@ -90,6 +143,13 @@ public class GetFolder2013Response extends GetFolderResponse {
             }
         }
 
+        /**
+         * Accumulates character data for the current field being processed.
+         *
+         * @param ch the character array
+         * @param offset the start offset in the array
+         * @param length the number of characters to use
+         */
         @Override
         public void characters(final char[] ch, final int offset, final int length) {
             if (fieldName != null) {
@@ -97,6 +157,13 @@ public class GetFolder2013Response extends GetFolderResponse {
             }
         }
 
+        /**
+         * Processes the end of an XML element and stores the accumulated field value.
+         *
+         * @param uri the namespace URI
+         * @param localName the local name
+         * @param qName the qualified name
+         */
         @Override
         public void endElement(final String uri, final String localName, final String qName) {
             if (fieldName != null) {
@@ -107,11 +174,19 @@ public class GetFolder2013Response extends GetFolderResponse {
             }
         }
 
+        /**
+         * Called when the document parsing is complete. No additional processing needed.
+         */
         @Override
         public void endDocument() {
             // nothing
         }
 
+        /**
+         * Gets the map containing all extracted folder data.
+         *
+         * @return the data map with folder properties
+         */
         public Map<String, Object> getDataMap() {
             return dataMap;
         }

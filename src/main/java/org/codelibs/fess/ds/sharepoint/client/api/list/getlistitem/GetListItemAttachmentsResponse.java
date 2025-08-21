@@ -22,9 +22,28 @@ import java.util.Map;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 
+/**
+ * Response object containing SharePoint list item attachments data.
+ * This class represents the response from the GetListItemAttachments API call and contains
+ * a list of attachment files associated with a specific list item.
+ */
 public class GetListItemAttachmentsResponse implements SharePointApiResponse {
+
+    /**
+     * Default constructor for GetListItemAttachmentsResponse.
+     */
+    public GetListItemAttachmentsResponse() {
+        // Default constructor
+    }
+
     private final List<AttachmentFile> files = new ArrayList<>();
 
+    /**
+     * Builds a GetListItemAttachmentsResponse from a JSON response.
+     *
+     * @param jsonResponse the JSON response from the SharePoint API
+     * @return a new GetListItemAttachmentsResponse instance populated with attachment data
+     */
     public static GetListItemAttachmentsResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final GetListItemAttachmentsResponse response = new GetListItemAttachmentsResponse();
 
@@ -41,6 +60,11 @@ public class GetListItemAttachmentsResponse implements SharePointApiResponse {
         return response;
     }
 
+    /**
+     * Gets the list of attachment files from the response.
+     *
+     * @return a list of AttachmentFile objects representing the SharePoint list item attachments
+     */
     public List<AttachmentFile> getFiles() {
         return files;
     }
@@ -57,19 +81,39 @@ public class GetListItemAttachmentsResponse implements SharePointApiResponse {
         return sb.toString();
     }
 
+    /**
+     * Represents a single attachment file in a SharePoint list item.
+     * Contains information about the file's name and server-relative URL.
+     */
     public static class AttachmentFile {
         private final String fileName;
         private final String serverRelativeUrl;
 
+        /**
+         * Constructs a new AttachmentFile instance.
+         *
+         * @param fileName the name of the attachment file
+         * @param serverRelativeUrl the server-relative URL of the attachment file
+         */
         public AttachmentFile(final String fileName, final String serverRelativeUrl) {
             this.fileName = fileName;
             this.serverRelativeUrl = serverRelativeUrl;
         }
 
+        /**
+         * Gets the file name.
+         *
+         * @return the name of the attachment file
+         */
         public String getFileName() {
             return fileName;
         }
 
+        /**
+         * Gets the server-relative URL of the attachment file.
+         *
+         * @return the server-relative URL of the attachment file
+         */
         public String getServerRelativeUrl() {
             return serverRelativeUrl;
         }
