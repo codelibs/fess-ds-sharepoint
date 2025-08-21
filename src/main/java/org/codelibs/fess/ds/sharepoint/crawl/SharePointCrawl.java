@@ -41,6 +41,13 @@ public abstract class SharePointCrawl {
         this.client = client;
     }
 
+    /**
+     * Performs the crawling operation for this SharePoint object.
+     *
+     * @param dataConfig the data configuration for the crawling operation
+     * @param crawlingQueue the queue to add additional crawling tasks to
+     * @return a map containing the crawled data
+     */
     public abstract Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue);
 
     protected List<String> getItemRoles(final String listId, final String itemId,

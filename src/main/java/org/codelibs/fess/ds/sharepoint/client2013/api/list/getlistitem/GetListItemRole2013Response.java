@@ -20,10 +20,17 @@ import java.util.List;
 
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 
+/**
+ * SharePoint 2013 response object for list item role assignments.
+ * This class extends GetListItemRoleResponse to handle XML-based responses from SharePoint 2013.
+ */
 public class GetListItemRole2013Response extends GetListItemRoleResponse {
     private final List<SharePointGroup> sharePointGroups = new ArrayList<>();
     private final List<User> users = new ArrayList<>();
 
+    /**
+     * Constructs a new GetListItemRole2013Response.
+     */
     public GetListItemRole2013Response() {
     }
 

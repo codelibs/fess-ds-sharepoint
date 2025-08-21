@@ -15,24 +15,61 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.exception;
 
+/**
+ * General exception thrown by SharePoint client operations.
+ * This exception is used to wrap various errors that can occur during
+ * SharePoint API interactions, including network issues, authentication failures,
+ * and API response parsing errors.
+ *
+ * <p>This is a runtime exception that indicates a problem with SharePoint
+ * client operations that typically cannot be recovered from at runtime.</p>
+ */
 public class SharePointClientException extends RuntimeException {
+    /** Serial version UID for serialization */
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Constructs a new SharePointClientException with no detail message.
+     */
     public SharePointClientException() {
     }
 
+    /**
+     * Constructs a new SharePointClientException with the specified detail message.
+     *
+     * @param message the detail message explaining the cause of the exception
+     */
     public SharePointClientException(final String message) {
         super(message);
     }
 
+    /**
+     * Constructs a new SharePointClientException with the specified detail message and cause.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param cause the underlying cause of this exception
+     */
     public SharePointClientException(final String message, final Throwable cause) {
         super(message, cause);
     }
 
+    /**
+     * Constructs a new SharePointClientException with the specified cause.
+     *
+     * @param cause the underlying cause of this exception
+     */
     public SharePointClientException(final Throwable cause) {
         super(cause);
     }
 
+    /**
+     * Constructs a new SharePointClientException with the specified parameters.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param cause the underlying cause of this exception
+     * @param enableSuppression whether suppression should be enabled
+     * @param writableStackTrace whether the stack trace should be writable
+     */
     public SharePointClientException(final String message, final Throwable cause, final boolean enableSuppression,
             final boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);

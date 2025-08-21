@@ -38,6 +38,10 @@ import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 
+/**
+ * Crawling class for SharePoint document library folders.
+ * Recursively crawls folders and files within a SharePoint document library.
+ */
 public class FolderCrawl extends SharePointCrawl {
     private static final Logger logger = LogManager.getLogger(FolderCrawl.class);
     private static final int PAGE_SIZE = 100;
@@ -46,6 +50,14 @@ public class FolderCrawl extends SharePointCrawl {
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
     private final boolean skipRole;
 
+    /**
+     * Constructs a FolderCrawl instance for crawling a SharePoint document library folder.
+     *
+     * @param client the SharePoint client for API communication
+     * @param serverRelativeUrl the server-relative URL of the folder to crawl
+     * @param skipRole whether to skip role/permission checking
+     * @param sharePointGroupCache cache for SharePoint group information
+     */
     public FolderCrawl(final SharePointClient client, final String serverRelativeUrl, final boolean skipRole,
             final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
         super(client);

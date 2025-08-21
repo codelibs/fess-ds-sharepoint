@@ -23,16 +23,34 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
+/**
+ * API class for retrieving SharePoint list item attachments.
+ * This class handles REST API calls to get attachment files associated with a specific list item.
+ */
 public class GetListItemAttachments extends SharePointApi<GetListItemAttachmentsResponse> {
     private static final Logger logger = LogManager.getLogger(GetListItemAttachments.class);
 
     private String listId = null;
     private String itemId = null;
 
+    /**
+     * Constructs a new GetListItemAttachments instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication object
+     */
     public GetListItemAttachments(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Sets the list ID and item ID for the attachments to retrieve.
+     *
+     * @param listId the GUID of the SharePoint list
+     * @param itemId the ID of the list item
+     * @return this GetListItemAttachments instance for method chaining
+     */
     public GetListItemAttachments setId(final String listId, final String itemId) {
         this.listId = listId;
         this.itemId = itemId;
@@ -57,6 +75,11 @@ public class GetListItemAttachments extends SharePointApi<GetListItemAttachments
         }
     }
 
+    /**
+     * Builds the URL for the attachment files API endpoint.
+     *
+     * @return the complete URL for retrieving attachment files
+     */
     protected String buildUrl() {
         return siteUrl + "/_api/Web/Lists(guid'" + listId + "')/Items(" + itemId + ")/AttachmentFiles";
     }

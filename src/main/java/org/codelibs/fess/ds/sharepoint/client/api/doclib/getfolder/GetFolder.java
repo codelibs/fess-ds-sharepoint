@@ -23,22 +23,54 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
+/**
+ * SharePoint API client for retrieving folder information from document libraries.
+ * This class provides functionality to get folder details including metadata,
+ * creation/modification dates, and item counts using SharePoint REST API.
+ *
+ * <p>Uses the GetFolderByServerRelativePath endpoint to retrieve folder information
+ * by server-relative URL path.</p>
+ *
+ * @see GetFolderResponse
+ * @see SharePointApi
+ */
 public class GetFolder extends SharePointApi<GetFolderResponse> {
     private static final Logger logger = LogManager.getLogger(GetFolder.class);
 
     private static final String API_PATH = "_api/web/GetFolderByServerRelativePath(decodedUrl='{{url}}')";
 
+    /** The server-relative URL of the folder to retrieve */
     private String serverRelativeUrl = null;
 
+    /**
+     * Constructs a new GetFolder API client.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the base URL of the SharePoint site
+     * @param oAuth the OAuth authentication provider
+     */
     public GetFolder(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Sets the server-relative URL of the folder to retrieve.
+     *
+     * @param serverRelativeUrl the server-relative path to the folder (e.g., "/sites/mysite/documents/myfolder")
+     * @return this instance for method chaining
+     */
     public GetFolder setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
+    /**
+     * Executes the get folder request and returns the folder information.
+     *
+     * @return the folder response containing folder metadata and properties
+     * @throws SharePointClientException if the server relative URL is not set,
+     *         if the HTTP request fails, or if the response cannot be parsed
+     */
     @Override
     public GetFolderResponse execute() {
         if (serverRelativeUrl == null) {
@@ -58,6 +90,11 @@ public class GetFolder extends SharePointApi<GetFolderResponse> {
         }
     }
 
+    /**
+     * Builds the complete API URL for the get folder request.
+     *
+     * @return the complete URL with encoded server relative path
+     */
     private String buildUrl() {
         return siteUrl + "/" + API_PATH.replace("{{url}}", encodeRelativeUrl(serverRelativeUrl));
     }

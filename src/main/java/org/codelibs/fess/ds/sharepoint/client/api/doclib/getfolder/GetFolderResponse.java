@@ -25,49 +25,124 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.util.DocumentUtil;
 
+/**
+ * Response object containing folder information retrieved from SharePoint document libraries.
+ * This class encapsulates all folder metadata including unique identifier, name, existence status,
+ * server-relative URL, creation/modification timestamps, and item count.
+ *
+ * <p>The response is built from JSON data returned by SharePoint REST API endpoints.</p>
+ *
+ * @see GetFolder
+ * @see SharePointApiResponse
+ */
 public class GetFolderResponse implements SharePointApiResponse {
 
+    /** The unique identifier of the folder */
     protected String id = null;
+    /** The display name of the folder */
     protected String name = null;
+    /** Whether the folder exists in SharePoint */
     protected boolean exists = false;
+    /** The server-relative URL path of the folder */
     protected String serverRelativeUrl = null;
+    /** The creation timestamp of the folder */
     protected Date created = null;
+    /** The last modification timestamp of the folder */
     protected Date modified = null;
+    /** The number of items contained in the folder */
     protected int itemCount = 0;
 
+    /**
+     * Default constructor for GetFolderResponse.
+     * Creates an empty response instance with default field values.
+     */
+    public GetFolderResponse() {
+        // Default constructor - fields are initialized with default values above
+    }
+
+    /**
+     * Gets the unique identifier of the folder.
+     *
+     * @return the folder's unique ID, or null if not available
+     */
     public String getId() {
         return id;
     }
 
+    /**
+     * Gets the display name of the folder.
+     *
+     * @return the folder name, or null if not available
+     */
     public String getName() {
         return name;
     }
 
+    /**
+     * Checks whether the folder exists in SharePoint.
+     *
+     * @return true if the folder exists, false otherwise
+     */
     public boolean isExists() {
         return exists;
     }
 
+    /**
+     * Gets the server-relative URL of the folder.
+     *
+     * @return the server-relative path to the folder, or null if not available
+     */
     public String getServerRelativeUrl() {
         return serverRelativeUrl;
     }
 
+    /**
+     * Gets the creation timestamp of the folder.
+     *
+     * @return the date when the folder was created, or null if not available
+     */
     public Date getCreated() {
         return created;
     }
 
+    /**
+     * Gets the last modification timestamp of the folder.
+     *
+     * @return the date when the folder was last modified, or null if not available
+     */
     public Date getModified() {
         return modified;
     }
 
+    /**
+     * Gets the number of items contained in the folder.
+     *
+     * @return the count of items in the folder
+     */
     public int getItemCount() {
         return itemCount;
     }
 
+    /**
+     * Builds a GetFolderResponse from a JSON response.
+     *
+     * @param jsonResponse the JSON response from SharePoint API
+     * @return a new GetFolderResponse instance populated with folder data
+     */
     public static GetFolderResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
         return buildFromMap(jsonMap);
     }
 
+    /**
+     * Builds a GetFolderResponse from a map containing folder data.
+     * This method extracts folder properties from the provided map and creates
+     * a response object with parsed timestamps and metadata.
+     *
+     * @param jsonMap the map containing folder data from SharePoint
+     * @return a new GetFolderResponse instance populated with the data
+     * @throws SharePointClientException if date parsing fails
+     */
     public static GetFolderResponse buildFromMap(final Map<String, Object> jsonMap) {
         final GetFolderResponse response = new GetFolderResponse();
         response.id = DocumentUtil.getValue(jsonMap, "UniqueId", String.class);

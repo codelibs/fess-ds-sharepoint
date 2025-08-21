@@ -27,7 +27,19 @@ import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013 response object for list forms.
+ * This class extends GetFormsResponse to handle XML-based responses from SharePoint 2013.
+ */
 public class GetForms2013Response extends GetFormsResponse {
+
+    /**
+     * Default constructor for GetForms2013Response.
+     */
+    public GetForms2013Response() {
+        super();
+    }
+
     private final List<Form> forms = new ArrayList<>();
 
     @Override
@@ -35,6 +47,12 @@ public class GetForms2013Response extends GetFormsResponse {
         return forms;
     }
 
+    /**
+     * Builds a GetForms2013Response from an XML response.
+     *
+     * @param xmlResponse the XML response from the SharePoint 2013 API
+     * @return a new GetForms2013Response instance populated with form data
+     */
     protected static GetForms2013Response build(final SharePointApi.XmlResponse xmlResponse) {
         final GetForms2013Response response = new GetForms2013Response();
         final GetFormsDocHandler handler = new GetFormsDocHandler();

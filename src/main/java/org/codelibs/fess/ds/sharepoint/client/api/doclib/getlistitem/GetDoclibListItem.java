@@ -26,20 +26,46 @@ import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientExceptio
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
 
+/**
+ * SharePoint API client for retrieving document library list item metadata.
+ * This class provides functionality to fetch list item information for files
+ * stored in SharePoint document libraries using the REST API.
+ */
 public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> {
+    /** Logger instance for this class. */
     private static final Logger logger = LogManager.getLogger(GetDoclibListItem.class);
 
+    /** The server-relative URL of the SharePoint folder/file. */
     private String serverRelativeUrl = null;
 
+    /**
+     * Constructs a new GetDoclibListItem API client.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication handler
+     */
     public GetDoclibListItem(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Sets the server-relative URL of the SharePoint folder/file to retrieve list item data for.
+     *
+     * @param serverRelativeUrl the server-relative URL path
+     * @return this instance for method chaining
+     */
     public GetDoclibListItem setServerRelativeUrl(final String serverRelativeUrl) {
         this.serverRelativeUrl = serverRelativeUrl;
         return this;
     }
 
+    /**
+     * Executes the API request to retrieve document library list item metadata.
+     *
+     * @return the response containing list ID and item ID
+     * @throws SharePointClientException if serverRelativeUrl is not set or if the request fails
+     */
     @Override
     public GetDoclibListItemResponse execute() {
         if (serverRelativeUrl == null) {
@@ -62,11 +88,22 @@ public class GetDoclibListItem extends SharePointApi<GetDoclibListItemResponse> 
         }
     }
 
+    /**
+     * Builds the SharePoint REST API URL for retrieving list item fields.
+     *
+     * @return the complete API URL
+     */
     protected String buildUrl() {
         return siteUrl + "_api/Web/GetFolderByServerRelativePath(decodedurl='" + encodeRelativeUrl(serverRelativeUrl)
                 + "')/ListItemAllFields";
     }
 
+    /**
+     * Extracts the list ID from the OData edit link.
+     *
+     * @param editLink the OData edit link containing the list GUID
+     * @return the extracted list ID, or null if editLink is null
+     */
     protected String getListId(final String editLink) {
         if (editLink == null) {
             return null;

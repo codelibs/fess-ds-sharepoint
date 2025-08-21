@@ -29,24 +29,49 @@ import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientExceptio
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
 
+/**
+ * API class for retrieving a single SharePoint list.
+ * This class handles REST API calls to get detailed information about a specific SharePoint list.
+ */
 public class GetList extends SharePointApi<GetListResponse> {
     private static final Logger logger = LogManager.getLogger(GetList.class);
 
     private static final String API_BY_LIST_ID_PATH = "_api/web/lists(guid'{list_guid}')";
     private static final String API_BY_LIST_NAME_PATH = "_api/web/lists/GetByTitle('{list_name}')";
 
+    /** The GUID of the SharePoint list to retrieve. */
     protected String listId = null;
+    /** The name of the SharePoint list to retrieve. */
     protected String listName = null;
 
+    /**
+     * Constructs a new GetList instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication object
+     */
     public GetList(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Sets the list ID for the list to retrieve.
+     *
+     * @param listId the GUID of the SharePoint list
+     * @return this GetList instance for method chaining
+     */
     public GetList setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
+    /**
+     * Sets the list name for the list to retrieve.
+     *
+     * @param listName the name of the SharePoint list
+     * @return this GetList instance for method chaining
+     */
     public GetList setListName(final String listName) {
         this.listName = listName;
         return this;

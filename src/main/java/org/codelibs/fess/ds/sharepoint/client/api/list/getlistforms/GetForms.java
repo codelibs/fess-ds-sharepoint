@@ -23,6 +23,10 @@ import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
+/**
+ * API class for retrieving SharePoint list forms.
+ * This class handles REST API calls to get form information from SharePoint lists.
+ */
 public class GetForms extends SharePointApi<GetFormsResponse> {
     private static final Logger logger = LogManager.getLogger(GetForms.class);
 
@@ -32,15 +36,34 @@ public class GetForms extends SharePointApi<GetFormsResponse> {
     private String listId = null;
     private String listName = null;
 
+    /**
+     * Constructs a new GetForms instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication object
+     */
     public GetForms(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
 
+    /**
+     * Sets the list ID for the forms to retrieve.
+     *
+     * @param listId the GUID of the SharePoint list
+     * @return this GetForms instance for method chaining
+     */
     public GetForms setListId(final String listId) {
         this.listId = listId;
         return this;
     }
 
+    /**
+     * Sets the list name for the forms to retrieve.
+     *
+     * @param listName the name of the SharePoint list
+     * @return this GetForms instance for method chaining
+     */
     public GetForms setListName(final String listName) {
         this.listName = listName;
         return this;

@@ -19,12 +19,30 @@ import java.util.List;
 
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 
+/**
+ * SharePoint 2013 specific response class for GetLists API operations.
+ * This class extends GetListsResponse to provide SharePoint 2013 compatibility
+ * while maintaining the same interface as the base response class.
+ *
+ * @see GetListsResponse
+ * @see GetLists2013
+ */
 public class GetLists2013Response extends GetListsResponse {
 
+    /**
+     * Constructs a new GetLists2013Response with the provided list of SharePoint lists.
+     *
+     * @param lists list of SharePointList objects parsed from SharePoint 2013 response
+     */
     public GetLists2013Response(final List<SharePointList> lists) {
         super(lists);
     }
 
+    /**
+     * Gets the list of SharePoint lists retrieved from SharePoint 2013.
+     *
+     * @return list of SharePointList objects
+     */
     @Override
     public List<SharePointList> getLists() {
         return lists;

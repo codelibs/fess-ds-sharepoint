@@ -26,9 +26,27 @@ import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013 response object for list item attachments.
+ * This class extends GetListItemAttachmentsResponse to handle XML-based responses from SharePoint 2013.
+ */
 public class GetListItemAttachments2013Response extends GetListItemAttachmentsResponse {
+
+    /**
+     * Default constructor for GetListItemAttachments2013Response.
+     */
+    public GetListItemAttachments2013Response() {
+        super();
+    }
+
     private final List<AttachmentFile> files = new ArrayList<>();
 
+    /**
+     * Builds a GetListItemAttachments2013Response from an XML response.
+     *
+     * @param xmlResponse the XML response from the SharePoint 2013 API
+     * @return a new GetListItemAttachments2013Response instance populated with attachment data
+     */
     public static GetListItemAttachments2013Response build(final SharePointApi.XmlResponse xmlResponse) {
         final GetListItemAttachments2013Response response = new GetListItemAttachments2013Response();
         final GetListItemAttachmentsDocHandler handler = new GetListItemAttachmentsDocHandler();

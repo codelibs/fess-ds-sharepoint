@@ -27,14 +27,40 @@ import org.codelibs.fess.ds.sharepoint.client2013.api.doclib.getfolder.GetFolder
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013 specific response class for GetFolders API.
+ * This class extends GetFoldersResponse to handle XML response parsing
+ * specific to SharePoint 2013 REST API format.
+ */
 public class GetFolders2013Response extends GetFoldersResponse {
+    /** List of folder responses specific to SharePoint 2013 */
     private final List<GetFolderResponse> folders = new ArrayList<>();
 
+    /**
+     * Default constructor for GetFolders2013Response.
+     * Creates an empty response instance that can be populated with folder data.
+     */
+    public GetFolders2013Response() {
+        super();
+    }
+
+    /**
+     * Gets the list of folders retrieved from SharePoint 2013.
+     *
+     * @return list of GetFolderResponse objects
+     */
     @Override
     public List<GetFolderResponse> getFolders() {
         return folders;
     }
 
+    /**
+     * Builds a GetFolders2013Response from an XML response.
+     * Parses SharePoint 2013 XML format to extract folder information.
+     *
+     * @param xmlResponse the XML response from SharePoint 2013 API
+     * @return GetFolders2013Response instance containing parsed folder data
+     */
     public static GetFolders2013Response build(final SharePointApi.XmlResponse xmlResponse) {
         final GetFoldersDocHandler handler = new GetFoldersDocHandler();
         xmlResponse.parseXml(handler);
@@ -51,20 +77,39 @@ public class GetFolders2013Response extends GetFoldersResponse {
         return response;
     }
 
+    /**
+     * SAX handler for parsing SharePoint 2013 XML responses containing folder data.
+     * This handler extracts folder information from the XML structure.
+     */
     private static class GetFoldersDocHandler extends DefaultHandler {
+        /** Map to store parsed data */
         private final Map<String, Object> dataMap = new HashMap<>();
+        /** Current folder being parsed */
         private Map<String, Object> resultMap = null;
 
+        /** Current field name being parsed */
         private String fieldName;
 
+        /** Buffer for collecting character data */
         private final StringBuilder buffer = new StringBuilder(1000);
 
+        /**
+         * Handles the start of the XML document.
+         */
         @Override
         public void startDocument() {
             dataMap.clear();
             dataMap.put("value", new ArrayList<>());
         }
 
+        /**
+         * Handles the start of an XML element.
+         *
+         * @param uri namespace URI
+         * @param localName local name
+         * @param qName qualified name
+         * @param attributes element attributes
+         */
         @Override
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             if ("entry".equals(qName)) {
@@ -88,6 +133,13 @@ public class GetFolders2013Response extends GetFoldersResponse {
             }
         }
 
+        /**
+         * Handles character data within XML elements.
+         *
+         * @param ch character array
+         * @param offset starting offset
+         * @param length number of characters
+         */
         @Override
         public void characters(final char[] ch, final int offset, final int length) {
             if (fieldName != null) {
@@ -95,6 +147,13 @@ public class GetFolders2013Response extends GetFoldersResponse {
             }
         }
 
+        /**
+         * Handles the end of an XML element.
+         *
+         * @param uri namespace URI
+         * @param localName local name
+         * @param qName qualified name
+         */
         @Override
         @SuppressWarnings("unchecked")
         public void endElement(final String uri, final String localName, final String qName) {
@@ -111,11 +170,19 @@ public class GetFolders2013Response extends GetFoldersResponse {
             }
         }
 
+        /**
+         * Handles the end of the XML document.
+         */
         @Override
         public void endDocument() {
             // nothing
         }
 
+        /**
+         * Gets the parsed data map containing folder information.
+         *
+         * @return map containing parsed folder data
+         */
         public Map<String, Object> getDataMap() {
             return dataMap;
         }

@@ -28,6 +28,10 @@ import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013 specific response class for GetListItemValue API.
+ * Extends the base GetListItemValueResponse with SharePoint 2013 specific XML parsing behavior.
+ */
 public class GetListItemValue2013Response extends GetListItemValueResponse {
 
     private String id;
@@ -47,86 +51,181 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
     private int fsObjType;
     private final Map<String, String> values = new HashMap<>();
 
+    /**
+     * Default constructor for GetListItemValue2013Response.
+     * Creates an empty response instance with default field values.
+     */
+    public GetListItemValue2013Response() {
+        super();
+    }
+
+    /**
+     * Returns the unique identifier of the list item.
+     *
+     * @return the item ID
+     */
     @Override
     public String getId() {
         return id;
     }
 
+    /**
+     * Returns the title of the list item.
+     *
+     * @return the item title
+     */
     @Override
     public String getTitle() {
         return title;
     }
 
+    /**
+     * Returns the last modification date of the list item.
+     *
+     * @return the modification date
+     */
     @Override
     public Date getModified() {
         return modified;
     }
 
+    /**
+     * Returns the creation date of the list item.
+     *
+     * @return the creation date
+     */
     @Override
     public Date getCreated() {
         return created;
     }
 
+    /**
+     * Returns the author of the list item.
+     *
+     * @return the author name
+     */
     @Override
     public String getAuthor() {
         return author;
     }
 
+    /**
+     * Returns the last editor of the list item.
+     *
+     * @return the editor name
+     */
     @Override
     public String getEditor() {
         return editor;
     }
 
+    /**
+     * Returns whether the list item has attachments.
+     *
+     * @return true if the item has attachments, false otherwise
+     */
     @Override
     public boolean isHasAttachments() {
         return hasAttachments;
     }
 
+    /**
+     * Returns the order value of the list item.
+     *
+     * @return the order value
+     */
     @Override
     public long getOrder() {
         return order;
     }
 
+    /**
+     * Returns the edit link for the list item.
+     *
+     * @return the edit link URL
+     */
     @Override
     public String getEditLink() {
         return editLink;
     }
 
+    /**
+     * Returns the file reference path of the list item.
+     *
+     * @return the file reference path
+     */
     @Override
     public String getFileRef() {
         return fileRef;
     }
 
+    /**
+     * Returns the file directory reference of the list item.
+     *
+     * @return the file directory reference
+     */
     @Override
     public String getFileDirRef() {
         return fileDirRef;
     }
 
+    /**
+     * Returns the file leaf reference (filename) of the list item.
+     *
+     * @return the file leaf reference
+     */
     @Override
     public String getFileLeafRef() {
         return fileLeafRef;
     }
 
+    /**
+     * Returns the parent item ID of the list item.
+     *
+     * @return the parent item ID
+     */
     @Override
     public String getParentItemId() {
         return parentItemId;
     }
 
+    /**
+     * Returns the parent folder ID of the list item.
+     *
+     * @return the parent folder ID
+     */
     @Override
     public String getParentFolderId() {
         return parentFolderId;
     }
 
+    /**
+     * Returns the file system object type of the list item.
+     *
+     * @return the file system object type
+     */
     @Override
     public int getFsObjType() {
         return fsObjType;
     }
 
+    /**
+     * Returns all field values of the list item as a map.
+     *
+     * @return the map of field names to values
+     */
     @Override
     public Map<String, String> getValues() {
         return values;
     }
 
+    /**
+     * Builds a GetListItemValue2013Response from the XML response received from SharePoint 2013.
+     *
+     * @param xmlResponse the XML response from the SharePoint API
+     * @return the parsed response containing item field values
+     * @throws ParseException if date parsing fails
+     */
     public static GetListItemValue2013Response build(final SharePointApi.XmlResponse xmlResponse) throws ParseException {
         final GetListItemValueDocHandler handler = new GetListItemValueDocHandler();
         xmlResponse.parseXml(handler);
@@ -157,6 +256,11 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         return response;
     }
 
+    /**
+     * Returns a string representation of the list item response.
+     *
+     * @return a formatted string containing item details
+     */
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder(100);
@@ -171,6 +275,10 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
         return sb.toString();
     }
 
+    /**
+     * SAX document handler for parsing SharePoint 2013 XML responses containing list item field values.
+     * Extracts field data from the XML structure.
+     */
     private static class GetListItemValueDocHandler extends DefaultHandler {
         private final Map<String, Object> dataMap = new HashMap<>();
 
@@ -180,12 +288,23 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
 
         private boolean nowCountent = false;
 
+        /**
+         * Initializes the data map when starting document parsing.
+         */
         @Override
         public void startDocument() {
             dataMap.clear();
             dataMap.put("Exists", true);
         }
 
+        /**
+         * Handles the start of XML elements during parsing.
+         *
+         * @param uri the namespace URI
+         * @param localName the local name
+         * @param qName the qualified name
+         * @param attributes the element attributes
+         */
         @Override
         public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
             final String nonePredfixQName = qName.substring(2);
@@ -244,6 +363,13 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
             }
         }
 
+        /**
+         * Handles character data within XML elements.
+         *
+         * @param ch the character array
+         * @param offset the start offset in the array
+         * @param length the number of characters to read
+         */
         @Override
         public void characters(final char[] ch, final int offset, final int length) {
             if (fieldName != null) {
@@ -251,6 +377,13 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
             }
         }
 
+        /**
+         * Handles the end of XML elements during parsing.
+         *
+         * @param uri the namespace URI
+         * @param localName the local name
+         * @param qName the qualified name
+         */
         @Override
         public void endElement(final String uri, final String localName, final String qName) {
             if ("content".equals(qName)) {
@@ -263,11 +396,19 @@ public class GetListItemValue2013Response extends GetListItemValueResponse {
             }
         }
 
+        /**
+         * Called when document parsing is complete.
+         */
         @Override
         public void endDocument() {
             // nothing
         }
 
+        /**
+         * Returns the parsed data map containing field values.
+         *
+         * @return the data map with parsed content
+         */
         public Map<String, Object> getDataMap() {
             return dataMap;
         }

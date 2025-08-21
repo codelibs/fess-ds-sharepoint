@@ -17,6 +17,18 @@ package org.codelibs.fess.ds.sharepoint.client.credential;
 
 import org.apache.http.auth.Credentials;
 
+/**
+ * Interface for SharePoint authentication credentials.
+ * Implementations of this interface provide different authentication mechanisms
+ * for connecting to SharePoint services (e.g., NTLM, OAuth).
+ *
+ * @see NtlmCredential
+ */
 public interface SharePointCredential {
+    /**
+     * Gets the Apache HttpClient credentials object for SharePoint authentication.
+     *
+     * @return credentials object suitable for HTTP authentication
+     */
     Credentials getCredential();
 }

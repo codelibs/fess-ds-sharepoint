@@ -35,16 +35,46 @@ import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 
+/**
+ * Crawler implementation for SharePoint list item attachments.
+ * This class handles crawling file attachments associated with SharePoint list items,
+ * creating individual file crawl tasks for each attachment found.
+ *
+ * <p>The crawler retrieves attachment metadata and queues FileCrawl tasks
+ * for processing each attachment file with proper access control and metadata.</p>
+ *
+ * @see SharePointCrawl
+ * @see ItemCrawl
+ * @see FileCrawl
+ */
 public class ItemAttachmentsCrawl extends SharePointCrawl {
+    /** Logger for attachment crawling operations */
     private static final Logger logger = LogManager.getLogger(ItemAttachmentsCrawl.class);
 
+    /** SharePoint list identifier */
     private final String listId;
+    /** Display name of the SharePoint list */
     private final String listName;
+    /** Unique identifier of the parent list item */
     private final String itemId;
+    /** Creation date of the parent list item */
     private final Date created;
+    /** Last modification date of the parent list item */
     private final Date modified;
+    /** Access roles inherited from the parent list item */
     private final List<String> roles;
 
+    /**
+     * Constructs a new ItemAttachmentsCrawl instance for crawling list item attachments.
+     *
+     * @param client SharePoint client for API operations
+     * @param listId unique identifier of the SharePoint list
+     * @param listName display name of the SharePoint list
+     * @param itemId unique identifier of the parent list item
+     * @param created creation date of the parent list item
+     * @param modified last modification date of the parent list item
+     * @param roles access roles inherited from the parent list item
+     */
     public ItemAttachmentsCrawl(final SharePointClient client, final String listId, final String listName, final String itemId,
             final Date created, final Date modified, final List<String> roles) {
         super(client);
@@ -57,6 +87,15 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
         statsKey = new StatsKeyObject("item_attachment#" + listName + ":" + itemId);
     }
 
+    /**
+     * Performs the crawling of SharePoint list item attachments.
+     * Retrieves attachment information and creates FileCrawl tasks
+     * for each attachment file found.
+     *
+     * @param dataConfig data source configuration
+     * @param crawlingQueue queue for additional crawl tasks (file crawl tasks)
+     * @return null (this crawler only queues other tasks, doesn't create documents directly)
+     */
     @Override
     public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
@@ -75,6 +114,13 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
         return null;
     }
 
+    /**
+     * Generates the web link URL for accessing an attachment file.
+     * Creates a URL that points to the attachment within the SharePoint list item's display form.
+     *
+     * @param fileName name of the attachment file
+     * @return web URL for accessing the attachment, or null if unable to generate
+     */
     private String getWebLink(final String fileName) {
         final GetForms getForms = client.api().list().getForms();
         if (listId != null) {

@@ -39,6 +39,10 @@ import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.util.ComponentUtil;
 
+/**
+ * Crawling class for SharePoint file items.
+ * Handles extraction and indexing of individual files from SharePoint document libraries.
+ */
 public class FileCrawl extends SharePointCrawl {
     private static final Logger logger = LogManager.getLogger(FileCrawl.class);
 
@@ -54,6 +58,19 @@ public class FileCrawl extends SharePointCrawl {
 
     private static final String DEFAULT_EXTRACTOR_NAME = "tikaExtractor";
 
+    /**
+     * Constructs a FileCrawl instance for crawling a specific SharePoint file.
+     *
+     * @param client the SharePoint client for API communication
+     * @param fileName the name of the file to crawl
+     * @param webUrl the web URL for the file
+     * @param serverRelativeUrl the server-relative URL of the file
+     * @param created the file creation date
+     * @param modified the file modification date
+     * @param roles the list of roles/permissions for the file
+     * @param listValues additional metadata values from the list item
+     * @param listName the name of the list containing the file
+     */
     public FileCrawl(final SharePointClient client, final String fileName, final String webUrl, final String serverRelativeUrl,
             final Date created, final Date modified, final List<String> roles, final Map<String, String> listValues,
             final String listName) {
@@ -69,6 +86,12 @@ public class FileCrawl extends SharePointCrawl {
         statsKey = new StatsKeyObject("file#" + serverRelativeUrl);
     }
 
+    /**
+     * Adds an additional property to be included in the crawled data.
+     *
+     * @param key the property key
+     * @param value the property value
+     */
     public void addProperty(final String key, final String value) {
         additionalProperties.put(key, value);
     }
@@ -152,6 +175,13 @@ public class FileCrawl extends SharePointCrawl {
         return content.toString();
     }
 
+    /**
+     * Determines the MIME type of the file based on its content and filename.
+     *
+     * @param filename the name of the file
+     * @param response the file response containing the file content
+     * @return the MIME type of the file
+     */
     protected String getMimeType(final String filename, final GetFileResponse response) {
         try (final InputStream is = response.getFileContent()) {
             final MimeTypeHelper mimeTypeHelper = ComponentUtil.getComponent(MimeTypeHelper.class);
@@ -161,6 +191,12 @@ public class FileCrawl extends SharePointCrawl {
         }
     }
 
+    /**
+     * Gets the file type based on the MIME type.
+     *
+     * @param mimeType the MIME type of the file
+     * @return the corresponding file type
+     */
     protected String getFileType(final String mimeType) {
         final FileTypeHelper fileTypeHelper = ComponentUtil.getFileTypeHelper();
         return fileTypeHelper.get(mimeType);

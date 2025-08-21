@@ -29,11 +29,22 @@ import org.codelibs.fess.util.DocumentUtil;
 import org.xml.sax.Attributes;
 import org.xml.sax.helpers.DefaultHandler;
 
+/**
+ * SharePoint 2013 implementation for retrieving list item role assignments.
+ * This class extends GetListItemRole to provide SharePoint 2013-specific XML-based API functionality.
+ */
 public class GetListItemRole2013 extends GetListItemRole {
     private String listId = null;
     private String itemId = null;
     private Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache = null;
 
+    /**
+     * Constructs a new GetListItemRole2013 instance.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication object
+     */
     public GetListItemRole2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
     }
@@ -107,6 +118,12 @@ public class GetListItemRole2013 extends GetListItemRole {
         return buildBaseUrl() + "Items(" + itemId + ")/RoleAssignments";
     }
 
+    /**
+     * Builds the URL for retrieving member information by principal ID (SharePoint 2013 version).
+     *
+     * @param principalId the principal ID of the member
+     * @return the complete URL for member API
+     */
     protected String buildMemberUrl(final String principalId) {
         return buildBaseUrl() + "RoleAssignments/GetByPrincipalId(" + principalId + ")/Member";
     }
