@@ -139,7 +139,9 @@ public class ItemCrawl extends SharePointCrawl {
                 dataMap.put(normalizeKey(entry.getKey()), entry.getValue());
             }
         }
-        response.getValues().entrySet().stream()
+        response.getValues()
+                .entrySet()
+                .stream()
                 .forEach(entry -> dataMap.put(ITEM_VALUE_PREFIX + normalizeKey(entry.getKey()), entry.getValue()));
 
         if (roles != null && !roles.isEmpty()) {
@@ -161,7 +163,10 @@ public class ItemCrawl extends SharePointCrawl {
      */
     private String buildContent(final GetListItemValueResponse response) {
         final StringBuilder sb = new StringBuilder(1000);
-        response.getValues().entrySet().stream().filter(entry -> StringUtils.isNotBlank(entry.getValue()))
+        response.getValues()
+                .entrySet()
+                .stream()
+                .filter(entry -> StringUtils.isNotBlank(entry.getValue()))
                 .filter(entry -> (includeFields.size() == 0 || includeFields.contains(entry.getKey()))
                         && !excludeFields.stream().anyMatch(exField -> entry.getKey().matches(exField)))
                 .forEach(entry -> {

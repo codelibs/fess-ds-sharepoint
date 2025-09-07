@@ -77,8 +77,13 @@ public class FolderCrawl extends SharePointCrawl {
         if (getFolderResponse.getItemCount() > 0) {
             int foldersStart = 0;
             while (true) {
-                final GetFoldersResponse getFoldersResponse = client.api().doclib().getFolders().setServerRelativeUrl(serverRelativeUrl)
-                        .setStart(foldersStart).setNum(PAGE_SIZE).execute();
+                final GetFoldersResponse getFoldersResponse = client.api()
+                        .doclib()
+                        .getFolders()
+                        .setServerRelativeUrl(serverRelativeUrl)
+                        .setStart(foldersStart)
+                        .setNum(PAGE_SIZE)
+                        .execute();
                 if (getFoldersResponse.getFolders().size() == 0) {
                     break;
                 }
@@ -90,8 +95,13 @@ public class FolderCrawl extends SharePointCrawl {
 
             int filesStart = 0;
             while (true) {
-                final GetFilesResponse getFilesResponse = client.api().doclib().getFiles().setServerRelativeUrl(serverRelativeUrl)
-                        .setStart(filesStart).setNum(PAGE_SIZE).execute();
+                final GetFilesResponse getFilesResponse = client.api()
+                        .doclib()
+                        .getFiles()
+                        .setServerRelativeUrl(serverRelativeUrl)
+                        .setStart(filesStart)
+                        .setNum(PAGE_SIZE)
+                        .execute();
                 if (getFilesResponse.getFiles().size() == 0) {
                     break;
                 }
@@ -101,8 +111,12 @@ public class FolderCrawl extends SharePointCrawl {
                             client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
                     final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(),
                             sharePointGroupCache, skipRole);
-                    final GetListItemValueResponse getListItemValueResponse = client.api().list().getListItemValue()
-                            .setListId(getDoclibListItemResponse.getListId()).setItemId(getDoclibListItemResponse.getItemId()).execute();
+                    final GetListItemValueResponse getListItemValueResponse = client.api()
+                            .list()
+                            .getListItemValue()
+                            .setListId(getDoclibListItemResponse.getListId())
+                            .setItemId(getDoclibListItemResponse.getItemId())
+                            .execute();
                     final Map<String, String> listValues = getListItemValueResponse.getValues();
                     final String webLink =
                             getWebLink(getDoclibListItemResponse.getListId(), file.getServerRelativeUrl(), serverRelativeUrl);
