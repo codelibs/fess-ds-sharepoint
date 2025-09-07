@@ -151,8 +151,12 @@ public class FileCrawl extends SharePointCrawl {
         final StringBuilder content = new StringBuilder(1000);
 
         try (final InputStream is = response.getFileContent()) {
-            final String fileText = ComponentUtil.getExtractorFactory().builder(is, null).extractorName(DEFAULT_EXTRACTOR_NAME)
-                    .mimeType(mimeType).extract().getContent();
+            final String fileText = ComponentUtil.getExtractorFactory()
+                    .builder(is, null)
+                    .extractorName(DEFAULT_EXTRACTOR_NAME)
+                    .mimeType(mimeType)
+                    .extract()
+                    .getContent();
             if (StringUtils.isNotBlank(fileText)) {
                 content.append(fileText);
             }

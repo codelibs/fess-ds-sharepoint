@@ -117,14 +117,26 @@ public class ListCrawl extends SharePointCrawl {
                 return null;
             }
             try {
-                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(isSubPage).setNum(numberPerPage)
-                        .setStart(start).execute();
+                getListItemsResponse = client.api()
+                        .list()
+                        .getListItems()
+                        .setListId(listId)
+                        .setSubPage(isSubPage)
+                        .setNum(numberPerPage)
+                        .setStart(start)
+                        .execute();
             } catch (final SharePointServerException e) {
                 if (e.getStatusCode() != 400) {
                     throw e;
                 }
-                getListItemsResponse = client.api().list().getListItems().setListId(listId).setSubPage(true).setNum(numberPerPage)
-                        .setStart(start).execute();
+                getListItemsResponse = client.api()
+                        .list()
+                        .getListItems()
+                        .setListId(listId)
+                        .setSubPage(true)
+                        .setNum(numberPerPage)
+                        .setStart(start)
+                        .execute();
             }
             if (getListItemsResponse.getListItems().isEmpty()) {
                 break;

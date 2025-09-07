@@ -93,8 +93,11 @@ public class SiteCrawl extends SharePointCrawl {
             crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache));
         });
         final GetListsResponse getListsResponse = client.api().list().getLists().execute();
-        getListsResponse.getLists().stream().filter(list -> !list.isNoCrawl() && !list.isHidden())
-                .filter(list -> !targetFolderName.contains(list.getListName())).filter(list -> !isExcludeList(list.getEntityTypeName()))
+        getListsResponse.getLists()
+                .stream()
+                .filter(list -> !list.isNoCrawl() && !list.isHidden())
+                .filter(list -> !targetFolderName.contains(list.getListName()))
+                .filter(list -> !isExcludeList(list.getEntityTypeName()))
                 .forEach(list -> crawlingQueue.offer(new ListCrawl(client, list.getId(), list.getListName(),
                         config.getListItemNumPerPages(), sharePointGroupCache, isSubPageList(list.getEntityTypeName()), config.isSkipRole(),
                         config.getListContentIncludeFields(), config.getListContentExcludeFields())));
