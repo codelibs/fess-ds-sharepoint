@@ -62,4 +62,71 @@ public class SharePointApiTest extends LastaFluteTestCase {
         assertEquals("/%E3%83%86%E3%82%B9%E3%83%88/%E3%83%86%E3%82%B9%E3%83%88%E3%81%A6%E3%81%99%E3%81%A8.txt",
                 sharePointApi.encodeRelativeUrl("/テスト/テストてすと.txt"));
     }
+
+    @Test
+    public void test_encodeRelativeUrl_withSpecialCharacters() throws Exception {
+        SharePointApi<SharePointApiResponse> sharePointApi = new SharePointApi<SharePointApiResponse>(null, null, null) {
+            @Override
+            public SharePointApiResponse execute() {
+                return null;
+            }
+        };
+
+        // Test special characters
+        assertEquals("file%23name.txt", sharePointApi.encodeRelativeUrl("file#name.txt"));
+        assertEquals("file%26name.txt", sharePointApi.encodeRelativeUrl("file&name.txt"));
+        assertEquals("file%3Dname.txt", sharePointApi.encodeRelativeUrl("file=name.txt"));
+        assertEquals("file%2Bname.txt", sharePointApi.encodeRelativeUrl("file+name.txt"));
+    }
+
+    @Test
+    public void test_encodeRelativeUrl_withMultiplePaths() throws Exception {
+        SharePointApi<SharePointApiResponse> sharePointApi = new SharePointApi<SharePointApiResponse>(null, null, null) {
+            @Override
+            public SharePointApiResponse execute() {
+                return null;
+            }
+        };
+
+        // Test multiple path segments
+        assertEquals("folder1/folder2/file.txt", sharePointApi.encodeRelativeUrl("folder1/folder2/file.txt"));
+        assertEquals("folder%201/folder%202/file%20name.txt",
+                sharePointApi.encodeRelativeUrl("folder 1/folder 2/file name.txt"));
+    }
+
+    @Test
+    public void test_XmlResponse_parseXml_static() throws Exception {
+        final String xml = "<root><item>value1</item><item>value2</item></root>";
+        final java.util.List<String> items = new java.util.ArrayList<>();
+
+        final org.xml.sax.helpers.DefaultHandler handler = new org.xml.sax.helpers.DefaultHandler() {
+            private boolean inItem = false;
+
+            @Override
+            public void startElement(String uri, String localName, String qName, org.xml.sax.Attributes attributes) {
+                if ("item".equals(qName)) {
+                    inItem = true;
+                }
+            }
+
+            @Override
+            public void characters(char[] ch, int start, int length) {
+                if (inItem) {
+                    items.add(new String(ch, start, length));
+                }
+            }
+
+            @Override
+            public void endElement(String uri, String localName, String qName) {
+                if ("item".equals(qName)) {
+                    inItem = false;
+                }
+            }
+        };
+
+        SharePointApi.XmlResponse.parseXml(xml, handler);
+        assertEquals(2, items.size());
+        assertEquals("value1", items.get(0));
+        assertEquals("value2", items.get(1));
+    }
 }
