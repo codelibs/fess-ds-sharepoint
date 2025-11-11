@@ -83,8 +83,7 @@ public class SharePointClientBuilderTest extends LastaFluteTestCase {
 
     @Test
     public void test_builderWithOAuth() {
-        final OAuth oAuth = OAuth.builder().setClientId("clientId").setClientSecret("clientSecret").setTenant("tenant")
-                .setRealm("realm").build();
+        final OAuth oAuth = new OAuth("clientId", "clientSecret", "tenant", "realm");
 
         final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite")
                 .setOAuth(oAuth);
