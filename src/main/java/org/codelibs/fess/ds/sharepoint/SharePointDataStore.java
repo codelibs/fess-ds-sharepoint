@@ -36,8 +36,18 @@ import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.util.ComponentUtil;
 
+/**
+ * DataStore implementation for crawling SharePoint sites.
+ */
 public class SharePointDataStore extends AbstractDataStore {
     private static final Logger logger = LogManager.getLogger(SharePointDataStore.class);
+
+    /**
+     * Creates a new SharePointDataStore instance.
+     */
+    public SharePointDataStore() {
+        // default constructor
+    }
 
     @Override
     protected String getName() {

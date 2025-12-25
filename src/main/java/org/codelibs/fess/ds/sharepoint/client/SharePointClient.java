@@ -21,6 +21,9 @@ import org.codelibs.fess.ds.sharepoint.client.helper.SharePointHelper;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.client2013.api.SharePoint2013Apis;
 
+/**
+ * Client for communicating with SharePoint REST API.
+ */
 public class SharePointClient {
     private final String url;
     private final String siteUrl;
@@ -29,6 +32,15 @@ public class SharePointClient {
     private SharePointApis sharePointApis;
     private final SharePointHelper sharePointHelper;
 
+    /**
+     * Creates a new SharePointClient instance.
+     *
+     * @param httpClient the HTTP client to use for requests
+     * @param url the base URL of the SharePoint server
+     * @param siteName the name of the SharePoint site
+     * @param oAuth the OAuth configuration, or null if not using OAuth
+     * @param verson2013 true if using SharePoint 2013 API
+     */
     protected SharePointClient(final CloseableHttpClient httpClient, final String url, final String siteName, final OAuth oAuth,
             final boolean verson2013) {
         this.siteUrl = buildSiteUrl(url, siteName);
@@ -42,26 +54,56 @@ public class SharePointClient {
         }
     }
 
+    /**
+     * Returns the SharePoint API interface.
+     *
+     * @return the SharePoint APIs object
+     */
     public SharePointApis api() {
         return sharePointApis;
     }
 
+    /**
+     * Returns the SharePoint helper utility.
+     *
+     * @return the SharePoint helper object
+     */
     public SharePointHelper helper() {
         return sharePointHelper;
     }
 
+    /**
+     * Returns the site name.
+     *
+     * @return the SharePoint site name
+     */
     public String getSiteName() {
         return siteName;
     }
 
+    /**
+     * Returns the base URL of the SharePoint server.
+     *
+     * @return the base URL
+     */
     public String getUrl() {
         return url;
     }
 
+    /**
+     * Returns the full site URL.
+     *
+     * @return the full site URL including the site path
+     */
     public String getSiteUrl() {
         return siteUrl;
     }
 
+    /**
+     * Creates a new builder for constructing SharePointClient instances.
+     *
+     * @return a new SharePointClientBuilder
+     */
     public static SharePointClientBuilder builder() {
         return new SharePointClientBuilder();
     }

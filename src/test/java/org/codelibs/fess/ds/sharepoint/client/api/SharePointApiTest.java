@@ -90,8 +90,7 @@ public class SharePointApiTest extends LastaFluteTestCase {
 
         // Test multiple path segments
         assertEquals("folder1/folder2/file.txt", sharePointApi.encodeRelativeUrl("folder1/folder2/file.txt"));
-        assertEquals("folder%201/folder%202/file%20name.txt",
-                sharePointApi.encodeRelativeUrl("folder 1/folder 2/file name.txt"));
+        assertEquals("folder%201/folder%202/file%20name.txt", sharePointApi.encodeRelativeUrl("folder 1/folder 2/file name.txt"));
     }
 
     @Test
