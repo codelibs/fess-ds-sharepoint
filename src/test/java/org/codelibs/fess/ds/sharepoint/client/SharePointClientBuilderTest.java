@@ -66,8 +66,12 @@ public class SharePointClientBuilderTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite")
-                .setRetryCount(3).setRequestConfig(requestConfig).setHttpClient(httpClient);
+        final SharePointClientBuilder builder = SharePointClient.builder()
+                .setUrl("https://example.com/")
+                .setSite("testsite")
+                .setRetryCount(3)
+                .setRequestConfig(requestConfig)
+                .setHttpClient(httpClient);
 
         assertNotNull(builder);
     }
@@ -75,8 +79,8 @@ public class SharePointClientBuilderTest extends LastaFluteTestCase {
     @Test
     public void test_builderWithCredentials() {
         final NtlmCredential credential = new NtlmCredential("user", "password", "hostname", "domain");
-        final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite")
-                .setCredential(credential);
+        final SharePointClientBuilder builder =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("testsite").setCredential(credential);
 
         assertNotNull(builder);
     }
@@ -85,16 +89,15 @@ public class SharePointClientBuilderTest extends LastaFluteTestCase {
     public void test_builderWithOAuth() {
         final OAuth oAuth = new OAuth("clientId", "clientSecret", "tenant", "realm");
 
-        final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite")
-                .setOAuth(oAuth);
+        final SharePointClientBuilder builder =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("testsite").setOAuth(oAuth);
 
         assertNotNull(builder);
     }
 
     @Test
     public void test_apply2013() {
-        final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite")
-                .apply2013();
+        final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite").apply2013();
 
         assertNotNull(builder);
     }
@@ -111,8 +114,8 @@ public class SharePointClientBuilderTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite")
-                .setHttpClient(httpClient).build();
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("testsite").setHttpClient(httpClient).build();
 
         assertNotNull(client);
         assertEquals("testsite", client.getSiteName());

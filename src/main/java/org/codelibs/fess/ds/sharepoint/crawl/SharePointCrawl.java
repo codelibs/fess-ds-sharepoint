@@ -31,12 +31,22 @@ import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.util.ComponentUtil;
 
+/**
+ * Abstract base class for SharePoint crawling operations.
+ */
 public abstract class SharePointCrawl {
 
+    /** The SharePoint client for API access. */
     protected final SharePointClient client;
 
+    /** The statistics key object for tracking crawl statistics. */
     protected StatsKeyObject statsKey;
 
+    /**
+     * Creates a new SharePointCrawl instance.
+     *
+     * @param client the SharePoint client to use for API access
+     */
     protected SharePointCrawl(final SharePointClient client) {
         this.client = client;
     }
@@ -50,6 +60,15 @@ public abstract class SharePointCrawl {
      */
     public abstract Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue);
 
+    /**
+     * Retrieves the roles for a list item.
+     *
+     * @param listId the list ID
+     * @param itemId the item ID
+     * @param sharePointGroupCache cache for SharePoint groups
+     * @param skipRole if true, returns an empty list without fetching roles
+     * @return list of role identifiers
+     */
     protected List<String> getItemRoles(final String listId, final String itemId,
             final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean skipRole) {
         if (skipRole) {
@@ -156,11 +175,22 @@ public abstract class SharePointCrawl {
         return titles;
     }
 
+    /**
+     * Builds a digest string from the content.
+     *
+     * @param content the content to create a digest from
+     * @return the digest string, truncated to maximum length
+     */
     protected String buildDigest(final String content) {
         final int maxLength = ComponentUtil.getFessConfig().getCrawlerDocumentFileMaxDigestLengthAsInteger();
         return StringUtils.abbreviate(content, maxLength);
     }
 
+    /**
+     * Returns the statistics key object for this crawl.
+     *
+     * @return the stats key object
+     */
     public StatsKeyObject getStatsKey() {
         return statsKey;
     }

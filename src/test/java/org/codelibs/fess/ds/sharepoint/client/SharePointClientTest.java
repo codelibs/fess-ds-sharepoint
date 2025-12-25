@@ -48,8 +48,8 @@ public class SharePointClientTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com/").setSite("mysite")
-                .setHttpClient(httpClient).build();
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("mysite").setHttpClient(httpClient).build();
 
         assertEquals("mysite", client.getSiteName());
     }
@@ -59,8 +59,8 @@ public class SharePointClientTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com/").setSite("mysite")
-                .setHttpClient(httpClient).build();
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("mysite").setHttpClient(httpClient).build();
 
         assertEquals("https://example.com/", client.getUrl());
     }
@@ -70,8 +70,8 @@ public class SharePointClientTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com/").setSite("mysite")
-                .setHttpClient(httpClient).build();
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("mysite").setHttpClient(httpClient).build();
 
         assertEquals("https://example.com/sites/mysite/", client.getSiteUrl());
     }
@@ -81,8 +81,8 @@ public class SharePointClientTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClient client = SharePointClient.builder().setUrl("https://sharepoint.example.com/").setSite("projects")
-                .setHttpClient(httpClient).build();
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://sharepoint.example.com/").setSite("projects").setHttpClient(httpClient).build();
 
         assertEquals("https://sharepoint.example.com/sites/projects/", client.getSiteUrl());
     }
@@ -92,8 +92,8 @@ public class SharePointClientTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com/").setSite("mysite")
-                .setHttpClient(httpClient).build();
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("mysite").setHttpClient(httpClient).build();
 
         assertNotNull(client.api());
     }
@@ -103,8 +103,8 @@ public class SharePointClientTest extends LastaFluteTestCase {
         final RequestConfig requestConfig = RequestConfig.custom().setSocketTimeout(10000).setConnectTimeout(10000).build();
         final CloseableHttpClient httpClient = HttpClientBuilder.create().setDefaultRequestConfig(requestConfig).build();
 
-        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com/").setSite("mysite")
-                .setHttpClient(httpClient).build();
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("mysite").setHttpClient(httpClient).build();
 
         assertNotNull(client.helper());
     }

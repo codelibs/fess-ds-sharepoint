@@ -25,6 +25,9 @@ import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 
+/**
+ * Helper class for SharePoint operations.
+ */
 public class SharePointHelper {
     private static final Logger logger = LogManager.getLogger(SharePointHelper.class);
 
@@ -32,11 +35,25 @@ public class SharePointHelper {
 
     private final boolean verson2013;
 
+    /**
+     * Creates a new SharePointHelper instance.
+     *
+     * @param client the SharePoint client
+     * @param verson2013 true if using SharePoint 2013
+     */
     public SharePointHelper(final SharePointClient client, final boolean verson2013) {
         this.client = client;
         this.verson2013 = verson2013;
     }
 
+    /**
+     * Builds a web link for a document library file.
+     *
+     * @param id the file ID
+     * @param serverRelativeUrl the server-relative URL of the file
+     * @param parentUrl the parent folder URL
+     * @return the web link URL
+     */
     public String buildDocLibFileWebLink(final String id, final String serverRelativeUrl, final String parentUrl) {
         if (!verson2013) {
             return client.getSiteUrl() + "Shared%20Documents/Forms/AllItems.aspx?id="
@@ -61,6 +78,12 @@ public class SharePointHelper {
         return client.getSiteUrl() + docLibName + "/Forms/AllItems.aspx?ID=id&Source=";
     }
 
+    /**
+     * Encodes a relative URL for use in SharePoint API calls.
+     *
+     * @param url the URL to encode
+     * @return the encoded URL
+     */
     public String encodeRelativeUrl(final String url) {
         String result = url;
         final String[] array = url.split("/");
@@ -70,6 +93,11 @@ public class SharePointHelper {
         return result.replace("+", "%20");
     }
 
+    /**
+     * Gets the hostname from the SharePoint site URL.
+     *
+     * @return the hostname
+     */
     public String getHostName() {
         try {
             final URL url = new URL(client.getSiteUrl());
