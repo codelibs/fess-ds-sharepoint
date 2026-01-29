@@ -23,10 +23,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.codelibs.fess.util.ComponentUtil;
-import org.dbflute.utflute.lastaflute.LastaFluteTestCase;
+import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.Test;
 
-public class SharePointClientExceptionTest extends LastaFluteTestCase {
+public class SharePointClientExceptionTest extends UnitDsTestCase {
 
     @Override
     protected String prepareConfigFile() {

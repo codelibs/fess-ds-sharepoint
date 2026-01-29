@@ -24,10 +24,10 @@ import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.util.ComponentUtil;
-import org.dbflute.utflute.lastaflute.LastaFluteTestCase;
+import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.Test;
 
-public class SharePointClientTest extends LastaFluteTestCase {
+public class SharePointClientTest extends UnitDsTestCase {
 
     @Override
     protected String prepareConfigFile() {

@@ -24,10 +24,10 @@ import static org.junit.Assert.assertTrue;
 import org.apache.http.auth.Credentials;
 import org.apache.http.auth.NTCredentials;
 import org.codelibs.fess.util.ComponentUtil;
-import org.dbflute.utflute.lastaflute.LastaFluteTestCase;
+import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.Test;
 
-public class NtlmCredentialTest extends LastaFluteTestCase {
+public class NtlmCredentialTest extends UnitDsTestCase {
 
     @Override
     protected String prepareConfigFile() {

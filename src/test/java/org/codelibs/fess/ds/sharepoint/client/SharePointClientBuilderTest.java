@@ -26,10 +26,10 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.ComponentUtil;
-import org.dbflute.utflute.lastaflute.LastaFluteTestCase;
+import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.Test;
 
-public class SharePointClientBuilderTest extends LastaFluteTestCase {
+public class SharePointClientBuilderTest extends UnitDsTestCase {
 
     @Override
     protected String prepareConfigFile() {

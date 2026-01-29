@@ -18,10 +18,10 @@ package org.codelibs.fess.ds.sharepoint;
 import org.junit.jupiter.api.TestInfo;
 
 import org.codelibs.fess.util.ComponentUtil;
-import org.dbflute.utflute.lastaflute.LastaFluteTestCase;
+import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.Test;
 
-public class SharePointDataStoreTest extends LastaFluteTestCase {
+public class SharePointDataStoreTest extends UnitDsTestCase {
     public SharePointDataStore dataStore;
 
     @Override
