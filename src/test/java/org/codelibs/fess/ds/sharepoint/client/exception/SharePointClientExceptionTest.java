@@ -15,16 +15,18 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.exception;
 
+import org.junit.jupiter.api.TestInfo;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.codelibs.fess.util.ComponentUtil;
-import org.dbflute.utflute.lastaflute.LastaFluteTestCase;
+import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.Test;
 
-public class SharePointClientExceptionTest extends LastaFluteTestCase {
+public class SharePointClientExceptionTest extends UnitDsTestCase {
 
     @Override
     protected String prepareConfigFile() {
@@ -37,9 +39,9 @@ public class SharePointClientExceptionTest extends LastaFluteTestCase {
     }
 
     @Override
-    public void tearDown() throws Exception {
+    public void tearDown(TestInfo testInfo) throws Exception {
         ComponentUtil.setFessConfig(null);
-        super.tearDown();
+        super.tearDown(testInfo);
     }
 
     @Test
