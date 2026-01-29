@@ -15,6 +15,8 @@
  */
 package org.codelibs.fess.ds.sharepoint.client;
 
+import org.junit.jupiter.api.TestInfo;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -40,9 +42,9 @@ public class SharePointClientBuilderTest extends LastaFluteTestCase {
     }
 
     @Override
-    public void tearDown() throws Exception {
+    public void tearDown(TestInfo testInfo) throws Exception {
         ComponentUtil.setFessConfig(null);
-        super.tearDown();
+        super.tearDown(testInfo);
     }
 
     @Test
