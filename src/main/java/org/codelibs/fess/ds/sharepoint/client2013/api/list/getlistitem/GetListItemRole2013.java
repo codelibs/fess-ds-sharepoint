@@ -78,33 +78,36 @@ public class GetListItemRole2013 extends GetListItemRole {
         final Map<String, Object> bodyMap = getListItemRoleDocHandler.getDataMap();
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> values = (List<Map<String, Object>>) bodyMap.get("value");
-        values.stream().map(value -> (DocumentUtil.getValue(value, "PrincipalId", String.class))).forEach(principalId -> {
-            if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
-                response.addSharePointGroup(sharePointGroupCache.get(principalId));
-                return;
-            }
-            final HttpGet memberRequest = new HttpGet(buildMemberUrl(principalId));
-            final XmlResponse memberResponse = doXmlRequest(memberRequest);
-            final MemberDocHandler memberDocHandler = new MemberDocHandler();
-            memberResponse.parseXml(memberDocHandler);
-            final Map<String, Object> memberResponseMap = memberDocHandler.getDataMap();
-            final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
-            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
-            if (principalType == 1) {
-                // User
-                final GetListItemRole2013Response.User user =
-                        new GetListItemRole2013Response.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
-                                DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
-                response.addUser(user);
-            } else if (principalType == 8) {
-                final GetListItemRole2013Response.SharePointGroup sharePointGroup =
-                        buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
-                response.addSharePointGroup(sharePointGroup);
-                if (sharePointGroupCache != null) {
-                    sharePointGroupCache.put(principalId, sharePointGroup);
-                }
-            }
-        });
+        values.stream()
+                .map(value -> (DocumentUtil.getValue(value, "PrincipalId", String.class)))
+                .filter(principalId -> !isLimitedAccessOnly(principalId))
+                .forEach(principalId -> {
+                    if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
+                        response.addSharePointGroup(sharePointGroupCache.get(principalId));
+                        return;
+                    }
+                    final HttpGet memberRequest = new HttpGet(buildMemberUrl(principalId));
+                    final XmlResponse memberResponse = doXmlRequest(memberRequest);
+                    final MemberDocHandler memberDocHandler = new MemberDocHandler();
+                    memberResponse.parseXml(memberDocHandler);
+                    final Map<String, Object> memberResponseMap = memberDocHandler.getDataMap();
+                    final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
+                    final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
+                    if (principalType == 1) {
+                        // User
+                        final GetListItemRole2013Response.User user =
+                                new GetListItemRole2013Response.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+                                        DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
+                        response.addUser(user);
+                    } else if (principalType == 8) {
+                        final GetListItemRole2013Response.SharePointGroup sharePointGroup =
+                                buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
+                        response.addSharePointGroup(sharePointGroup);
+                        if (sharePointGroupCache != null) {
+                            sharePointGroupCache.put(principalId, sharePointGroup);
+                        }
+                    }
+                });
         return response;
     }
 
@@ -131,6 +134,33 @@ public class GetListItemRole2013 extends GetListItemRole {
     @Override
     protected String buildUsersUrl(final String memberId) {
         return siteUrl + "_api/Web/SiteGroups/GetById(" + memberId + ")/Users";
+    }
+
+    /**
+     * Builds the URL for retrieving role definition bindings by principal ID.
+     *
+     * @param principalId the principal ID to get role definition bindings for
+     * @return the complete URL for role definition bindings API
+     */
+    protected String buildRoleDefinitionBindingsUrl(final String principalId) {
+        return buildBaseUrl() + "Items(" + itemId + ")/RoleAssignments/GetByPrincipalId(" + principalId + ")/RoleDefinitionBindings";
+    }
+
+    boolean isLimitedAccessOnly(final String principalId) {
+        final HttpGet httpGet = new HttpGet(buildRoleDefinitionBindingsUrl(principalId));
+        final XmlResponse xmlResponse = doXmlRequest(httpGet);
+        final RoleDefinitionBindingsDocHandler docHandler = new RoleDefinitionBindingsDocHandler();
+        xmlResponse.parseXml(docHandler);
+        final List<Integer> roleTypeKinds = docHandler.getRoleTypeKinds();
+        if (roleTypeKinds.isEmpty()) {
+            return true;
+        }
+        for (final int roleTypeKind : roleTypeKinds) {
+            if (roleTypeKind > 1) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -357,6 +387,45 @@ public class GetListItemRole2013 extends GetListItemRole {
 
         public Map<String, Object> getDataMap() {
             return dataMap;
+        }
+    }
+
+    static class RoleDefinitionBindingsDocHandler extends DefaultHandler {
+        private final List<Integer> roleTypeKinds = new ArrayList<>();
+
+        private String fieldName;
+
+        private final StringBuilder buffer = new StringBuilder(1000);
+
+        @Override
+        public void startElement(final String uri, final String localName, final String qName, final Attributes attributes) {
+            if ("d:RoleTypeKind".equals(qName)) {
+                fieldName = "RoleTypeKind";
+                buffer.setLength(0);
+            }
+        }
+
+        @Override
+        public void characters(final char[] ch, final int offset, final int length) {
+            if (fieldName != null) {
+                buffer.append(new String(ch, offset, length));
+            }
+        }
+
+        @Override
+        public void endElement(final String uri, final String localName, final String qName) {
+            if ("d:RoleTypeKind".equals(qName) && fieldName != null) {
+                try {
+                    roleTypeKinds.add(Integer.parseInt(buffer.toString().trim()));
+                } catch (final NumberFormatException e) {
+                    // ignore
+                }
+                fieldName = null;
+            }
+        }
+
+        public List<Integer> getRoleTypeKinds() {
+            return roleTypeKinds;
         }
     }
 }
