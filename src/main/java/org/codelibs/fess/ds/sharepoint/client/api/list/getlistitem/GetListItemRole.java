@@ -107,7 +107,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
      * @return a GetListItemRoleResponse containing the role assignments for this page
      */
     protected GetListItemRoleResponse executeInternal(final int start, final int num) {
-        final String buildUrl = buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num);
+        final String buildUrl = buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num) + "&%24expand=RoleDefinitionBindings";
         if (logger.isDebugEnabled()) {
             logger.debug("buildUrl: {}", buildUrl);
         }
@@ -118,47 +118,50 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
         final Map<String, Object> bodyMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> values = (List<Map<String, Object>>) bodyMap.get("value");
-        values.stream().map(value -> (value.get("PrincipalId").toString())).forEach(principalId -> {
-            if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
-                response.addSharePointGroup(sharePointGroupCache.get(principalId));
-                return;
-            }
-            final String buildMemberUrl = buildMemberUrl(itemId, principalId);
-            if (logger.isDebugEnabled()) {
-                logger.debug("buildMemberUrl: {}", buildMemberUrl);
-            }
-            final HttpGet memberRequest = new HttpGet(buildMemberUrl);
-            final JsonResponse memberResponse = doJsonRequest(memberRequest);
-            final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
-            final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
-            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
-            switch (principalType) {
-            case 1:
-                // User
-                final GetListItemRoleResponse.User user =
-                        new GetListItemRoleResponse.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+        values.stream()
+                .filter(value -> !isLimitedAccessOnly(value))
+                .map(value -> (value.get("PrincipalId").toString()))
+                .forEach(principalId -> {
+                    if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
+                        response.addSharePointGroup(sharePointGroupCache.get(principalId));
+                        return;
+                    }
+                    final String buildMemberUrl = buildMemberUrl(itemId, principalId);
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("buildMemberUrl: {}", buildMemberUrl);
+                    }
+                    final HttpGet memberRequest = new HttpGet(buildMemberUrl);
+                    final JsonResponse memberResponse = doJsonRequest(memberRequest);
+                    final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
+                    final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
+                    final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
+                    switch (principalType) {
+                    case 1:
+                        // User
+                        final GetListItemRoleResponse.User user =
+                                new GetListItemRoleResponse.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+                                        DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
+                        response.addUser(user);
+                        break;
+                    case 4:
+                        // Security Group
+                        final GetListItemRoleResponse.SecurityGroup securityGroup = new GetListItemRoleResponse.SecurityGroup(id,
+                                DocumentUtil.getValue(memberResponseMap, "Title", String.class),
                                 DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
-                response.addUser(user);
-                break;
-            case 4:
-                // Security Group
-                final GetListItemRoleResponse.SecurityGroup securityGroup =
-                        new GetListItemRoleResponse.SecurityGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
-                                DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
-                response.addSecurityGroup(securityGroup);
-                break;
-            case 8:
-                final GetListItemRoleResponse.SharePointGroup sharePointGroup =
-                        buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
-                response.addSharePointGroup(sharePointGroup);
-                if (sharePointGroupCache != null) {
-                    sharePointGroupCache.put(principalId, sharePointGroup);
-                }
-                break;
-            default:
-                break;
-            }
-        });
+                        response.addSecurityGroup(securityGroup);
+                        break;
+                    case 8:
+                        final GetListItemRoleResponse.SharePointGroup sharePointGroup =
+                                buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
+                        response.addSharePointGroup(sharePointGroup);
+                        if (sharePointGroupCache != null) {
+                            sharePointGroupCache.put(principalId, sharePointGroup);
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+                });
         return response;
     }
 
@@ -210,6 +213,25 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
      */
     protected String getPagingParam(final int start, final int num) {
         return PAGING_PARAM.replace("{{start}}", String.valueOf(start)).replace("{{num}}", String.valueOf(num));
+    }
+
+    @SuppressWarnings("unchecked")
+    boolean isLimitedAccessOnly(final Map<String, Object> roleAssignment) {
+        final List<Map<String, Object>> bindings = (List<Map<String, Object>>) roleAssignment.get("RoleDefinitionBindings");
+        if (bindings == null || bindings.isEmpty()) {
+            return true;
+        }
+        for (final Map<String, Object> binding : bindings) {
+            final Object roleTypeKindObj = binding.get("RoleTypeKind");
+            if (roleTypeKindObj != null) {
+                final int roleTypeKind = (roleTypeKindObj instanceof Number) ? ((Number) roleTypeKindObj).intValue()
+                        : Integer.parseInt(roleTypeKindObj.toString());
+                if (roleTypeKind > 1) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /**
