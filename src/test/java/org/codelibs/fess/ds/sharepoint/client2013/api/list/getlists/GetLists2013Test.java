@@ -38,8 +38,21 @@ public class GetLists2013Test extends UnitDsTestCase {
      * GetLists uses FALSE. The net effect is that a SharePoint 2013 site crawl
      * enqueues zero lists.
      *
-     * <p>THIS TEST ASSERTS A BUG. Phase 1 (fix/sp2013-list-crawl) fixes the
-     * implementation, at which point this test must be inverted to expect 2 lists.
+     * <p>THIS TEST ASSERTS A BUG. The fix corrects the
+     * implementation, at which point this test must be inverted to expect 3 lists
+     * (see below), not 2.
+     *
+     * <p><b>Tripwire entry:</b> {@code fixtures/sp2013/lists.xml} carries a third
+     * {@code <entry>} (Id {@code 44444444-...}) with {@code <d:Hidden>true</d:Hidden>}
+     * and no {@code <d:NoCrawl>} element at all. The first two entries always supply
+     * both {@code NoCrawl} and {@code Hidden} explicitly (both {@code false}), which
+     * means fixing only the {@code EntityTypeName} line would make this test pass
+     * with a count of 2 while leaving GetLists2013's other two defects - the NoCrawl
+     * default of TRUE (should be FALSE) and reading Hidden from the wrong map -
+     * invisible. Today the tripwire entry changes nothing (it is skipped along with
+     * the other two, so the count stays 0); once EntityTypeName is fixed it must push
+     * the count to 3, and its {@code isNoCrawl()}/{@code isHidden()} values expose the
+     * two remaining defects. Do not delete it as noise.
      */
     @Test
     public void test_currentBehavior_returnsNoLists() throws Exception {
@@ -51,7 +64,7 @@ public class GetLists2013Test extends UnitDsTestCase {
                 final GetLists2013 api = new GetLists2013(httpClient, server.getBaseUrl() + "sites/test/", null);
                 final GetListsResponse response = api.execute();
 
-                assertEquals("SP2013 list crawl currently yields no lists (bug, fixed in Phase 1)", 0, response.getLists().size());
+                assertEquals("SP2013 list crawl currently yields no lists (bug; the fix inverts this test)", 0, response.getLists().size());
             }
         }
     }

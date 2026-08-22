@@ -73,7 +73,7 @@ public class GetListsTest extends UnitDsTestCase {
             assertEquals("/sites/test/_api/lists", recorded.getPath());
             // Current behavior: GetLists issues no paging parameters at all, so a site
             // with more lists than the server's default page size is silently truncated.
-            // Phase 1 (fix/silent-data-loss) adds paging; this assertion will change then.
+            // Adding paging will change this assertion.
             assertNull(recorded.getQuery());
         }
     }

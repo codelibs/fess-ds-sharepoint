@@ -46,7 +46,7 @@ public class SharePointDataStoreRoleTest extends UnitDsTestCase {
      * {@code resultMap.get(role)} — which is null — over the configured permissions.
      * Documents indexed this way match no user's role query and become invisible.
      *
-     * <p>THIS TEST ASSERTS A BUG. Phase 1 (fix/role-permission-overwrite) makes the
+     * <p>THIS TEST ASSERTS A BUG. The fix makes the
      * configured permissions survive, at which point this test must be inverted.
      */
     @Test
@@ -69,7 +69,7 @@ public class SharePointDataStoreRoleTest extends UnitDsTestCase {
     /**
      * Mirrors the merge logic in SharePointDataStore#storeData so the behavior can be
      * pinned without standing up a full crawl. Keep in sync with the production code;
-     * Phase 1 changes both together.
+     * Fix both together.
      */
     private void mergeRoleLikeDataStore(final Map<String, Object> dataMap, final Map<String, Object> resultMap, final String roleField) {
         if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
