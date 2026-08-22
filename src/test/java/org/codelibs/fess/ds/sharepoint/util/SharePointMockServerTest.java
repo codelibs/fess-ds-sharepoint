@@ -45,6 +45,7 @@ public class SharePointMockServerTest extends UnitDsTestCase {
             final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             assertEquals(200, response.statusCode());
+            assertEquals("application/json; charset=UTF-8", response.headers().firstValue("Content-Type").orElse(null));
             assertEquals("0", response.headers().firstValue("X-SharePointHealthScore").orElse(null));
             assertTrue("body should contain the list title", response.body().contains("Shared Documents"));
 
