@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.jetty.http.HttpField;
@@ -44,8 +45,8 @@ import org.eclipse.jetty.util.Callback;
  */
 public class SharePointMockServer implements AutoCloseable {
 
-    private final Map<String, StubResponse> stubs = new LinkedHashMap<>();
-    private final Map<String, String> globalHeaders = new LinkedHashMap<>();
+    private final Map<String, StubResponse> stubs = new ConcurrentHashMap<>();
+    private final Map<String, String> globalHeaders = new ConcurrentHashMap<>();
     private final List<RecordedRequest> recordedRequests = new CopyOnWriteArrayList<>();
 
     private Server server;
@@ -59,7 +60,7 @@ public class SharePointMockServer implements AutoCloseable {
      * @return this instance for chaining
      */
     public SharePointMockServer onPath(final String path, final String contentType, final String fixtureClasspath) {
-        stubs.put(path, new StubResponse(200, contentType, readClasspath(fixtureClasspath)));
+        stubs.put(path, new StubResponse(200, withUtf8Charset(contentType), readClasspath(fixtureClasspath)));
         return this;
     }
 
@@ -73,7 +74,7 @@ public class SharePointMockServer implements AutoCloseable {
      * @return this instance for chaining
      */
     public SharePointMockServer onPathStatus(final String path, final int status, final String contentType, final String body) {
-        stubs.put(path, new StubResponse(status, contentType, body));
+        stubs.put(path, new StubResponse(status, withUtf8Charset(contentType), body));
         return this;
     }
 
@@ -165,6 +166,28 @@ public class SharePointMockServer implements AutoCloseable {
         } catch (final IOException e) {
             throw new IllegalStateException("Failed to read fixture: " + location, e);
         }
+    }
+
+    /**
+     * Ensures the given Content-Type declares a charset, defaulting to UTF-8.
+     *
+     * <p>{@link Content.Sink#write(org.eclipse.jetty.io.Content.Sink, boolean, String, org.eclipse.jetty.util.Callback)}
+     * always encodes the body as UTF-8, but a Content-Type header with no charset
+     * leaves HttpCore's {@code EntityUtils.toString(HttpEntity)} (used by
+     * {@code SharePointApi}) to fall back to its own MIME registry, which defaults
+     * XML and plain-text media types to ISO-8859-1. Without this, non-ASCII fixture
+     * bodies would decode incorrectly on the client side even though the bytes on
+     * the wire are correct.
+     *
+     * @param contentType the Content-Type value to check
+     * @return {@code contentType} unchanged if it already declares a charset, otherwise
+     *         {@code contentType} with {@code ; charset=UTF-8} appended
+     */
+    private static String withUtf8Charset(final String contentType) {
+        if (contentType == null || contentType.toLowerCase(Locale.ROOT).contains("charset=")) {
+            return contentType;
+        }
+        return contentType + "; charset=UTF-8";
     }
 
     private class StubHandler extends Handler.Abstract {

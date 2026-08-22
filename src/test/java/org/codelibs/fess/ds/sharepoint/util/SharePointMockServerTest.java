@@ -84,4 +84,33 @@ public class SharePointMockServerTest extends UnitDsTestCase {
             assertEquals("throttled", response.body());
         }
     }
+
+    @Test
+    public void test_contentTypeGetsUtf8CharsetWhenMissing() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            final String japaneseBody = "<items><item>\u65e5\u672c\u8a9e\u30c6\u30b9\u30c8</item></items>";
+            server.onPathStatus("/sites/test/_api/no-charset", 200, "application/xml", japaneseBody);
+            server.onPathStatus("/sites/test/_api/has-charset", 200, "application/xml; charset=UTF-8", japaneseBody);
+            server.onPathStatus("/sites/test/_api/has-charset-mixed-case", 200, "text/plain; CHARSET=Shift_JIS", "ascii-only");
+            server.start();
+
+            final HttpClient httpClient = HttpClient.newHttpClient();
+
+            final HttpResponse<String> noCharsetResponse =
+                    httpClient.send(HttpRequest.newBuilder().uri(URI.create(server.getBaseUrl() + "sites/test/_api/no-charset")).build(),
+                            HttpResponse.BodyHandlers.ofString());
+            assertEquals("application/xml; charset=UTF-8", noCharsetResponse.headers().firstValue("Content-Type").orElse(null));
+            assertEquals(japaneseBody, noCharsetResponse.body());
+
+            final HttpResponse<String> hasCharsetResponse =
+                    httpClient.send(HttpRequest.newBuilder().uri(URI.create(server.getBaseUrl() + "sites/test/_api/has-charset")).build(),
+                            HttpResponse.BodyHandlers.ofString());
+            assertEquals("application/xml; charset=UTF-8", hasCharsetResponse.headers().firstValue("Content-Type").orElse(null));
+
+            final HttpResponse<String> mixedCaseResponse = httpClient.send(
+                    HttpRequest.newBuilder().uri(URI.create(server.getBaseUrl() + "sites/test/_api/has-charset-mixed-case")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertEquals("text/plain; CHARSET=Shift_JIS", mixedCaseResponse.headers().firstValue("Content-Type").orElse(null));
+        }
+    }
 }
