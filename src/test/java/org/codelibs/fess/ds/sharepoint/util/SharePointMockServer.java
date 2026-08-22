@@ -27,8 +27,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.jetty.http.HttpField;
+import org.eclipse.jetty.http.UriCompliance;
 import org.eclipse.jetty.io.Content;
 import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.Server;
@@ -93,10 +96,30 @@ public class SharePointMockServer implements AutoCloseable {
     /**
      * Starts the server on an ephemeral port.
      *
+     * <p>The connector is configured with a relaxed {@link UriCompliance} rather than
+     * the bare {@code new Server(0)} default. Jetty 12's default compliance mode
+     * ({@code UriCompliance.DEFAULT}) allows no ambiguous URI encodings at all, so it
+     * rejects requests like {@code /f/a%25b.txt} (a literal {@code %} in a SharePoint
+     * file name) and OData paths like
+     * {@code GetFolderByServerRelativeUrl(%27%2Fsites%2F...%27)} with a 400 before
+     * {@code StubHandler.handle} ever runs - the request is not even recorded. Real
+     * IIS/SharePoint servers accept these wire forms, and the escaping tests this
+     * mock exists to support need to see them reach the handler with their raw
+     * encoding intact. Do not "simplify" this back to {@code new Server(0)}: doing so
+     * silently reintroduces those 400s with an empty request log and nothing to
+     * assert on. {@link Request#getHttpURI()}{@code .getPath()} still returns the raw
+     * wire form afterwards, which is what escaping assertions need.
+     *
      * @throws Exception if the server fails to start
      */
     public void start() throws Exception {
-        server = new Server(0);
+        server = new Server();
+        final HttpConfiguration httpConfig = new HttpConfiguration();
+        httpConfig.setUriCompliance(UriCompliance.DEFAULT.with("sharepoint", UriCompliance.Violation.AMBIGUOUS_PATH_ENCODING,
+                UriCompliance.Violation.AMBIGUOUS_PATH_SEPARATOR, UriCompliance.Violation.AMBIGUOUS_PATH_SEGMENT));
+        final ServerConnector connector = new ServerConnector(server, new HttpConnectionFactory(httpConfig));
+        connector.setPort(0);
+        server.addConnector(connector);
         server.setHandler(new StubHandler());
         server.start();
     }

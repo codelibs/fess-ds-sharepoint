@@ -58,6 +58,37 @@ public class SharePointMockServerTest extends UnitDsTestCase {
         }
     }
 
+    /**
+     * Guards against reverting the connector to the bare {@code new Server(0)} form.
+     *
+     * <p>Jetty 12's default {@link org.eclipse.jetty.http.UriCompliance} treats an
+     * encoded {@code %} (wire form {@code %25}) inside a path segment as an ambiguous
+     * path encoding and rejects the request with 400 before {@code StubHandler.handle}
+     * ever runs - the request is not even recorded. Real IIS/SharePoint servers accept
+     * this in file names (e.g. {@code a%b.txt}), and the next phase's OData/percent
+     * escaping tests need exactly this wire form to reach the handler. Do not
+     * "simplify" {@link SharePointMockServer#start()} back to {@code new Server(0)};
+     * that silently reintroduces the 400 this test fails on.
+     */
+    @Test
+    public void test_encodedPercentInPathIsAcceptedAndPreservedRaw() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPath("/f/a%25b.txt", "text/plain", "fixtures/modern/lists.json");
+            server.start();
+
+            final HttpClient httpClient = HttpClient.newHttpClient();
+            final HttpRequest request = HttpRequest.newBuilder().uri(URI.create(server.getBaseUrl() + "f/a%25b.txt")).build();
+            final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertEquals("an encoded %25 in a path segment must not be rejected as an ambiguous URI", 200, response.statusCode());
+
+            assertEquals(1, server.getRecordedRequests().size());
+            final SharePointMockServer.RecordedRequest recorded = server.getRecordedRequests().get(0);
+            assertEquals("the recorded path must preserve the raw wire-encoded form, not a decoded one", "/f/a%25b.txt",
+                    recorded.getPath());
+        }
+    }
+
     @Test
     public void test_unregisteredPathReturns404() throws Exception {
         try (SharePointMockServer server = new SharePointMockServer()) {
