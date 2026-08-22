@@ -1,0 +1,31 @@
+{
+  "value": [
+    {
+      "Id": "11111111-1111-1111-1111-111111111111",
+      "Title": "Shared Documents",
+      "EntityTypeName": "Shared_x0020_Documents",
+      "BaseTemplate": 101,
+      "NoCrawl": false,
+      "Hidden": false,
+      "ItemCount": 3
+    },
+    {
+      "Id": "22222222-2222-2222-2222-222222222222",
+      "Title": "Announcements",
+      "EntityTypeName": "AnnouncementsList",
+      "BaseTemplate": 104,
+      "NoCrawl": false,
+      "Hidden": false,
+      "ItemCount": 2
+    },
+    {
+      "Id": "33333333-3333-3333-3333-333333333333",
+      "Title": "User Information List",
+      "EntityTypeName": "UserInfoList",
+      "BaseTemplate": 112,
+      "NoCrawl": true,
+      "Hidden": true,
+      "ItemCount": 5
+    }
+  ]
+}
