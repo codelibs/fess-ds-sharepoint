@@ -19,7 +19,7 @@ import org.junit.jupiter.api.TestInfo;
 
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class SharePointDataStoreTest extends UnitDsTestCase {
     public SharePointDataStore dataStore;
@@ -48,5 +48,8 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
 
     @Test
     public void testCrawl() throws Exception {
+        // Crawl behavior is covered by the mock-server based tests added in
+        // SharePointDataStoreRoleTest and SiteCrawlTest. This placeholder is
+        // kept so the class still reports a test and is not silently empty.
     }
 }

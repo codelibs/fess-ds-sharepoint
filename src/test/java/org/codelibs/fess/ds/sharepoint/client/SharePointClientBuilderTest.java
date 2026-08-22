@@ -17,9 +17,6 @@ package org.codelibs.fess.ds.sharepoint.client;
 
 import org.junit.jupiter.api.TestInfo;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -27,7 +24,7 @@ import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class SharePointClientBuilderTest extends UnitDsTestCase {
 
