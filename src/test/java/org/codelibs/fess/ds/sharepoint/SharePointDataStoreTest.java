@@ -48,8 +48,10 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
 
     @Test
     public void testCrawl() throws Exception {
-        // Crawl behavior is covered by the mock-server based tests added in
-        // SharePointDataStoreRoleTest and SiteCrawlTest. This placeholder is
-        // kept so the class still reports a test and is not silently empty.
+        // Intentionally empty. Exercising storeData() end to end needs a DataConfig,
+        // an IndexUpdateCallback and a DataStoreParams, which is out of scope for the
+        // test-foundation phase. Kept so the class still reports a test rather than
+        // being silently empty; the crawl paths get their coverage alongside the
+        // fixes that touch them.
     }
 }
