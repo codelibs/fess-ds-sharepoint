@@ -30,31 +30,20 @@
     </content>
   </entry>
   <!--
-    Tripwire entry for GetLists2013's two masked defects (see GetLists2013.java:98-99).
+    Tripwire entry for two defects GetLists2013 used to have.
 
-    - No <d:NoCrawl> element here at all, so GetLists2013 must fall back to its
-      default. GetLists2013.java:98 reads NoCrawl from the correct per-entry
-      map but defaults to TRUE, where the modern GetLists defaults to FALSE.
-      The two entries above always supply NoCrawl explicitly, so that wrong
-      default is never exercised.
-    - <d:Hidden> is true here, but GetLists2013.java:99 reads Hidden from the
-      wrong map (the outer dataMap instead of the per-entry value map), so it
-      always falls back to its own default of FALSE - silently wrong for this
-      entry once the outer bug below is fixed.
+    - No <d:NoCrawl> element here at all, so GetLists2013 has to fall back to
+      its default. That default was TRUE, where the modern GetLists defaults to
+      FALSE, so this entry was wrongly excluded from crawling. The two entries
+      above always supply NoCrawl explicitly, so nothing else exercises the
+      default.
+    - <d:Hidden> is true here. Hidden was read from the outer dataMap instead of
+      the per-entry value map, so it always fell back to its own default of
+      FALSE - silently wrong for this entry.
 
-    Today this entry changes nothing: GetLists2013 reads EntityTypeName from
-    that same wrong outer map, so entityTypeName is always null and every
-    entry - including this one - is skipped, keeping the count at 0 (see
-    GetLists2013Test#test_currentBehavior_returnsNoLists, which must keep
-    asserting 0). Once the EntityTypeName line is fixed to read from the
-    per-entry map, this entry starts being counted, and:
-      * if NoCrawl still defaults to TRUE, this entry (no NoCrawl element)
-        will be wrongly excluded from crawling;
-      * if Hidden still reads from the wrong map, this entry will report
-        isHidden()==false despite <d:Hidden>true</d:Hidden>.
-    Do not delete this entry when the EntityTypeName bug is fixed - it is
-    what makes those two remaining defects visible instead of coincidentally
-    passing.
+    Both are asserted by GetLists2013Test#test_parsesAllListsFromTheAtomFeed.
+    Do not delete this entry: it is the only one that tells a correct default
+    and a correct map from a coincidentally passing one.
   -->
   <entry>
     <content type="application/xml">

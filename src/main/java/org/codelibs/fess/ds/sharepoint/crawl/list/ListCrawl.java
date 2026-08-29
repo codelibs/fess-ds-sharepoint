@@ -47,6 +47,29 @@ public class ListCrawl extends SharePointCrawl {
     /** Logger for list crawling operations */
     private static final Logger logger = LogManager.getLogger(ListCrawl.class);
 
+    /**
+     * Upper bound on the number of pages of list items this crawl may fetch.
+     *
+     * <p>The listing ends when a page comes back empty. A server that ignores the paging token
+     * answers the same first page instead, so without this bound the loop would neither finish
+     * nor stay within memory - it keeps offering the same items to the crawling queue. This is
+     * the same hazard {@link org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl} guards
+     * against for the files inside one folder.
+     *
+     * <p>Unlike that guard, this one does not cap an item count. {@link
+     * org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems}'s paging token
+     * advances by item ID ({@code p_ID}), not by an offset into the list, so this bound caps an
+     * ID range instead: at the default 100 items per request it is an ID range of 1,000,000, and
+     * raising {@code list.items.number_per_page} raises the covered ID range in proportion. A
+     * real list's item IDs only grow, including past deleted items, so a long-lived list can run
+     * past this ceiling with far fewer live items than the ceiling number suggests - a 3,000-item
+     * list whose IDs have reached 50,000 after years of adds and deletes is nowhere near it. The
+     * value here gives that kind of list 20x headroom over that example while still bounding a
+     * runaway server, one that never stops paging, to a finite number of requests (at most 10,000
+     * against the default page size).
+     */
+    private static final int MAX_PAGES = 10000;
+
     /** SharePoint list identifier */
     private final String id;
     /** Display name of the SharePoint list */
@@ -111,7 +134,8 @@ public class ListCrawl extends SharePointCrawl {
         final GetListsResponse.SharePointList sharePointList = getListResponse.getList();
         final String listId = sharePointList.getId();
         final String listName = sharePointList.getListName();
-        for (int start = 0;; start += numberPerPage) {
+        int start = 0;
+        for (int page = 0; page < MAX_PAGES; page++) {
             GetListItemsResponse getListItemsResponse;
             if (listId == null) {
                 return null;
@@ -141,18 +165,28 @@ public class ListCrawl extends SharePointCrawl {
             if (getListItemsResponse.getListItems().isEmpty()) {
                 break;
             }
+            start += numberPerPage;
             getListItemsResponse.getListItems().forEach(item -> {
                 if (item.getTitle().startsWith("$Resources")) {
                     return;
                 }
 
                 final List<String> roles = getItemRoles(listId, item.getId(), sharePointGroupCache, skipRole);
-                crawlingQueue.offer(new ItemCrawl(client, listId, listName, item.getId(), roles, isSubPage, includeFields, excludeFields));
+                crawlingQueue.offer(new ItemCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles,
+                        isSubPage, includeFields, excludeFields));
                 if (item.hasAttachments()) {
                     crawlingQueue.offer(
                             new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles));
                 }
             });
+            if (page == MAX_PAGES - 1) {
+                // "Pages" here is really an item-ID range: GetListItems's paging token advances
+                // by item ID (p_ID), not by an offset, so this stops at an ID ceiling rather than
+                // an item count. Truncating here is not counted as a crawl failure, so the
+                // stale-document cleanup still runs and documents past the bound can be removed
+                // from the index.
+                logger.warn("Stopped listing the items of list {} after {} pages; the listing may be truncated.", listName, MAX_PAGES);
+            }
         }
         return null;
     }

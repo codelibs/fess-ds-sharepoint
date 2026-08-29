@@ -22,6 +22,8 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class GetListsTest extends UnitDsTestCase {
 
@@ -71,10 +73,61 @@ public class GetListsTest extends UnitDsTestCase {
             assertEquals(1, server.getRecordedRequests().size());
             final SharePointMockServer.RecordedRequest recorded = server.getRecordedRequests().get(0);
             assertEquals("/sites/test/_api/lists", recorded.getPath());
-            // Current behavior: GetLists issues no paging parameters at all, so a site
-            // with more lists than the server's default page size is silently truncated.
-            // Adding paging will change this assertion.
+            // GetLists never adds its own paging parameters - it lets the server drive paging
+            // through odata.nextLink instead. This fixture has none, so exactly one request is
+            // made and it carries no query string of our own making.
             assertNull(recorded.getQuery());
+        }
+    }
+
+    @Test
+    public void test_followsODataNextLinkAcrossPages() throws Exception {
+        // A response that includes odata.nextLink used to be a dead end: GetLists read only the
+        // first page and never followed it, silently truncating a site with more lists than the
+        // server's own default page size.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.start();
+            final String nextUrl = server.getBaseUrl() + "sites/test/_api/lists?nextpage=1";
+            server.onPathStatus("/sites/test/_api/lists", 200, "application/json",
+                    "{\"value\":[{\"Id\":\"11111111-1111-1111-1111-111111111111\",\"Title\":\"List A\","
+                            + "\"EntityTypeName\":\"GenericList\",\"NoCrawl\":false,\"Hidden\":false}]," + "\"odata.nextLink\":\"" + nextUrl
+                            + "\"}");
+            server.onPathQuery("/sites/test/_api/lists", "nextpage=1", "application/json",
+                    "{\"value\":[{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Title\":\"List B\","
+                            + "\"EntityTypeName\":\"GenericList\",\"NoCrawl\":false,\"Hidden\":false}]}");
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final GetListsResponse response = new GetLists(httpClient, server.getBaseUrl() + "sites/test/", null).execute();
+
+                final List<GetListsResponse.SharePointList> lists = response.getLists();
+                assertEquals("both pages must be read", 2, lists.size());
+                assertEquals("List A", lists.get(0).getListName());
+                assertEquals("List B", lists.get(1).getListName());
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_stopsFollowingNextLinkAfterPageBound() throws Exception {
+        // A server that always answers with a nextLink pointing back at itself must not be
+        // followed forever. Without a bound this call never returns, which is what the timeout
+        // above turns into a failure instead of a hung suite.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.start();
+            final String selfUrl = server.getBaseUrl() + "sites/test/_api/lists?next=1";
+            // Registered by path only, so it answers the initial request and every "?next=1"
+            // follow-up identically - exactly how a server that never advances would behave.
+            server.onPathStatus("/sites/test/_api/lists", 200, "application/json",
+                    "{\"value\":[{\"Id\":\"11111111-1111-1111-1111-111111111111\","
+                            + "\"Title\":\"List A\",\"EntityTypeName\":\"GenericList\",\"NoCrawl\":false,\"Hidden\":false}],"
+                            + "\"odata.nextLink\":\"" + selfUrl + "\"}");
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final GetListsResponse response = new GetLists(httpClient, server.getBaseUrl() + "sites/test/", null).execute();
+
+                assertEquals("the loop must stop at its page bound, one list per page", 100, response.getLists().size());
+            }
         }
     }
 }

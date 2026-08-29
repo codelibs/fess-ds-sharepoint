@@ -45,6 +45,13 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
      */
     private static final int MAX_MEMBER_PAGES = 100;
 
+    /**
+     * Upper bound on the number of pages the role assignment listing may fetch, for the same
+     * reason as {@link #MAX_MEMBER_PAGES}. At {@link #PAGE_SISE} assignments per request it allows
+     * 20,000 role assignments on a single item.
+     */
+    private static final int MAX_PAGES = 100;
+
     private String listId = null;
     private String itemId = null;
     private Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = null;
@@ -90,40 +97,80 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             throw new SharePointClientException("listId/itemId is required.");
         }
         final GetListItemRoleResponse response = new GetListItemRoleResponse();
+        final List<Map<String, Object>> values = new ArrayList<>();
         int start = 0;
-        while (true) {
-            final GetListItemRoleResponse getListItemRoleResponse = executeInternal(start, PAGE_SISE);
-            if (getListItemRoleResponse.getUsers().isEmpty() && getListItemRoleResponse.getSharePointGroups().isEmpty()
-                    && getListItemRoleResponse.getSecurityGroups().isEmpty()) {
+        for (int page = 0; page < MAX_PAGES; page++) {
+            final List<Map<String, Object>> pageValues = getRoleAssignmentPage(start, PAGE_SISE);
+            if (pageValues.isEmpty()) {
                 break;
             }
-            getListItemRoleResponse.getUsers().stream().forEach(response::addUser);
-            getListItemRoleResponse.getSharePointGroups().stream().forEach(response::addSharePointGroup);
-            getListItemRoleResponse.getSecurityGroups().stream().forEach(response::addSecurityGroup);
             start += PAGE_SISE;
+            values.addAll(pageValues);
+            if (pageValues.size() < PAGE_SISE) {
+                break;
+            }
+            if (page == MAX_PAGES - 1) {
+                logger.warn("Stopped listing the role assignments of item {} after {} pages; the listing may be truncated.", itemId,
+                        MAX_PAGES);
+            }
         }
+        addRoleAssignments(values, response);
         return response;
     }
 
     /**
-     * Executes the role assignment retrieval for a specific page of results.
+     * Fetches and resolves one page of the item's role assignments.
+     *
+     * <p>{@link #execute()} no longer calls this method: it now tells an empty raw page (the true
+     * end of the listing) apart from a page that is merely empty after {@link
+     * #isLimitedAccessOnly} filtering, by fetching raw pages with {@link
+     * #getRoleAssignmentPage(int, int)} directly and resolving them with {@link
+     * #addRoleAssignments(List, GetListItemRoleResponse)} only once the whole raw listing is
+     * collected. This method is kept, unchanged in behavior, because it is {@code protected} and
+     * therefore part of this class's contract for subclasses and external callers.
      *
      * @param start the starting index for pagination
      * @param num the number of items to retrieve
-     * @return a GetListItemRoleResponse containing the role assignments for this page
+     * @return a GetListItemRoleResponse containing the resolved role assignments for this page
      */
     protected GetListItemRoleResponse executeInternal(final int start, final int num) {
+        final GetListItemRoleResponse r = new GetListItemRoleResponse();
+        addRoleAssignments(getRoleAssignmentPage(start, num), r);
+        return r;
+    }
+
+    /**
+     * Fetches one page of the item's role assignments, as returned by the server.
+     *
+     * <p>The listing ends on this raw page rather than on what survives
+     * {@link #isLimitedAccessOnly}: a whole page of Limited Access assignments is routine on a
+     * list with broken inheritance, and treating it as the end of the listing dropped every role
+     * assignment on the pages after it.
+     *
+     * @param start the starting index for pagination
+     * @param num the number of assignments to retrieve
+     * @return the role assignments on this page, unfiltered
+     */
+    private List<Map<String, Object>> getRoleAssignmentPage(final int start, final int num) {
         final String buildUrl = buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num) + "&%24expand=RoleDefinitionBindings";
         if (logger.isDebugEnabled()) {
             logger.debug("buildUrl: {}", buildUrl);
         }
         final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
-
-        final GetListItemRoleResponse response = new GetListItemRoleResponse();
         final Map<String, Object> bodyMap = jsonResponse.getBodyAsMap();
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> values = (List<Map<String, Object>>) bodyMap.get("value");
+        return values;
+    }
+
+    /**
+     * Resolves the principals named by the given role assignments and adds them to the response.
+     *
+     * @param values the role assignments to resolve, as returned by the server
+     * @param response the response to add the resolved principals to
+     */
+    private void addRoleAssignments(final List<Map<String, Object>> values, final GetListItemRoleResponse response) {
         values.stream()
                 .filter(value -> !isLimitedAccessOnly(value))
                 .map(value -> (value.get("PrincipalId").toString()))
@@ -166,7 +213,6 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                         break;
                     }
                 });
-        return response;
     }
 
     /**
@@ -300,7 +346,6 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     private void fillSharePointGroup(final GetListItemRoleResponse.SharePointGroup sharePointGroup, final String id) {
         final List<Map<String, Object>> usersList = new ArrayList<>();
         int start = 0;
-        boolean completed = false;
         for (int page = 0; page < MAX_MEMBER_PAGES; page++) {
             final String buildUsersUrl = buildUsersUrl(id) + "?" + getPagingParam(start, PAGE_SISE);
             if (logger.isDebugEnabled()) {
@@ -312,19 +357,17 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
             @SuppressWarnings("unchecked")
             final List<Map<String, Object>> users = (List<Map<String, Object>>) usersResponseMap.get("value");
             if (users == null || users.isEmpty()) {
-                completed = true;
-                break;
-            }
-            usersList.addAll(users);
-            if (users.size() < PAGE_SISE) {
-                completed = true;
                 break;
             }
             start += PAGE_SISE;
-        }
-        if (!completed) {
-            logger.warn("Stopped reading the members of SharePoint group {} after {} pages. Some members are not indexed.", id,
-                    MAX_MEMBER_PAGES);
+            usersList.addAll(users);
+            if (users.size() < PAGE_SISE) {
+                break;
+            }
+            if (page == MAX_MEMBER_PAGES - 1) {
+                logger.warn("Stopped listing the members of SharePoint group {} after {} pages; the listing may be truncated.", id,
+                        MAX_MEMBER_PAGES);
+            }
         }
         usersList.forEach(user -> {
             final String userId = DocumentUtil.getValue(user, "Id", String.class);

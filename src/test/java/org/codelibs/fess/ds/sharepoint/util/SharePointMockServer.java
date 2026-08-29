@@ -235,7 +235,15 @@ public class SharePointMockServer implements AutoCloseable {
         recordedRequests.clear();
     }
 
-    private static String readClasspath(final String location) {
+    /**
+     * Reads a fixture from the classpath, for a test that needs the body itself rather than a
+     * path stub - registering the same fixture for one exact query with {@link #onPathQuery}, for
+     * instance.
+     *
+     * @param location classpath location, e.g. {@code fixtures/modern/lists.json}
+     * @return the fixture content
+     */
+    public static String readClasspath(final String location) {
         try (InputStream in = SharePointMockServer.class.getClassLoader().getResourceAsStream(location)) {
             if (in == null) {
                 throw new IllegalArgumentException("Fixture not found on classpath: " + location);

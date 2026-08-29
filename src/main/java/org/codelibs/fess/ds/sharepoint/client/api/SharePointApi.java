@@ -189,8 +189,13 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
      * URL-encodes a relative URL path by encoding each path segment separately.
      * This method properly handles path separators and converts + to %20.
      *
+     * <p>Each segment also goes through {@link #escapeODataLiteral}, so the result is only valid
+     * inside an OData string literal - every current caller interpolates it into one, such as
+     * {@code GetFolderByServerRelativePath(decodedUrl='...')}. Placing it anywhere else leaves any
+     * apostrophe in the path doubled. Use {@code URLEncoder} directly for that.
+     *
      * @param url the relative URL to encode
-     * @return the URL-encoded path, or null if input is null
+     * @return the URL-encoded path, escaped for an OData string literal, or null if input is null
      */
     protected String encodeRelativeUrl(final String url) {
         if (url == null) {

@@ -22,6 +22,8 @@ import java.util.Map;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.DocumentUtil;
@@ -40,8 +42,17 @@ import org.xml.sax.helpers.DefaultHandler;
  * @see GetLists2013Response
  */
 public class GetLists2013 extends GetLists {
+    private static final Logger logger = LogManager.getLogger(GetLists2013.class);
+
     /** SharePoint 2013 API endpoint path for lists */
     private static final String API_PATH = "_api/lists";
+
+    /**
+     * Upper bound on the number of pages this request may follow via the Atom feed's
+     * {@code rel="next"} link. See {@link GetLists#execute()} for the reasoning; the SharePoint
+     * 2013 feed exposes the same paging hazard through XML instead of {@code odata.nextLink}.
+     */
+    private static final int MAX_PAGES = 100;
 
     /**
      * Constructs a new GetLists2013 instance.
@@ -61,25 +72,35 @@ public class GetLists2013 extends GetLists {
      */
     @Override
     public GetLists2013Response execute() {
-        final HttpGet httpGet = new HttpGet(siteUrl + "/" + API_PATH);
-        final XmlResponse xmlResponse = doXmlRequest(httpGet);
-        return buildResponse(xmlResponse);
+        final List<GetLists2013Response.SharePointList> sharePointLists = new ArrayList<>();
+        String url = siteUrl + "/" + API_PATH;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            final HttpGet httpGet = new HttpGet(url);
+            final XmlResponse xmlResponse = doXmlRequest(httpGet);
+            final GetListsDocHandler handler = new GetListsDocHandler();
+            xmlResponse.parseXml(handler);
+            final Map<String, Object> dataMap = handler.getDataMap();
+            appendLists(dataMap, sharePointLists);
+            final String nextLink = DocumentUtil.getValue(dataMap, "nextLink", String.class);
+            if (nextLink == null) {
+                return new GetLists2013Response(sharePointLists);
+            }
+            url = nextLink;
+            if (page == MAX_PAGES - 1) {
+                logger.warn("Stopped listing {} after {} pages; the listing may be truncated.", API_PATH, MAX_PAGES);
+            }
+        }
+        return new GetLists2013Response(sharePointLists);
     }
 
     /**
-     * Builds the response object from parsed XML data.
-     * Processes the XML response to extract list information and
-     * creates SharePointList objects for each found list.
+     * Extracts list information from one page of parsed XML data and appends it to the given
+     * accumulator.
      *
-     * @param xmlResponse the XML response from SharePoint 2013
-     * @return GetLists2013Response with parsed list data
+     * @param dataMap the data map for one page, parsed from SharePoint 2013 XML
+     * @param sharePointLists the accumulator to append this page's lists to
      */
-    private GetLists2013Response buildResponse(final XmlResponse xmlResponse) {
-        final GetListsDocHandler handler = new GetListsDocHandler();
-        xmlResponse.parseXml(handler);
-        final Map<String, Object> dataMap = handler.getDataMap();
-
-        final List<GetLists2013Response.SharePointList> sharePointLists = new ArrayList<>();
+    private void appendLists(final Map<String, Object> dataMap, final List<GetLists2013Response.SharePointList> sharePointLists) {
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> valueList = (List<Map<String, Object>>) dataMap.get("value");
         valueList.forEach(value -> {
@@ -101,8 +122,6 @@ public class GetLists2013 extends GetLists {
                     new GetLists2013Response.SharePointList(idObj, titleObj, noCrawl, hidden, entityTypeName);
             sharePointLists.add(sharePointList);
         });
-
-        return new GetLists2013Response(sharePointLists);
     }
 
     /**
@@ -158,6 +177,11 @@ public class GetLists2013 extends GetLists {
             } else if ("d:EntityTypeName".equals(qName)) {
                 fieldName = "EntityTypeName";
                 buffer.setLength(0);
+            } else if ("link".equals(qName) && "next".equals(attributes.getValue("rel"))) {
+                // The Atom feed's own paging link, present only when the server has more entries
+                // than fit on this page. Absent from the leaf <entry> elements' own <link
+                // rel="edit"> elements, so this always refers to the feed-level next page.
+                dataMap.put("nextLink", attributes.getValue("href"));
             }
         }
 

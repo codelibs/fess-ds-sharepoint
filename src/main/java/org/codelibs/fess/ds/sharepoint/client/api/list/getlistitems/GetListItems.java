@@ -20,7 +20,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -138,50 +140,58 @@ public class GetListItems extends SharePointApi<GetListItemsResponse> {
      *
      * @param jsonResponse the JSON response from the SharePoint API
      * @return the parsed response containing list items
-     * @throws SharePointClientException if parsing fails
      */
     @SuppressWarnings("unchecked")
     private GetListItemsResponse buildResponse(final JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
-        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT);
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
 
         final List<GetListItemsResponse.ListItem> listItems = new ArrayList<>();
         final List<Map<String, Object>> valueList = (List<Map<String, Object>>) jsonMap.get("value");
         valueList.forEach(value -> {
-            try {
-                final String title = DocumentUtil.getValue(value, "Title", String.class, StringUtil.EMPTY);
-                final String id = DocumentUtil.getValue(value, "Id", String.class);
-                if (id == null) {
-                    logger.warn("Id field does not contain. Skip item. {}", jsonResponse.getBody());
-                    return;
-                }
-                final String editLink = DocumentUtil.getValue(value, "odata.editLink", String.class);
-                if (editLink == null) {
-                    logger.warn("odate.editLink field does not contain. Skip item. {}", jsonResponse.getBody());
-                    return;
-                }
-                final boolean attachments = DocumentUtil.getValue(value, "Attachments", Boolean.class, Boolean.FALSE);
-                final String createdObj = DocumentUtil.getValue(value, "Created", String.class);
-                if (createdObj == null) {
-                    logger.warn("Created field does not contain. Skip item. {}", jsonResponse.getBody());
-                    return;
-                }
-                final Date created = sdf.parse(createdObj);
-                final String modifiedObj = DocumentUtil.getValue(value, "Modified", String.class);
-                if (modifiedObj == null) {
-                    logger.warn("Modified field does not contain. Skip item. {}", jsonResponse.getBody());
-                    return;
-                }
-                final Date modified = sdf.parse(modifiedObj);
-
-                final GetListItemsResponse.ListItem listItem =
-                        new GetListItemsResponse.ListItem(id, editLink, title, attachments, created, modified);
-                listItems.add(listItem);
-            } catch (final ParseException e) {
-                throw new SharePointClientException("Failed to get item info.", e);
+            final String title = DocumentUtil.getValue(value, "Title", String.class, StringUtil.EMPTY);
+            final String id = DocumentUtil.getValue(value, "Id", String.class);
+            if (id == null) {
+                logger.warn("Id field does not contain. Skip item. {}", jsonResponse.getBody());
+                return;
             }
+            final String editLink = DocumentUtil.getValue(value, "odata.editLink", String.class);
+            if (editLink == null) {
+                logger.warn("odate.editLink field does not contain. Skip item. {}", jsonResponse.getBody());
+                return;
+            }
+            final boolean attachments = DocumentUtil.getValue(value, "Attachments", Boolean.class, Boolean.FALSE);
+            // A date that is absent or does not match this format used to drop the whole item
+            // (if absent) or throw and abort every remaining item on this page (if malformed).
+            // Neither should cost more than the date itself.
+            final Date created = parseDate(sdf, DocumentUtil.getValue(value, "Created", String.class));
+            final Date modified = parseDate(sdf, DocumentUtil.getValue(value, "Modified", String.class));
+
+            final GetListItemsResponse.ListItem listItem =
+                    new GetListItemsResponse.ListItem(id, editLink, title, attachments, created, modified);
+            listItems.add(listItem);
         });
 
         return new GetListItemsResponse(listItems);
+    }
+
+    /**
+     * Parses an ISO 8601 date, tolerating an absent or unparseable value.
+     *
+     * @param sdf the date format to parse with
+     * @param value the date text, may be null
+     * @return the parsed date, or null if {@code value} is null or does not match the format
+     */
+    private Date parseDate(final SimpleDateFormat sdf, final String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return sdf.parse(value);
+        } catch (final ParseException e) {
+            logger.warn("Failed to parse date: {}", value, e);
+            return null;
+        }
     }
 }
