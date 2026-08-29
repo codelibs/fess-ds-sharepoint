@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.xml.XMLConstants;
@@ -45,6 +46,8 @@ import org.xml.sax.helpers.DefaultHandler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import jakarta.validation.ValidationException;
+
 /**
  * Abstract base class for SharePoint API operations.
  *
@@ -54,6 +57,13 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     private static final Logger logger = LogManager.getLogger(SharePointApi.class);
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
+
+    // Accepts a bare GUID, one wrapped in plain braces ({...}), and one wrapped in the
+    // percent-encoded braces (%7B...%7D) you get by copying a classic SharePoint "List="
+    // query-string value verbatim - all three round-trip through the server's own
+    // percent-decode today, so none of them can start being rejected.
+    private static final Pattern GUID_PATTERN = Pattern
+            .compile("(?:\\{|%7[bB])?" + "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:\\}|%7[dD])?");
 
     /**
      * HTTP client used for making requests to SharePoint.
@@ -187,8 +197,64 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
             return null;
         }
         return StreamUtil.stream(StringUtils.splitPreserveAllTokens(url, '/'))
-                .get(stream -> stream.map(s -> URLEncoder.encode(s, StandardCharsets.UTF_8)).collect(Collectors.joining("/")))
+                .get(stream -> stream.map(s -> URLEncoder.encode(escapeODataLiteral(s), StandardCharsets.UTF_8))
+                        .collect(Collectors.joining("/")))
                 .replace("+", "%20");
+    }
+
+    /**
+     * Doubles the apostrophes in a value that is about to be placed inside an OData string
+     * literal.
+     *
+     * <p>OData ends a string literal at the first apostrophe, so a name containing one produces a
+     * malformed expression and the server answers 400. Doubling is the escape the protocol
+     * defines. It has to happen before percent-encoding, which is a separate layer: the server
+     * percent-decodes the path before the OData expression is parsed, so encoding alone leaves the
+     * literal broken.
+     *
+     * @param value the raw value, may be null
+     * @return the value with every apostrophe doubled, or null if the value was null
+     */
+    protected String escapeODataLiteral(final String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.replace("'", "''");
+    }
+
+    /**
+     * Rejects a value that is about to be interpolated into an OData {@code guid'...'} literal
+     * unless it actually looks like a GUID.
+     *
+     * <p>A list id is never supposed to contain an apostrophe, so doubling is not the right
+     * defense the way it is for a path or a title: a value that fails this check is not a
+     * legitimate id that happens to need escaping, it is bad input. Rejecting it up front avoids
+     * both the malformed OData expression and any other character that would otherwise reach the
+     * request unescaped.
+     *
+     * <p>This method only validates and throws; whether that failure ends up loud or quiet
+     * depends entirely on where it is called from, not on this method. Called from
+     * {@code SharePointCrawler#validate}, before any crawl target exists, the
+     * {@link ValidationException} it throws runs outside {@code SharePointCrawler.doCrawl}'s
+     * retry handling entirely and fails the job immediately - that is the only call site that
+     * actually makes a malformed {@code site.list_id} loud. Called from {@code GetList} or
+     * {@code GetList2013} while a crawl is already in progress, the same exception instead falls
+     * into {@code doCrawl}'s generic {@code catch (Exception e)}, which wraps it in a
+     * {@code DataStoreCrawlingException} with {@code abort} left {@code false} - the crawl for
+     * that target ends, but the job is reported as a warning, not a failure. Static so a caller in
+     * a different package ({@code SharePointCrawler}) can reach it without a second copy of
+     * {@code GUID_PATTERN}.
+     *
+     * @param value the value to check
+     * @param paramName the name to use in the exception message if validation fails
+     * @return {@code value}, unchanged
+     * @throws ValidationException if {@code value} is not a GUID
+     */
+    public static String requireGuidLiteral(final String value, final String paramName) {
+        if (value == null || !GUID_PATTERN.matcher(value).matches()) {
+            throw new ValidationException("[" + paramName + "] must be a GUID. value:" + value);
+        }
+        return value;
     }
 
     /**

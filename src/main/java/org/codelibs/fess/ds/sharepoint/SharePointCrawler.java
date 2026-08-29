@@ -30,6 +30,7 @@ import org.apache.logging.log4j.Logger;
 import org.codelibs.core.misc.Pair;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
+import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
@@ -81,6 +82,19 @@ public class SharePointCrawler {
         }
         if (config.siteName == null) {
             throw new ValidationException("sitename param is required.");
+        }
+        // Validated here, in the constructor, rather than only where GetList/GetList2013
+        // interpolate it into an OData guid'...' literal: this runs before
+        // SharePointDataStore#storeData's try block even starts (createCrawler is called
+        // outside it), so the ValidationException below escapes uncaught and fails the job -
+        // the same way a missing url or siteName already does. Validating only at the OData
+        // call site would leave a malformed site.list_id to reach doCrawl's generic
+        // catch (Exception e) during an actual crawl attempt instead: that branch discards the
+        // stats key and wraps the exception in a DataStoreCrawlingException whose 3-arg
+        // constructor sets abort=false, which storeData then downgrades to a warning and
+        // finishes as a zero-document "success" - not a retry, just one catch and a quiet exit.
+        if (StringUtils.isNotBlank(config.initialListId)) {
+            SharePointApi.requireGuidLiteral(config.initialListId, "site.list_id");
         }
     }
 

@@ -15,6 +15,8 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
 import org.junit.jupiter.api.TestInfo;
 
 import org.codelibs.fess.util.ComponentUtil;
@@ -93,6 +95,46 @@ public class SharePointApiTest extends UnitDsTestCase {
         // Test multiple path segments
         assertEquals("folder1/folder2/file.txt", sharePointApi.encodeRelativeUrl("folder1/folder2/file.txt"));
         assertEquals("folder%201/folder%202/file%20name.txt", sharePointApi.encodeRelativeUrl("folder 1/folder 2/file name.txt"));
+    }
+
+    @Test
+    public void test_encodeRelativeUrl_doublesApostrophesForTheODataLiteral() {
+        final SharePointApi<SharePointApiResponse> sharePointApi = new SharePointApi<>(null, null, null) {
+            @Override
+            public SharePointApiResponse execute() {
+                return null;
+            }
+        };
+        // The value is interpolated into an OData string literal, so a single apostrophe closes
+        // the literal early and the server answers 400. It has to be doubled before it is
+        // percent-encoded, which puts %27%27 on the wire.
+        assertEquals("an apostrophe must be doubled and then encoded", "O%27%27Brien.docx",
+                sharePointApi.encodeRelativeUrl("O'Brien.docx"));
+        assertEquals("apostrophes must be doubled in every path segment", "/sites/O%27%27Brien/Docs/it%27%27s.txt",
+                sharePointApi.encodeRelativeUrl("/sites/O'Brien/Docs/it's.txt"));
+        assertEquals("a value with no apostrophe must be unchanged", "plain.txt", sharePointApi.encodeRelativeUrl("plain.txt"));
+    }
+
+    @Test
+    public void test_requireGuidLiteral_acceptsBackwardCompatibleGuidForms() {
+        // requireGuidLiteral either throws or returns its argument by identity, so there is
+        // nothing meaningful to compare the return value against - the only thing each of these
+        // forms can actually demonstrate is that it does not throw. They have to keep being
+        // accepted, not just the plain lowercase dashed form used elsewhere in this file's
+        // tests, or validating the value at all would be a backward-compatibility break.
+        assertDoesNotThrow(() -> SharePointApi.requireGuidLiteral("a1234567-89ab-cdef-0123-456789abcdef", "listId"),
+                "a plain lowercase GUID must be accepted");
+        assertDoesNotThrow(() -> SharePointApi.requireGuidLiteral("A1234567-89AB-CDEF-0123-456789ABCDEF", "listId"),
+                "uppercase hex digits must be accepted");
+        assertDoesNotThrow(() -> SharePointApi.requireGuidLiteral("{a1234567-89ab-cdef-0123-456789abcdef}", "listId"),
+                "a GUID wrapped in plain braces must be accepted");
+        // The form you get by copying a classic SharePoint "List=" query-string value verbatim.
+        // It previously round-tripped through the server's own percent-decode and plausibly
+        // worked, so validation must not start rejecting it.
+        assertDoesNotThrow(() -> SharePointApi.requireGuidLiteral("%7Ba1234567-89ab-cdef-0123-456789abcdef%7D", "listId"),
+                "percent-encoded braces (%7B/%7D) must be accepted");
+        assertDoesNotThrow(() -> SharePointApi.requireGuidLiteral("%7ba1234567-89ab-cdef-0123-456789abcdef%7d", "listId"),
+                "lowercase percent-encoded braces (%7b/%7d) must be accepted");
     }
 
     @Test

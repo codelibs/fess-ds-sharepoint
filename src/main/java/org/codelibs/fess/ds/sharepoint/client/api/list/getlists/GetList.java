@@ -81,9 +81,10 @@ public class GetList extends SharePointApi<GetListResponse> {
     public GetListResponse execute() {
         final String apiPath;
         if (StringUtils.isNotBlank(listId)) {
-            apiPath = API_BY_LIST_ID_PATH.replace("{list_guid}", listId);
+            apiPath = API_BY_LIST_ID_PATH.replace("{list_guid}", requireGuidLiteral(listId, "listId"));
         } else if (StringUtils.isNotBlank(listName)) {
-            apiPath = API_BY_LIST_NAME_PATH.replace("{list_name}", URLEncoder.encode(listName, StandardCharsets.UTF_8).replace("+", "%20"));
+            apiPath = API_BY_LIST_NAME_PATH.replace("{list_name}",
+                    URLEncoder.encode(escapeODataLiteral(listName), StandardCharsets.UTF_8).replace("+", "%20"));
         } else {
             throw new SharePointClientException("[GetList] listId/listName is required.");
         }

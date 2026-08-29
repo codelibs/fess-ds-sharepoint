@@ -156,8 +156,14 @@ public class SharePointMockServer implements AutoCloseable {
      * mock exists to support need to see them reach the handler with their raw
      * encoding intact. Do not "simplify" this back to {@code new Server(0)}: doing so
      * silently reintroduces those 400s with an empty request log and nothing to
-     * assert on. {@link Request#getHttpURI()}{@code .getPath()} still returns the raw
-     * wire form afterwards, which is what escaping assertions need.
+     * assert on. {@link Request#getHttpURI()}{@code .getPath()} reflects whatever bytes
+     * the client actually put on the wire - Jetty does not decode or rewrite it further.
+     * That is not necessarily the exact string a test built: Apache HttpClient's own
+     * request-line handling can rewrite a URI before sending it (see {@code GetListTest}
+     * for a case where an encoded apostrophe in the request path is normalized back to a
+     * literal one, and why it happens). This method still records the true wire form,
+     * which is what escaping assertions need - just not always the client's original
+     * string.
      *
      * @throws Exception if the server fails to start
      */
