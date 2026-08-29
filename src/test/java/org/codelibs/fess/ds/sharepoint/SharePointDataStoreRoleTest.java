@@ -20,11 +20,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.codelibs.fess.entity.DataStoreParams;
+import org.codelibs.fess.helper.CrawlerStatsHelper;
+import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.util.ComponentUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
+/**
+ * Drives {@link SharePointDataStore#storeData} itself and inspects the document handed to the
+ * callback, so the role merge is verified where it actually happens.
+ */
 public class SharePointDataStoreRoleTest extends UnitDsTestCase {
+
+    private static final String ROLE_FIELD = "role";
 
     @Override
     protected boolean isSuppressTestCaseTransaction() {
@@ -32,57 +41,64 @@ public class SharePointDataStoreRoleTest extends UnitDsTestCase {
     }
 
     @Override
-    public void tearDown(final TestInfo testInfo) throws Exception {
-        ComponentUtil.setFessConfig(null);
-        super.tearDown(testInfo);
+    public void setUp(final TestInfo testInfo) throws Exception {
+        super.setUp(testInfo);
+        ComponentUtil.register(new SystemHelper(), "systemHelper");
+        final CrawlerStatsHelper crawlerStatsHelper = new CrawlerStatsHelper();
+        crawlerStatsHelper.init();
+        ComponentUtil.register(crawlerStatsHelper, "crawlerStatsHelper");
     }
 
-    /**
-     * Pins the CURRENT, BROKEN role-merge behavior of SharePointDataStore.
-     *
-     * <p>AbstractDataStore always puts the data config's permissions into the
-     * default data map, so {@code dataMap.containsKey(role)} is always true. When the
-     * crawl result carries no role of its own, the else branch writes
-     * {@code resultMap.get(role)} — which is null — over the configured permissions.
-     * Documents indexed this way match no user's role query and become invisible.
-     *
-     * <p>THIS TEST ASSERTS A BUG. The fix makes the
-     * configured permissions survive, at which point this test must be inverted.
-     */
+    private Map<String, Object> crawlSingleDocument(final Map<String, Object> crawlResult, final Map<String, Object> defaultDataMap) {
+        final SharePointDataStore dataStore = new SharePointDataStore() {
+            @Override
+            protected SharePointCrawler createCrawler(final DataStoreParams paramMap) {
+                return new StubSharePointCrawler(List.of(crawlResult));
+            }
+        };
+        final CapturingIndexUpdateCallback callback = new CapturingIndexUpdateCallback();
+        dataStore.storeData(null, callback, new DataStoreParams(), new HashMap<>(), defaultDataMap);
+        assertEquals("exactly one document must reach the index", 1, callback.documents.size());
+        return callback.documents.get(0);
+    }
+
     @Test
-    public void test_currentBehavior_emptyRoleWipesConfiguredPermissions() throws Exception {
-        final String roleField = ComponentUtil.getFessConfig().getIndexFieldRole();
+    public void test_configuredPermissionsSurviveWhenSharePointYieldsNoRole() {
+        final Map<String, Object> defaultDataMap = new HashMap<>();
+        defaultDataMap.put(ROLE_FIELD, new ArrayList<>(List.of("1alice", "2sales")));
 
-        final Map<String, Object> dataMap = new HashMap<>();
-        final List<String> configuredPermissions = new ArrayList<>();
-        configuredPermissions.add("1guest");
-        dataMap.put(roleField, configuredPermissions);
+        final Map<String, Object> crawlResult = new HashMap<>();
+        crawlResult.put("title", "no-role document");
 
-        final Map<String, Object> resultMap = new HashMap<>();
-        // The crawl produced no SharePoint-derived roles, so no role key is present.
+        final Map<String, Object> document = crawlSingleDocument(crawlResult, defaultDataMap);
 
-        mergeRoleLikeDataStore(dataMap, resultMap, roleField);
-
-        assertNull("configured permissions are currently wiped out when the crawl yields no role", dataMap.get(roleField));
+        assertNotNull("the permissions configured on the data config must not be dropped", document.get(ROLE_FIELD));
+        assertEquals("the configured permissions must be indexed verbatim", List.of("1alice", "2sales"), document.get(ROLE_FIELD));
     }
 
-    /**
-     * Mirrors the merge logic in SharePointDataStore#storeData so the behavior can be
-     * pinned without standing up a full crawl. Keep in sync with the production code;
-     * Fix both together.
-     */
-    private void mergeRoleLikeDataStore(final Map<String, Object> dataMap, final Map<String, Object> resultMap, final String roleField) {
-        if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
-            final List<Object> roles = new ArrayList<>();
-            if (dataMap.get(roleField) instanceof List<?> roleList) {
-                roles.addAll(roleList);
-            }
-            if (resultMap.get(roleField) instanceof List<?> roleList) {
-                roles.addAll(roleList);
-            }
-            dataMap.put(roleField, roles);
-        } else {
-            dataMap.put(roleField, resultMap.get(roleField));
-        }
+    @Test
+    public void test_crawledRolesAreMergedOnTopOfConfiguredPermissions() {
+        final Map<String, Object> defaultDataMap = new HashMap<>();
+        defaultDataMap.put(ROLE_FIELD, new ArrayList<>(List.of("1alice")));
+
+        final Map<String, Object> crawlResult = new HashMap<>();
+        crawlResult.put(ROLE_FIELD, new ArrayList<>(List.of("2sales")));
+
+        final Map<String, Object> document = crawlSingleDocument(crawlResult, defaultDataMap);
+
+        assertEquals("both the configured and the crawled permissions must be indexed", List.of("1alice", "2sales"),
+                document.get(ROLE_FIELD));
+    }
+
+    @Test
+    public void test_roleIsRemovedFromTheScriptInputMap() {
+        final Map<String, Object> defaultDataMap = new HashMap<>();
+        defaultDataMap.put(ROLE_FIELD, new ArrayList<>(List.of("1alice")));
+
+        final Map<String, Object> crawlResult = new HashMap<>();
+        crawlResult.put(ROLE_FIELD, new ArrayList<>(List.of("2sales")));
+        crawlSingleDocument(crawlResult, defaultDataMap);
+
+        assertFalse("the role must be consumed so scripts cannot see it twice", crawlResult.containsKey(ROLE_FIELD));
     }
 }

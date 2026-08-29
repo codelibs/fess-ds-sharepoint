@@ -75,7 +75,11 @@ public class SharePointDataStore extends AbstractDataStore {
                     final Map<String, Object> resultMap = result.getFirst();
                     final StatsKeyObject statsKey = result.getSecond();
                     try {
-                        if (dataMap.containsKey(roleField) && resultMap.containsKey(roleField)) {
+                        // The crawl only contributes a role when SharePoint actually returned one.
+                        // Without this guard a document with no SharePoint role overwrites the
+                        // permissions configured on the data config with null, which hides the
+                        // document from every user.
+                        if (resultMap.containsKey(roleField)) {
                             final List<Object> roles = new ArrayList<>();
                             if (dataMap.get(roleField) instanceof List<?> roleList) {
                                 roles.addAll(roleList);
@@ -84,8 +88,6 @@ public class SharePointDataStore extends AbstractDataStore {
                                 roles.addAll(roleList);
                             }
                             dataMap.put(roleField, roles);
-                        } else {
-                            dataMap.put(roleField, resultMap.get(roleField));
                         }
                         resultMap.remove(roleField);
                         crawlerStatsHelper.record(statsKey, StatsAction.PREPARED);
@@ -126,7 +128,14 @@ public class SharePointDataStore extends AbstractDataStore {
         callback.commit();
     }
 
-    private SharePointCrawler createCrawler(final DataStoreParams paramMap) {
+    /**
+     * Builds the crawler for one data config. Visible to subclasses so a test can supply a crawler
+     * that replays canned results instead of talking to a SharePoint farm.
+     *
+     * @param paramMap the data config parameters
+     * @return a crawler seeded with the first crawl target
+     */
+    protected SharePointCrawler createCrawler(final DataStoreParams paramMap) {
         final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
         config.setUrl(paramMap.getAsString("url"));
         if (paramMap.containsKey("auth.ntlm.user")) {
