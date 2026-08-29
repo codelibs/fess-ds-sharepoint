@@ -91,12 +91,12 @@ public class GetLists2013 extends GetLists {
             if (idObj == null) {
                 return;
             }
-            final String entityTypeName = DocumentUtil.getValue(dataMap, "EntityTypeName", String.class);
+            final String entityTypeName = DocumentUtil.getValue(value, "EntityTypeName", String.class);
             if (entityTypeName == null) {
                 return;
             }
-            final boolean noCrawl = DocumentUtil.getValue(value, "NoCrawl", Boolean.class, Boolean.TRUE);
-            final boolean hidden = DocumentUtil.getValue(dataMap, "Hidden", Boolean.class, Boolean.FALSE);
+            final boolean noCrawl = DocumentUtil.getValue(value, "NoCrawl", Boolean.class, Boolean.FALSE);
+            final boolean hidden = DocumentUtil.getValue(value, "Hidden", Boolean.class, Boolean.FALSE);
             final GetLists2013Response.SharePointList sharePointList =
                     new GetLists2013Response.SharePointList(idObj, titleObj, noCrawl, hidden, entityTypeName);
             sharePointLists.add(sharePointList);
