@@ -23,7 +23,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.jetty.http.HttpField;
@@ -49,6 +51,7 @@ import org.eclipse.jetty.util.Callback;
 public class SharePointMockServer implements AutoCloseable {
 
     private final Map<String, StubResponse> stubs = new ConcurrentHashMap<>();
+    private final Map<String, Queue<StubResponse>> onceStubs = new ConcurrentHashMap<>();
     private final Map<String, String> globalHeaders = new ConcurrentHashMap<>();
     private final List<RecordedRequest> recordedRequests = new CopyOnWriteArrayList<>();
 
@@ -78,6 +81,52 @@ public class SharePointMockServer implements AutoCloseable {
      */
     public SharePointMockServer onPathStatus(final String path, final int status, final String contentType, final String body) {
         stubs.put(path, new StubResponse(status, withUtf8Charset(contentType), body));
+        return this;
+    }
+
+    /**
+     * Registers a body served only for one exact raw query string on a path, with HTTP 200.
+     *
+     * <p>A stub registered with {@link #onPath} or {@link #onPathStatus} answers every query on
+     * its path, which is enough for an API that fetches a resource once but not for one that
+     * pages: a paging loop that keeps receiving a full page never reaches its last page. Register
+     * one of these per page, and the empty page that ends the loop.
+     *
+     * <p>The query is matched against {@link RecordedRequest#getQuery()}, i.e. the raw wire form
+     * with the OData dollar signs still percent-encoded, e.g.
+     * {@code %24skip=0&%24top=200}. A path stub still answers any query this method has not
+     * claimed.
+     *
+     * @param path the request path without query string
+     * @param query the exact raw query string to match
+     * @param contentType the Content-Type header to send
+     * @param body the response body
+     * @return this instance for chaining
+     */
+    public SharePointMockServer onPathQuery(final String path, final String query, final String contentType, final String body) {
+        stubs.put(path + "?" + query, new StubResponse(200, withUtf8Charset(contentType), body));
+        return this;
+    }
+
+    /**
+     * Registers a response served once, on the next request to a path, ahead of every standing
+     * stub for it.
+     *
+     * <p>Lets a test express a transient failure: register the error here and the real body with
+     * {@link #onPath} or {@link #onPathStatus}, and the first call fails while the retry
+     * succeeds. Repeated calls queue up and are served in registration order; once the queue is
+     * drained the standing stubs answer as usual. Matching ignores the query string, so this
+     * claims the next request to the path whatever it asks for.
+     *
+     * @param path the request path without query string
+     * @param status the HTTP status to return on that one request
+     * @param contentType the Content-Type header to send
+     * @param body the response body
+     * @return this instance for chaining
+     */
+    public SharePointMockServer onPathOnce(final String path, final int status, final String contentType, final String body) {
+        onceStubs.computeIfAbsent(path, key -> new ConcurrentLinkedQueue<>())
+                .add(new StubResponse(status, withUtf8Charset(contentType), body));
         return this;
     }
 
@@ -227,7 +276,14 @@ public class SharePointMockServer implements AutoCloseable {
 
             globalHeaders.forEach((name, value) -> response.getHeaders().put(name, value));
 
-            final StubResponse stub = stubs.get(path);
+            final Queue<StubResponse> once = onceStubs.get(path);
+            StubResponse stub = once == null ? null : once.poll();
+            if (stub == null && query != null) {
+                stub = stubs.get(path + "?" + query);
+            }
+            if (stub == null) {
+                stub = stubs.get(path);
+            }
             if (stub == null) {
                 response.setStatus(404);
                 response.getHeaders().put("Content-Type", "text/plain; charset=UTF-8");
