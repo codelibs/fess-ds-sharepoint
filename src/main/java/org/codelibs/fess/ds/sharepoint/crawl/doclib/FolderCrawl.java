@@ -46,6 +46,19 @@ public class FolderCrawl extends SharePointCrawl {
     private static final Logger logger = LogManager.getLogger(FolderCrawl.class);
     private static final int PAGE_SIZE = 100;
 
+    /**
+     * Upper bound on the number of pages either listing below may fetch.
+     *
+     * <p>Both loops end when a page comes back empty or shorter than the page size. A server that
+     * ignores the skip parameter answers the same full first page instead, and every pass queues
+     * that page's entries again, so the listing neither finishes nor stays within memory. This
+     * bound turns that into a truncated listing with a warning.
+     *
+     * <p>At {@link #PAGE_SIZE} entries per page it allows 10,000 subfolders and 10,000 files
+     * directly inside one folder, twice SharePoint's own 5,000-item list view threshold.
+     */
+    private static final int MAX_PAGES = 100;
+
     private final String serverRelativeUrl;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
     private final boolean skipRole;
@@ -76,7 +89,7 @@ public class FolderCrawl extends SharePointCrawl {
         final GetFolderResponse getFolderResponse = client.api().doclib().getFolder().setServerRelativeUrl(serverRelativeUrl).execute();
         if (getFolderResponse.getItemCount() > 0) {
             int foldersStart = 0;
-            while (true) {
+            for (int page = 0; page < MAX_PAGES; page++) {
                 final GetFoldersResponse getFoldersResponse = client.api()
                         .doclib()
                         .getFolders()
@@ -84,17 +97,28 @@ public class FolderCrawl extends SharePointCrawl {
                         .setStart(foldersStart)
                         .setNum(PAGE_SIZE)
                         .execute();
-                if (getFoldersResponse.getFolders().size() == 0) {
+                final List<GetFolderResponse> folders = getFoldersResponse.getFolders();
+                if (folders.isEmpty()) {
                     break;
                 }
                 foldersStart += PAGE_SIZE;
-                getFoldersResponse.getFolders().forEach(subFolder -> {
+                folders.forEach(subFolder -> {
                     crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl(), skipRole, sharePointGroupCache));
                 });
+                if (folders.size() < PAGE_SIZE) {
+                    break;
+                }
+                if (page == MAX_PAGES - 1) {
+                    // Truncating here is not counted as a crawl failure, so the stale-document
+                    // cleanup still runs and documents past the bound can be removed from the
+                    // index.
+                    logger.warn("Stopped listing the subfolders of {} after {} pages; the listing may be truncated.", serverRelativeUrl,
+                            MAX_PAGES);
+                }
             }
 
             int filesStart = 0;
-            while (true) {
+            for (int page = 0; page < MAX_PAGES; page++) {
                 final GetFilesResponse getFilesResponse = client.api()
                         .doclib()
                         .getFiles()
@@ -102,11 +126,12 @@ public class FolderCrawl extends SharePointCrawl {
                         .setStart(filesStart)
                         .setNum(PAGE_SIZE)
                         .execute();
-                if (getFilesResponse.getFiles().size() == 0) {
+                final List<GetFilesResponse.DocLibFile> files = getFilesResponse.getFiles();
+                if (files.isEmpty()) {
                     break;
                 }
                 filesStart += PAGE_SIZE;
-                getFilesResponse.getFiles().forEach(file -> {
+                files.forEach(file -> {
                     final GetDoclibListItemResponse getDoclibListItemResponse =
                             client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
                     final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(),
@@ -123,6 +148,16 @@ public class FolderCrawl extends SharePointCrawl {
                     crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(),
                             file.getModified(), roles, listValues, null));
                 });
+                if (files.size() < PAGE_SIZE) {
+                    break;
+                }
+                if (page == MAX_PAGES - 1) {
+                    // Truncating here is not counted as a crawl failure, so the stale-document
+                    // cleanup still runs and documents past the bound can be removed from the
+                    // index.
+                    logger.warn("Stopped listing the files of {} after {} pages; the listing may be truncated.", serverRelativeUrl,
+                            MAX_PAGES);
+                }
             }
         }
         return null;

@@ -15,6 +15,8 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.file.getfile;
 
+import java.io.IOException;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -81,15 +83,32 @@ public class GetFile extends SharePointApi<GetFileResponse> {
         if (oAuth != null) {
             oAuth.apply(httpGet);
         }
+        CloseableHttpResponse httpResponse = null;
         try {
-            final CloseableHttpResponse httpResponse = client.execute(httpGet);
+            httpResponse = client.execute(httpGet);
             if (isErrorResponse(httpResponse)) {
-                throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode()
-                        + " body:" + EntityUtils.toString(httpResponse.getEntity()));
+                final int status = httpResponse.getStatusLine().getStatusCode();
+                final String body = EntityUtils.toString(httpResponse.getEntity());
+                throw new SharePointClientException("GetFile Request failure. status:" + status + " body:" + body);
             }
-            return new GetFileResponse(httpResponse);
+            final GetFileResponse response = new GetFileResponse(httpResponse);
+            // Ownership passes to the response, which closes it; the finally below must not.
+            httpResponse = null;
+            return response;
+        } catch (final SharePointClientException e) {
+            // Already carries the status code and the response body. Letting the catch below wrap
+            // it a second time would bury both.
+            throw e;
         } catch (final Exception e) {
             throw new SharePointClientException("GetFile Request failure.", e);
+        } finally {
+            if (httpResponse != null) {
+                try {
+                    httpResponse.close();
+                } catch (final IOException e) {
+                    logger.warn("Failed to close the response.", e);
+                }
+            }
         }
     }
 
