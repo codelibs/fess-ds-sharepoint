@@ -17,14 +17,23 @@ package org.codelibs.fess.ds.sharepoint;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.AbstractQueue;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 
@@ -65,9 +74,24 @@ import jakarta.validation.ValidationException;
 public class SharePointCrawler implements Closeable {
     private static final Logger logger = LogManager.getLogger(SharePointCrawler.class);
 
+    /**
+     * How long {@link #doCrawl} waits for a worker to hand over a document before re-testing
+     * whether the crawl has finished, and how long a worker waits for a crawl unit before
+     * re-testing whether it should exit. Short enough that a stop or a close is noticed promptly,
+     * long enough that neither loop is a spin.
+     */
+    private static final long POLL_TIMEOUT_MILLIS = 100L;
+
+    /**
+     * How long {@link #close()} waits for the workers to finish what they are doing before
+     * interrupting them. A worker can be in the middle of an HTTP request, which is bounded by the
+     * socket timeout, not by anything here.
+     */
+    private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 60L;
+
     private final SharePointClient client;
 
-    private final ConcurrentLinkedQueue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+    private final CrawlQueue crawlingQueue = new CrawlQueue();
 
     private final CrawlerConfig config;
 
@@ -76,11 +100,46 @@ public class SharePointCrawler implements Closeable {
     private final UrlFilter urlFilter;
 
     /**
+     * How many crawl units are worked on at once, already capped to twice the processor count.
+     * {@code 1} - the default - means every unit runs on the caller's thread and no pool exists.
+     */
+    private final int numberOfThreads;
+
+    /**
+     * The worker pool, or null when {@link #numberOfThreads} is 1. Null is what keeps the default
+     * configuration on exactly the code path it had before this parameter existed: no pool is
+     * created, no thread is started, and {@link #doCrawl} drains the queue on the caller's thread.
+     */
+    private final ExecutorService executorService;
+
+    /**
+     * Documents the workers have finished and {@link #doCrawl} has not handed to its caller yet,
+     * or null when single-threaded.
+     *
+     * <p>Bounded, at one document per worker. A worker blocks handing over its document once it is
+     * full, which is what keeps {@code SharePointDataStore#storeData}'s {@code read_interval} sleep
+     * meaningful - the crawl runs no faster than documents are consumed - and what stops a fast
+     * farm from filling the heap with file contents faster than they are indexed.
+     */
+    private final BlockingQueue<CrawlResult> results;
+
+    /** Whether the workers have been started; they are started by the first {@link #doCrawl} call. */
+    private final AtomicBoolean workersStarted = new AtomicBoolean();
+
+    /**
+     * Set by {@link #close()} before the pool is shut down, so a worker waiting on the queue or on
+     * a full results queue leaves instead of being interrupted out of an HTTP request. Also set
+     * when the crawling thread is interrupted, so the crawl ends rather than spinning.
+     */
+    private volatile boolean closing;
+
+    /**
      * The wait applied before retrying a request SharePoint answered with 503, growing with each
      * successive retry of the same crawl unit. Package-private so a test can replace it with one
-     * that records the delay instead of actually sleeping for it.
+     * that records the delay instead of actually sleeping for it. Volatile because worker threads
+     * read it.
      */
-    private SharePointBackoff backoff = SharePointBackoff.defaults();
+    private volatile SharePointBackoff backoff = SharePointBackoff.defaults();
 
     /**
      * Answers whether the job this crawl belongs to has been asked to stop.
@@ -90,8 +149,12 @@ public class SharePointCrawler implements Closeable {
      * supplies a supplier reading that flag, so the queue loop below can notice it too - see
      * {@link #doCrawl} for the window that remains. Defaults to "never stop" so a crawler built
      * outside {@code SharePointDataStore} behaves exactly as it did before.
+     *
+     * <p>Volatile because the workers read it too. The flag it reads is itself volatile
+     * ({@code AbstractDataStore#alive}), so a stop reaches every worker without any further
+     * synchronization.
      */
-    private BooleanSupplier stopRequested = () -> false;
+    private volatile BooleanSupplier stopRequested = () -> false;
 
     /**
      * Creates a new SharePointCrawler with the specified configuration.
@@ -100,6 +163,14 @@ public class SharePointCrawler implements Closeable {
      */
     public SharePointCrawler(final CrawlerConfig config) {
         validate(config);
+        this.numberOfThreads = resolveNumberOfThreads(config.getNumberOfThreads());
+        if (numberOfThreads > 1) {
+            this.results = new ArrayBlockingQueue<>(numberOfThreads);
+            this.executorService = newFixedThreadPool(numberOfThreads);
+        } else {
+            this.results = null;
+            this.executorService = null;
+        }
         this.client = createClient(config);
         this.config = config;
         this.urlFilter = buildUrlFilter(config);
@@ -107,6 +178,48 @@ public class SharePointCrawler implements Closeable {
         if (crawlingQueue.isEmpty()) {
             logger.error("Failed to start crawl.");
         }
+    }
+
+    /**
+     * Decides how many crawl units this crawl works on at once.
+     *
+     * <p>Capped at twice the processor count, the same bound {@code fess-ds-microsoft365} applies -
+     * capped here, rather than where the pool is built, because the HTTP connection pool is sized
+     * to the result (see {@link #createClient}) and has to match what actually runs. A value below
+     * 1 falls back to 1 rather than failing the job, for the same reason
+     * {@code SharePointDataStore#parseInt} falls back on a malformed number.
+     *
+     * @param requested the configured {@code number_of_threads}
+     * @return the number of threads that will actually be used, never below 1
+     */
+    private static int resolveNumberOfThreads(final int requested) {
+        final int maxThreads = Runtime.getRuntime().availableProcessors() * 2;
+        if (requested < 1) {
+            logger.warn("number_of_threads is {}, which is not a usable thread count. Using 1.", requested);
+            return 1;
+        }
+        if (requested > maxThreads) {
+            logger.info("number_of_threads {} is capped at {} (twice the processor count).", requested, maxThreads);
+            return maxThreads;
+        }
+        return requested;
+    }
+
+    /**
+     * Builds the worker pool, with the lifecycle {@code fess-ds-microsoft365} uses: a fixed number
+     * of threads, a bounded hand-off queue, and {@code CallerRunsPolicy} so a submission can never
+     * be silently dropped.
+     *
+     * <p>This crawler submits exactly {@code nThreads} long-lived tasks, one per thread, so neither
+     * the hand-off queue nor the rejection policy is exercised in practice; they are the safe
+     * configuration to have if that ever changes.
+     *
+     * @param nThreads the number of threads, already capped
+     * @return the pool
+     */
+    private static ExecutorService newFixedThreadPool(final int nThreads) {
+        return new ThreadPoolExecutor(nThreads, nThreads, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(nThreads),
+                new ThreadPoolExecutor.CallerRunsPolicy());
     }
 
     private void validate(final CrawlerConfig config) {
@@ -136,7 +249,14 @@ public class SharePointCrawler implements Closeable {
                 .setUrl(config.getUrl())
                 .setSite(config.getSiteName())
                 .setSitePath(config.getSiteRelativePath())
-                .setRequestConfig(buildRequestConfig(config));
+                .setRequestConfig(buildRequestConfig(config))
+                // Every worker shares this one client - including the sibling clients
+                // SharePointClient#forSitePath hands a subsite crawl, which share its connection
+                // pool. Apache HttpClient allows 2 connections per route by default and a crawl is
+                // a single route, so without this every thread past the second would spend the
+                // crawl waiting for a connection. Below 2 threads this is a no-op and the client
+                // keeps the pool it has always had.
+                .setMaxConnections(numberOfThreads);
         final String ntlmUser = config.getNtlmUser();
         if (StringUtils.isNotBlank(ntlmUser)) {
             final String ntlmPass = config.getNtlmPassword();
@@ -268,10 +388,23 @@ public class SharePointCrawler implements Closeable {
     /**
      * Checks if there are remaining targets to crawl.
      *
+     * <p>With workers running this is not simply "the queue is not empty": a unit a worker has
+     * already taken is in no queue at all, and neither is the document it is about to produce.
+     * {@link CrawlQueue#isDrained()} covers both - it counts a unit from the moment it is queued
+     * until the moment its worker is completely finished with it - and is read before
+     * {@code results}, so a document put there by the last worker to finish cannot be missed: when
+     * the count reaches zero every hand-off has already happened.
+     *
      * @return true if there are more targets to crawl
      */
     public boolean hasCrawlTarget() {
-        return !crawlingQueue.isEmpty();
+        if (executorService == null) {
+            return !crawlingQueue.isEmpty();
+        }
+        if (closing) {
+            return false;
+        }
+        return !crawlingQueue.isDrained() || !results.isEmpty();
     }
 
     /**
@@ -315,6 +448,27 @@ public class SharePointCrawler implements Closeable {
     }
 
     /**
+     * Returns the number of crawl units this crawl works on at once, after the cap has been
+     * applied, for a test that needs to see what a configured {@code number_of_threads} resolved
+     * to.
+     *
+     * @return the resolved thread count, never below 1
+     */
+    int getNumberOfThreads() {
+        return numberOfThreads;
+    }
+
+    /**
+     * Returns the worker pool, or null when this crawl runs entirely on its caller's thread, for a
+     * test that needs to prove the default configuration creates no pool at all.
+     *
+     * @return the worker pool, or null
+     */
+    ExecutorService getExecutorService() {
+        return executorService;
+    }
+
+    /**
      * Performs a crawl operation.
      *
      * <p>This drains the queue until a crawl unit produces a document, so a single call can span
@@ -328,11 +482,29 @@ public class SharePointCrawler implements Closeable {
      * spending another attempt. A listing already in progress inside {@code SharePointCrawl#doCrawl}
      * still runs to completion - those inner loops take no stop signal.
      *
+     * <p>With {@code number_of_threads} greater than 1 the queue is drained by a pool of workers
+     * instead, and this method hands over the documents they finished - one per call, in the same
+     * shape, so nothing above it changes. See {@link #takeFromWorkers}.
+     *
      * @param dataConfig the data configuration
      * @return a pair containing the crawled data map and stats key, or null if no data
      */
     public Pair<Map<String, Object>, StatsKeyObject> doCrawl(final DataConfig dataConfig) {
-        final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
+        if (executorService == null) {
+            return crawlOnCallersThread(dataConfig);
+        }
+        return takeFromWorkers(dataConfig);
+    }
+
+    /**
+     * Drains the queue on the calling thread until a crawl unit produces a document - the single
+     * threaded crawl, unchanged, and the only path a configuration without {@code number_of_threads}
+     * ever takes.
+     *
+     * @param dataConfig the data configuration
+     * @return a pair containing the crawled data map and stats key, or null if no data
+     */
+    private Pair<Map<String, Object>, StatsKeyObject> crawlOnCallersThread(final DataConfig dataConfig) {
         while (!crawlingQueue.isEmpty()) {
             if (stopRequested.getAsBoolean()) {
                 logger.info("A stop was requested; leaving {} crawl target(s) uncrawled.", crawlingQueue.size());
@@ -342,75 +514,299 @@ public class SharePointCrawler implements Closeable {
             if (crawl == null) {
                 continue;
             }
-            final StatsKeyObject statsKey = crawl.getStatsKey();
-            crawlerStatsHelper.begin(statsKey);
-            int retryCount = 0;
-            boolean succeeded = false;
-            RuntimeException lastFailure = null;
-            while (retryCount <= config.getRetryLimit() && !stopRequested.getAsBoolean()) {
-                try {
-                    final Map<String, Object> dataMap = crawl.doCrawl(dataConfig, crawlingQueue);
-                    crawlerStatsHelper.record(statsKey, StatsAction.ACCESSED);
-                    if (dataMap != null) {
-                        return new Pair<>(dataMap, statsKey);
-                    }
-                    succeeded = true;
-                    break;
-                } catch (final SharePointServerException e) {
-                    lastFailure = e;
-                    if (retryCount + 1 <= config.getRetryLimit()) {
-                        logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
-                        // SharePoint's on-premises throttling signal: wait longer with each
-                        // successive retry of this same target rather than hammering a server that
-                        // just said it is overloaded. Only a genuine 503 waits - a 404 or 403
-                        // retrying anyway is not evidence of load, so it is not worth delaying.
-                        if (e.getStatusCode() == 503) {
-                            awaitUnlessStopping(retryCount);
-                        }
-                    } else {
-                        logger.warn("Api server error: {}", e.getMessage(), e);
-                    }
-                } catch (final SharePointClientException e) {
-                    lastFailure = e;
-                    if (retryCount + 1 <= config.getRetryLimit()) {
-                        logger.warn("Error occured: {}  [Retry:{}]", e.getMessage(), retryCount);
-                        // GetFile/GetFile2013 report every HTTP error this way instead of as a
-                        // SharePointServerException, but still carry the status code (see
-                        // SharePointClientException(String, int)), so a 503 from a file download
-                        // backs off exactly like a 503 from any other API call.
-                        if (e.getStatusCode() == 503) {
-                            awaitUnlessStopping(retryCount);
-                        }
-                    } else {
-                        logger.warn("Error occured. {}", e.getMessage(), e);
-                    }
-                } catch (final Exception e) {
-                    crawlerStatsHelper.discard(statsKey);
-                    throw new DataStoreCrawlingException(statsKey.getId(), "Failed to crawl " + statsKey.getId(), e);
+            try {
+                final Pair<Map<String, Object>, StatsKeyObject> result = crawlUnit(dataConfig, crawl);
+                if (result != null) {
+                    return result;
                 }
-                retryCount++;
-                crawlerStatsHelper.record(statsKey, StatsAction.EXCEPTION.name().toLowerCase(Locale.ENGLISH) + "@" + retryCount);
+            } finally {
+                crawlingQueue.finished();
             }
-            if (!succeeded) {
-                // Losing this target loses every document it would have produced. Count it so the
-                // crawl can decline to delete stale documents, and record it so an operator can
-                // find it in the failure URL list instead of only in the log.
-                failureCount.incrementAndGet();
-                if (retryCount == 0 && lastFailure == null && stopRequested.getAsBoolean()) {
-                    // The retry loop's own condition is the first stop check made after this
-                    // target was polled, so a stop requested in the window between the queue
-                    // check above and that condition leaves retryCount at 0 and lastFailure null
-                    // without a single attempt having been made.
-                    logger.warn("Gave up on {}: a stop was requested before it could be attempted.", statsKey.getId());
-                } else {
-                    logger.warn("Gave up on {} after {} attempt(s).", statsKey.getId(), retryCount);
-                }
-                if (lastFailure != null) {
-                    storeFailureUrl(dataConfig, statsKey, lastFailure);
-                }
-            }
-            crawlerStatsHelper.done(statsKey);
         }
+        return null;
+    }
+
+    /**
+     * Hands over the next document a worker has finished, waiting for one if the crawl is still
+     * running.
+     *
+     * <p><b>Why the crawl cannot end early.</b> The obvious test - the queue is empty - is not
+     * enough: a worker that has taken a unit but has not yet enqueued the children it discovers
+     * leaves the queue legitimately empty with work still outstanding. Splitting that into "the
+     * queue is empty <em>and</em> nothing is in flight" only moves the problem, because those are
+     * two reads and a unit can move from one to the other between them. So {@link CrawlQueue}
+     * counts a unit from the moment it is <em>queued</em> until the moment its worker is completely
+     * finished with it - children enqueued (and therefore counted) and document handed over - and
+     * this method tests that single count. When it reads zero, every child that will ever exist has
+     * already been counted and every document that will ever be produced has already been put on
+     * {@code results}, so the {@code results} check that follows it is final rather than a race.
+     *
+     * <p><b>Why the crawl cannot hang.</b> A worker only ever waits on the queue (with a timeout),
+     * on an HTTP response (bounded by the socket timeout) or for room in {@code results} (which
+     * this method is emptying, and which it stops waiting for once a stop is requested). This
+     * method only ever waits for a document with a timeout, and re-tests the count each time.
+     *
+     * <p>Outstanding work is only worth waiting for while there is a worker left to do it, so this
+     * method tests the two things that make every worker leave - {@link #closing} and
+     * {@link #stopRequested} - before it waits at all. Those are the only ways a worker exits its
+     * loop, so no combination of them leaves this method waiting on threads that have gone.
+     *
+     * @param dataConfig the data configuration
+     * @return a pair containing the crawled data map and stats key, or null once the crawl is
+     *         finished or has been stopped
+     */
+    private Pair<Map<String, Object>, StatsKeyObject> takeFromWorkers(final DataConfig dataConfig) {
+        startWorkers(dataConfig);
+        while (true) {
+            if (closing) {
+                // The workers leave on this flag, so waiting for a document after it is set is
+                // waiting for a thread that has already gone: without this check a close() from
+                // another thread wedges this one until the process ends, silently, with crawl
+                // targets still outstanding. It is also the only reason the loop below can trust
+                // that "work is outstanding" means "a worker is coming back with it".
+                logger.warn("The crawler was closed while a crawl was still running; leaving {} crawl target(s) uncrawled.",
+                        crawlingQueue.size());
+                return null;
+            }
+            if (stopRequested.getAsBoolean()) {
+                logger.info("A stop was requested; leaving {} crawl target(s) uncrawled.", crawlingQueue.size());
+                return null;
+            }
+            final CrawlResult result;
+            try {
+                result = results.poll(POLL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (final InterruptedException e) {
+                // Nothing in core interrupts this thread - a stop is a flag - so this is only
+                // reachable if something else does. End the crawl rather than returning null to a
+                // caller that would immediately ask again and get nothing, forever.
+                Thread.currentThread().interrupt();
+                closing = true;
+                logger.warn("Interrupted while waiting for a crawled document; ending the crawl.");
+                return null;
+            }
+            if (result != null) {
+                return result.get();
+            }
+            if (crawlingQueue.isDrained() && results.isEmpty()) {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Starts one worker per thread, on the first call. The workers run until the crawl is stopped
+     * or {@link #close()} is called; they are not restarted.
+     *
+     * @param dataConfig the data configuration every unit is crawled with. One crawl runs against
+     *            one data config - {@code SharePointDataStore#storeData} passes the same instance
+     *            on every call - so the workers capture the one they are started with.
+     */
+    private void startWorkers(final DataConfig dataConfig) {
+        if (!workersStarted.compareAndSet(false, true)) {
+            return;
+        }
+        if (logger.isDebugEnabled()) {
+            logger.debug("Starting {} SharePoint crawl worker(s).", numberOfThreads);
+        }
+        for (int i = 0; i < numberOfThreads; i++) {
+            executorService.execute(() -> runWorker(dataConfig));
+        }
+    }
+
+    /**
+     * Takes crawl units off the queue and hands the documents they produce to {@link #doCrawl}.
+     *
+     * <p>The unit is only counted as finished - {@link CrawlQueue#finished()}, in the {@code
+     * finally} - once its {@code doCrawl} has returned, so the children it enqueued are already
+     * counted, and once its document has been handed over, so it is already visible. That ordering
+     * is the whole termination argument; see {@link #takeFromWorkers}.
+     *
+     * @param dataConfig the data configuration
+     */
+    private void runWorker(final DataConfig dataConfig) {
+        while (!closing && !stopRequested.getAsBoolean()) {
+            final SharePointCrawl crawl;
+            try {
+                crawl = crawlingQueue.poll(POLL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (final InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            if (crawl == null) {
+                continue;
+            }
+            try {
+                final CrawlResult result = runUnitCatchingFailures(dataConfig, crawl);
+                if (result != null) {
+                    handOff(result);
+                }
+            } catch (final InterruptedException e) {
+                // Only reachable from close()'s shutdownNow, after the crawl is already over.
+                Thread.currentThread().interrupt();
+                return;
+            } finally {
+                crawlingQueue.finished();
+            }
+        }
+    }
+
+    /**
+     * Crawls one unit, turning anything it throws into a result the crawling thread can rethrow.
+     *
+     * <p>A failure must not be left on the worker: {@code SharePointDataStore#storeData} counts the
+     * exceptions it catches, and a crawl that quietly loses targets without counting them is a
+     * crawl that reports success and lets core delete every document it never reached. Carrying the
+     * exception across and rethrowing it there keeps the accounting exactly where it already was.
+     *
+     * @param dataConfig the data configuration
+     * @param crawl the crawl unit
+     * @return the document to hand over, the failure to hand over, or null if this unit produced
+     *         neither
+     */
+    private CrawlResult runUnitCatchingFailures(final DataConfig dataConfig, final SharePointCrawl crawl) {
+        try {
+            final Pair<Map<String, Object>, StatsKeyObject> document = crawlUnit(dataConfig, crawl);
+            return document == null ? null : new CrawlResult(document, null);
+        } catch (final RuntimeException | Error e) {
+            return new CrawlResult(null, e);
+        }
+    }
+
+    /**
+     * Hands one finished document to the crawling thread, waiting for room if it is still working
+     * through the previous ones.
+     *
+     * <p>Gives up on a stop rather than waiting for room that will never be made: the crawling
+     * thread has already stopped draining by then. The document is dropped, which is what a stop
+     * does to every target still queued behind it as well.
+     *
+     * <p>A result carrying a <em>failure</em> rather than a document is dropped here too, and that
+     * one is not merely a target the stop did not get to: it is a target that was attempted and
+     * lost. {@link #crawlUnit} throws it from its generic {@code catch} before reaching the failure
+     * count, and {@link CrawlResult#get()} - which would have rethrown it on the crawling thread
+     * for {@code SharePointDataStore#storeData} to count - is never called on a dropped result. So
+     * nothing else has recorded it, and it is counted and logged here instead. Whether
+     * {@code storeData} observes the count depends on timing: it reads {@link #getFailureCount()}
+     * once the crawling thread has stopped draining, which can be before a worker still finishing
+     * its last hand-off gets here. The log line is the record that does not race.
+     *
+     * @param result the document or failure to hand over
+     * @throws InterruptedException if this worker is interrupted while waiting for room
+     */
+    private void handOff(final CrawlResult result) throws InterruptedException {
+        while (!closing && !stopRequested.getAsBoolean()) {
+            if (results.offer(result, POLL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                return;
+            }
+        }
+        final Pair<Map<String, Object>, StatsKeyObject> document = result.document;
+        if (document != null) {
+            logger.info("Dropping the crawled document for {}: the crawl is stopping.", document.getSecond().getId());
+            ComponentUtil.getCrawlerStatsHelper().done(document.getSecond());
+            return;
+        }
+        failureCount.incrementAndGet();
+        logger.warn("Dropping a failed crawl target: the crawl is stopping before its failure could be reported.", result.failure);
+    }
+
+    /**
+     * Crawls one unit to completion: its retries, its backoff, its failure accounting and its
+     * statistics. Runs on the crawling thread when single-threaded and on a worker otherwise, and
+     * is the same code either way.
+     *
+     * <p>A retry stays on the thread that owns the unit - it is this loop, not a re-queue - and
+     * nothing here puts a failed target back on the queue. Nothing should: a re-queued target would
+     * be crawled a second time by another worker, with its own requests, its own retries and its
+     * own entry in the failure count.
+     *
+     * <p>That is a statement about crawl <em>units</em>, not about stats keys, and the difference
+     * matters. {@code Queue#poll} hands each unit to exactly one worker, but two different units
+     * can carry the same {@link StatsKeyObject} id - it is built from a list's <em>name</em>, so
+     * two subsites that each have a list called {@code Tasks} produce {@code item#Tasks:1} for two
+     * genuinely different documents, and a list's paging can queue the same item more than once. So
+     * with workers running, two threads can record against one id, and
+     * {@code CrawlerStatsHelper} keeps an unsynchronized {@code LinkedHashMap} per id. <b>The
+     * consequence is confined to statistics</b>: a garbled or lost statistics line, from calls that
+     * are already inside a {@code catch (Exception)}. No document is affected, and neither is
+     * {@link #failureCount} - the thing that decides whether stale documents may be deleted - which
+     * is an {@link AtomicLong} that never goes through that helper. Do not "fix" this by
+     * de-duplicating queued units on that id: because the id is not unique across sites, that would
+     * silently drop the second subsite's documents, trading a cosmetic defect for data loss.
+     *
+     * @param dataConfig the data configuration
+     * @param crawl the crawl unit
+     * @return the document this unit produced, or null if it produced none
+     */
+    private Pair<Map<String, Object>, StatsKeyObject> crawlUnit(final DataConfig dataConfig, final SharePointCrawl crawl) {
+        final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
+        final StatsKeyObject statsKey = crawl.getStatsKey();
+        crawlerStatsHelper.begin(statsKey);
+        int retryCount = 0;
+        boolean succeeded = false;
+        RuntimeException lastFailure = null;
+        while (retryCount <= config.getRetryLimit() && !stopRequested.getAsBoolean()) {
+            try {
+                final Map<String, Object> dataMap = crawl.doCrawl(dataConfig, crawlingQueue);
+                crawlerStatsHelper.record(statsKey, StatsAction.ACCESSED);
+                if (dataMap != null) {
+                    return new Pair<>(dataMap, statsKey);
+                }
+                succeeded = true;
+                break;
+            } catch (final SharePointServerException e) {
+                lastFailure = e;
+                if (retryCount + 1 <= config.getRetryLimit()) {
+                    logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
+                    // SharePoint's on-premises throttling signal: wait longer with each
+                    // successive retry of this same target rather than hammering a server that
+                    // just said it is overloaded. Only a genuine 503 waits - a 404 or 403
+                    // retrying anyway is not evidence of load, so it is not worth delaying.
+                    if (e.getStatusCode() == 503) {
+                        awaitUnlessStopping(retryCount);
+                    }
+                } else {
+                    logger.warn("Api server error: {}", e.getMessage(), e);
+                }
+            } catch (final SharePointClientException e) {
+                lastFailure = e;
+                if (retryCount + 1 <= config.getRetryLimit()) {
+                    logger.warn("Error occured: {}  [Retry:{}]", e.getMessage(), retryCount);
+                    // GetFile/GetFile2013 report every HTTP error this way instead of as a
+                    // SharePointServerException, but still carry the status code (see
+                    // SharePointClientException(String, int)), so a 503 from a file download
+                    // backs off exactly like a 503 from any other API call.
+                    if (e.getStatusCode() == 503) {
+                        awaitUnlessStopping(retryCount);
+                    }
+                } else {
+                    logger.warn("Error occured. {}", e.getMessage(), e);
+                }
+            } catch (final Exception e) {
+                crawlerStatsHelper.discard(statsKey);
+                throw new DataStoreCrawlingException(statsKey.getId(), "Failed to crawl " + statsKey.getId(), e);
+            }
+            retryCount++;
+            crawlerStatsHelper.record(statsKey, StatsAction.EXCEPTION.name().toLowerCase(Locale.ENGLISH) + "@" + retryCount);
+        }
+        if (!succeeded) {
+            // Losing this target loses every document it would have produced. Count it so the
+            // crawl can decline to delete stale documents, and record it so an operator can
+            // find it in the failure URL list instead of only in the log.
+            failureCount.incrementAndGet();
+            if (retryCount == 0 && lastFailure == null && stopRequested.getAsBoolean()) {
+                // The retry loop's own condition is the first stop check made after this
+                // target was polled, so a stop requested in the window between the queue
+                // check above and that condition leaves retryCount at 0 and lastFailure null
+                // without a single attempt having been made.
+                logger.warn("Gave up on {}: a stop was requested before it could be attempted.", statsKey.getId());
+            } else {
+                logger.warn("Gave up on {} after {} attempt(s).", statsKey.getId(), retryCount);
+            }
+            if (lastFailure != null) {
+                storeFailureUrl(dataConfig, statsKey, lastFailure);
+            }
+        }
+        crawlerStatsHelper.done(statsKey);
         return null;
     }
 
@@ -457,11 +853,13 @@ public class SharePointCrawler implements Closeable {
     /**
      * Returns how many crawl units were given up on after exhausting their retries.
      *
-     * <p>Counts only the units the retry loop in {@link #doCrawl} abandoned, which are the ones
+     * <p>Counts the units the retry loop in {@link #crawlUnit} abandoned, which are the ones
      * that produce no document and let the crawl continue to the next queue entry. A unit that
-     * fails with an exception the retry loop does not retry is not counted here, because that
-     * exception leaves {@link #doCrawl} before this counter is reached - the caller counts that
-     * one where it catches it, so the two together cover every lost unit.
+     * fails with an exception the retry loop does not retry is normally not counted here, because
+     * that exception leaves {@link #crawlUnit} before this counter is reached - the caller counts
+     * that one where it catches it, so the two together cover every lost unit. The one exception
+     * is a worker's failure dropped by {@link #handOff} while the crawl is stopping, which the
+     * caller never gets to see and which is therefore counted here instead.
      *
      * @return the number of crawl units that were given up on
      */
@@ -470,13 +868,181 @@ public class SharePointCrawler implements Closeable {
     }
 
     /**
-     * Releases the HTTP connection pool held by the underlying SharePoint client.
+     * Stops the workers and releases the HTTP connection pool held by the underlying SharePoint
+     * client.
+     *
+     * <p>In that order, and not the other way round: the workers make their requests through that
+     * client - including through the sibling clients a subsite crawl builds from it, which share
+     * its connection pool - so closing it first would pull the pool out from under a request still
+     * in flight.
      *
      * @throws IOException if the client fails to close
      */
     @Override
     public void close() throws IOException {
-        client.close();
+        try {
+            shutdownWorkers();
+        } finally {
+            // In a finally so that a failure while stopping the workers cannot leak the connection
+            // pool - a leaked pool holds its connections for the life of the JVM, and one crawl
+            // per data config per run adds up. By the time this runs the workers have been waited
+            // for twice; see shutdownWorkers.
+            client.close();
+        }
+    }
+
+    /**
+     * Asks the workers to finish, waits a bounded time for them, interrupts whatever is left, and
+     * waits again.
+     *
+     * <p>The second wait is the point: an interrupt does not stop a thread that is inside a
+     * blocking read on a socket, and the caller releases the connection pool the moment this
+     * returns. Returning on {@code shutdownNow()} alone would hand that pool to
+     * {@code client.close()} while a worker was still reading from it.
+     */
+    private void shutdownWorkers() {
+        if (executorService == null) {
+            return;
+        }
+        // Set before the shutdown so a worker waiting on the queue or for room in results leaves
+        // on its own, rather than having to be interrupted out of an HTTP request.
+        closing = true;
+        executorService.shutdown();
+        if (awaitWorkers()) {
+            return;
+        }
+        logger.warn("The SharePoint crawl workers did not finish within {} seconds; interrupting them.", EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS);
+        executorService.shutdownNow();
+        if (!awaitWorkers()) {
+            logger.warn("A SharePoint crawl worker is still running {} seconds after being interrupted; releasing its connection pool"
+                    + " anyway. Requests it has in flight will fail.", EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS);
+        }
+    }
+
+    /**
+     * Waits a bounded time for every worker to finish.
+     *
+     * @return true if they all finished, false on the timeout or on an interrupt
+     */
+    private boolean awaitWorkers() {
+        try {
+            return executorService.awaitTermination(EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("Interrupted while waiting for the SharePoint crawl workers to finish.", e);
+            return false;
+        }
+    }
+
+    /**
+     * The crawl queue, and the count of how much work is outstanding.
+     *
+     * <p>A unit is counted from the moment it is <em>offered</em> - by the initial seeding, or by
+     * another unit's discovery - until {@link #finished()} says its worker is completely done with
+     * it. That is deliberately wider than "is in the queue": between a worker taking a unit and
+     * that unit enqueuing what it discovered, the queue is empty and the crawl is anything but
+     * finished. Because both facts live in one counter, {@link #isDrained()} is a single read and
+     * cannot see a unit that is momentarily in neither place.
+     *
+     * <p>{@code AbstractQueue} rather than a bare field so that a crawl unit, which is handed this
+     * queue to enqueue what it discovers, counts its children without knowing anything about the
+     * counter.
+     */
+    private static final class CrawlQueue extends AbstractQueue<SharePointCrawl> {
+        private final LinkedBlockingQueue<SharePointCrawl> delegate = new LinkedBlockingQueue<>();
+
+        private final AtomicInteger outstanding = new AtomicInteger();
+
+        @Override
+        public boolean offer(final SharePointCrawl crawl) {
+            outstanding.incrementAndGet();
+            if (delegate.offer(crawl)) {
+                return true;
+            }
+            outstanding.decrementAndGet();
+            return false;
+        }
+
+        @Override
+        public SharePointCrawl poll() {
+            return delegate.poll();
+        }
+
+        /**
+         * Waits a bounded time for a crawl unit, so a worker with nothing to do neither spins nor
+         * misses a stop.
+         *
+         * @param timeout how long to wait
+         * @param unit the unit of {@code timeout}
+         * @return the next crawl unit, or null if none arrived in time
+         * @throws InterruptedException if the waiting thread is interrupted
+         */
+        public SharePointCrawl poll(final long timeout, final TimeUnit unit) throws InterruptedException {
+            return delegate.poll(timeout, unit);
+        }
+
+        @Override
+        public SharePointCrawl peek() {
+            return delegate.peek();
+        }
+
+        @Override
+        public Iterator<SharePointCrawl> iterator() {
+            return delegate.iterator();
+        }
+
+        @Override
+        public int size() {
+            return delegate.size();
+        }
+
+        /**
+         * Records that one crawl unit is completely finished with: whatever it discovered has been
+         * enqueued (and so counted here) and whatever document it produced has been handed over.
+         */
+        public void finished() {
+            outstanding.decrementAndGet();
+        }
+
+        /**
+         * Returns whether nothing is queued and nothing is being worked on.
+         *
+         * @return true if no crawl unit is outstanding
+         */
+        public boolean isDrained() {
+            return outstanding.get() == 0;
+        }
+    }
+
+    /**
+     * What a worker hands to the crawling thread: either a crawled document or the failure that
+     * came of trying.
+     */
+    private static final class CrawlResult {
+        private final Pair<Map<String, Object>, StatsKeyObject> document;
+
+        private final Throwable failure;
+
+        CrawlResult(final Pair<Map<String, Object>, StatsKeyObject> document, final Throwable failure) {
+            this.document = document;
+            this.failure = failure;
+        }
+
+        /**
+         * Returns the document, or rethrows the worker's failure on the crawling thread so the
+         * caller handles it exactly where it has always handled one.
+         *
+         * @return the crawled document
+         */
+        Pair<Map<String, Object>, StatsKeyObject> get() {
+            if (failure instanceof final RuntimeException e) {
+                throw e;
+            }
+            if (failure instanceof final Error e) {
+                throw e;
+            }
+            return document;
+        }
     }
 
     /**
@@ -524,6 +1090,7 @@ public class SharePointCrawler implements Closeable {
         private String sessionId = null;
         private boolean crawlSubsites = false;
         private int maxDepth = 10;
+        private int numberOfThreads = 1;
 
         /**
          * Returns the SharePoint server URL.
@@ -1156,6 +1723,26 @@ public class SharePointCrawler implements Closeable {
          */
         public void setMaxDepth(final int maxDepth) {
             this.maxDepth = maxDepth;
+        }
+
+        /**
+         * Returns how many crawl targets are worked on at once. The default, {@code 1}, is the
+         * single-threaded crawl this connector has always run: no thread pool is created at all.
+         *
+         * @return the configured number of threads
+         */
+        public int getNumberOfThreads() {
+            return numberOfThreads;
+        }
+
+        /**
+         * Sets how many crawl targets are worked on at once. The value is capped at twice the
+         * processor count when the crawler is built.
+         *
+         * @param numberOfThreads the number of threads
+         */
+        public void setNumberOfThreads(final int numberOfThreads) {
+            this.numberOfThreads = numberOfThreads;
         }
     }
 }

@@ -15,6 +15,13 @@
  */
 package org.codelibs.fess.ds.sharepoint.client;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.TestInfo;
 
 import org.apache.http.client.config.RequestConfig;
@@ -215,5 +222,59 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
     public void test_userAgentConstantIsTheDocumentedLiteral() {
         assertEquals("the documented User-Agent must not change without the README changing with it", "FessSharePointDataStore/1.0",
                 SharePointClientBuilder.USER_AGENT);
+    }
+
+    /**
+     * Apache HttpClient's connection pool allows 2 connections per route by default, and a whole
+     * SharePoint crawl is one route, so a crawl running more than two threads would spend its time
+     * waiting for a connection instead of making requests - and only until the connection request
+     * timeout ran out, after which the third thread's request fails outright. That is exactly what
+     * {@code SharePointCrawlerTest#test_buildRequestConfig_connectionRequestTimeoutIsHonouredUnderPoolExhaustion}
+     * demonstrates against a client built without this. Here the same three concurrent requests
+     * must all get through.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_theConnectionPoolIsSizedForTheThreadCount() throws Exception {
+        final String slowFileUrl = "/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='/slow.txt')/$value";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(slowFileUrl, 200, "text/plain", "done");
+            server.withDelay(slowFileUrl, 3000L);
+            server.start();
+
+            // A bounded wait for a pooled connection, so a pool that is too small fails this test
+            // in a second rather than hanging it.
+            final RequestConfig requestConfig =
+                    RequestConfig.custom().setConnectTimeout(1000).setSocketTimeout(30000).setConnectionRequestTimeout(1000).build();
+            try (SharePointClient client = SharePointClient.builder()
+                    .setUrl(server.getBaseUrl())
+                    .setSite("test")
+                    .setRequestConfig(requestConfig)
+                    .setMaxConnections(4)
+                    .build()) {
+                final ExecutorService occupiers = Executors.newFixedThreadPool(2);
+                final CountDownLatch bothStarted = new CountDownLatch(2);
+                try {
+                    for (int i = 0; i < 2; i++) {
+                        occupiers.submit(() -> {
+                            bothStarted.countDown();
+                            try {
+                                client.api().file().getFile().setServerRelativeUrl("/slow.txt").execute().close();
+                            } catch (final Exception e) {
+                                // Not under test here - only that the connection stayed leased.
+                            }
+                        });
+                    }
+                    assertTrue("both occupying requests must have started", bothStarted.await(10, TimeUnit.SECONDS));
+                    // Give the two occupiers a moment to actually lease their connections.
+                    Thread.sleep(300L);
+
+                    assertDoesNotThrow(() -> client.api().file().getFile().setServerRelativeUrl("/slow.txt").execute().close(),
+                            "a third concurrent request must get a connection of its own when the pool is sized for the thread count");
+                } finally {
+                    occupiers.shutdownNow();
+                }
+            }
+        }
     }
 }

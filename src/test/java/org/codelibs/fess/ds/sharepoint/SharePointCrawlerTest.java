@@ -20,16 +20,21 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ConnectionPoolTimeoutException;
@@ -767,6 +772,410 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
                         documents.get(0).get(ComponentUtil.getFessConfig().getIndexFieldSite()));
                 assertEquals("the subsite must be skipped on its first 403, without spending a single retry", 1,
                         server.getRecordedRequests().stream().filter(request -> subsiteFoldersApi.equals(request.getPath())).count());
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    // === number_of_threads ===
+
+    /**
+     * A crawl unit that produces exactly one document, identified by {@code id}, after running
+     * {@code onCrawl}.
+     */
+    private static SharePointCrawl documentCrawl(final String id, final Runnable onCrawl) {
+        return new SharePointCrawl(null) {
+            {
+                statsKey = new StatsKeyObject(id);
+            }
+
+            @Override
+            public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
+                onCrawl.run();
+                // A HashMap, not Map.of: storeData mutates the map a crawl unit returns
+                // (resultMap.remove) and swallows the UnsupportedOperationException an immutable
+                // one would throw, so a test that hands production code an immutable map here can
+                // pass having run nothing.
+                final Map<String, Object> dataMap = new HashMap<>();
+                dataMap.put("id", id);
+                return dataMap;
+            }
+        };
+    }
+
+    /** Builds a crawler whose only real crawl target is an empty document library. */
+    private static CrawlerConfig emptyDocLibConfig(final SharePointMockServer server) {
+        final CrawlerConfig config = new CrawlerConfig();
+        config.setUrl(server.getBaseUrl());
+        config.setSiteName("test");
+        config.setInitialDocLibPath("/docs");
+        return config;
+    }
+
+    /** Drains a crawler to exhaustion, collecting the id of every document it produced. */
+    private static List<String> drain(final SharePointCrawler crawler) {
+        final List<String> ids = new ArrayList<>();
+        while (crawler.hasCrawlTarget()) {
+            final Pair<Map<String, Object>, StatsKeyObject> result = crawler.doCrawl(new DataConfig());
+            if (result != null) {
+                ids.add((String) result.getFirst().get("id"));
+            }
+        }
+        return ids;
+    }
+
+    /**
+     * The invariant every other test in this section is allowed to assume: a data config that does
+     * not set {@code number_of_threads} gets the crawl it always got. Same requests, same
+     * documents, same order - and no thread pool, so the default configuration cannot inherit any
+     * of the failure modes a pool brings with it.
+     */
+    @Test
+    @Timeout(value = 30, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_theDefaultIsStillASingleThreadedCrawl() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            // number_of_threads deliberately not set.
+            final SharePointCrawler crawler = new SharePointCrawler(emptyDocLibConfig(server));
+            final String callingThread = Thread.currentThread().getName();
+            final List<String> crawledOn = Collections.synchronizedList(new ArrayList<>());
+            crawler.offerCrawlTargetForTest(documentCrawl("a", () -> crawledOn.add(Thread.currentThread().getName())));
+            crawler.offerCrawlTargetForTest(documentCrawl("b", () -> crawledOn.add(Thread.currentThread().getName())));
+            crawler.offerCrawlTargetForTest(documentCrawl("c", () -> crawledOn.add(Thread.currentThread().getName())));
+            try {
+                assertNull("no worker pool may be created when number_of_threads is unset", crawler.getExecutorService());
+                assertEquals("the default must resolve to a single-threaded crawl", 1, crawler.getNumberOfThreads());
+
+                final List<String> ids = drain(crawler);
+
+                assertEquals("every document must be returned, in the order its target was queued", List.of("a", "b", "c"), ids);
+                assertEquals("the empty document library listing must still be the only request made", 1,
+                        server.getRecordedRequests().size());
+                assertEquals("every crawl target must run on the calling thread - there is no other thread to run on",
+                        List.of(callingThread, callingThread, callingThread), crawledOn);
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_everyDocumentIsReturnedExactlyOnceWithFourThreads() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = emptyDocLibConfig(server);
+            config.setNumberOfThreads(4);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            final Set<String> expected = new LinkedHashSet<>();
+            for (int i = 0; i < 50; i++) {
+                final String id = "doc-" + i;
+                expected.add(id);
+                crawler.offerCrawlTargetForTest(documentCrawl(id, () -> {
+                    // Long enough that the units genuinely overlap rather than being finished by
+                    // whichever worker happens to get there first.
+                    try {
+                        Thread.sleep(5L);
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+            }
+            try {
+                final List<String> ids = drain(crawler);
+
+                assertEquals("no document may be produced twice", ids.size(), new HashSet<>(ids).size());
+                assertEquals("every queued target's document must come back", expected, new HashSet<>(ids));
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    /**
+     * The regression this whole change is at risk of: a worker that has taken a discovery unit but
+     * has not yet enqueued what it found leaves the queue legitimately empty with the crawl far
+     * from over. A termination test that only asks whether the queue is empty ends the crawl here -
+     * and a crawl that ends early having recorded no failure lets core delete every document it
+     * never reached.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_theCrawlEndsWhenDiscoveryIsStillInFlightButTheQueueIsMomentarilyEmpty() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = emptyDocLibConfig(server);
+            config.setNumberOfThreads(4);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            // Produces no document of its own, and takes its time before enqueuing the ones that
+            // do - so for most of a second the queue is empty and the results are empty while
+            // three documents are still to come.
+            crawler.offerCrawlTargetForTest(new SharePointCrawl(null) {
+                {
+                    statsKey = new StatsKeyObject("slow-discovery");
+                }
+
+                @Override
+                public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
+                    try {
+                        Thread.sleep(500L);
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    crawlingQueue.offer(documentCrawl("child-1", () -> {}));
+                    crawlingQueue.offer(documentCrawl("child-2", () -> {}));
+                    crawlingQueue.offer(documentCrawl("child-3", () -> {}));
+                    return null;
+                }
+            });
+            try {
+                final List<String> ids = drain(crawler);
+
+                assertEquals("the crawl must not finish while a discovery unit is still working", Set.of("child-1", "child-2", "child-3"),
+                        new HashSet<>(ids));
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aStopRequestEndsTheCrawlAndDrainsTheWorkers() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = emptyDocLibConfig(server);
+            config.setNumberOfThreads(4);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            final AtomicBoolean stopped = new AtomicBoolean();
+            final AtomicInteger crawled = new AtomicInteger();
+            crawler.setStopRequested(stopped::get);
+            for (int i = 0; i < 40; i++) {
+                crawler.offerCrawlTargetForTest(documentCrawl("doc-" + i, () -> {
+                    crawled.incrementAndGet();
+                    try {
+                        Thread.sleep(100L);
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+            }
+            try {
+                Pair<Map<String, Object>, StatsKeyObject> first = null;
+                while (first == null && crawler.hasCrawlTarget()) {
+                    first = crawler.doCrawl(new DataConfig());
+                }
+                assertNotNull("the crawl must produce documents before it is stopped", first);
+
+                stopped.set(true);
+
+                assertNull("a stop must end the crawl rather than waiting for the queue to drain", crawler.doCrawl(new DataConfig()));
+                assertTrue("a stop must leave the targets behind it uncrawled", crawled.get() < 40);
+            } finally {
+                crawler.close();
+            }
+            assertTrue("close() must have stopped every worker", crawler.getExecutorService().awaitTermination(10, TimeUnit.SECONDS));
+        }
+    }
+
+    /**
+     * A close is the other way every worker leaves, and the crawling thread has to notice it for
+     * the same reason it notices a stop: work that is outstanding is only worth waiting for while
+     * there is a worker left to do it. Without the {@code closing} check in the poll loop this test
+     * does not fail - it never finishes, because the crawling thread waits for documents from
+     * threads that have already gone. The timeout is what turns that into a failing test rather
+     * than a wedged build.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aCloseFromAnotherThreadEndsACrawlInProgress() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = emptyDocLibConfig(server);
+            config.setNumberOfThreads(4);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            // None of these produce a document, so the crawling thread below stays in its poll
+            // loop rather than returning early with one; there is far more queued than the close
+            // will let the workers get through.
+            for (int i = 0; i < 200; i++) {
+                crawler.offerCrawlTargetForTest(recordingCrawl("slow-" + i, () -> {
+                    try {
+                        Thread.sleep(50L);
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }));
+            }
+            final AtomicReference<Throwable> closeFailure = new AtomicReference<>();
+            final Thread closer = new Thread(() -> {
+                try {
+                    Thread.sleep(300L);
+                    crawler.close();
+                } catch (final Throwable t) {
+                    closeFailure.set(t);
+                }
+            });
+            closer.start();
+            try {
+                assertNull("a close from another thread must end the crawl, not leave the crawling thread waiting forever",
+                        crawler.doCrawl(new DataConfig()));
+                assertFalse("and the crawl must not claim it still has targets afterwards", crawler.hasCrawlTarget());
+            } finally {
+                closer.join(30_000L);
+            }
+            assertNull("the close itself must not have failed", closeFailure.get());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_theThreadCountIsCappedAtTwiceTheProcessorCount() throws Exception {
+        final CrawlerConfig config = baseConfig();
+        config.setNumberOfThreads(1000);
+
+        try (SharePointCrawler crawler = new SharePointCrawler(config)) {
+            assertEquals("number_of_threads must be capped so a data config cannot exhaust the host",
+                    Runtime.getRuntime().availableProcessors() * 2, crawler.getNumberOfThreads());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aThreadCountBelowOneFallsBackToTheSingleThreadedCrawl() throws Exception {
+        final CrawlerConfig config = baseConfig();
+        config.setNumberOfThreads(0);
+
+        try (SharePointCrawler crawler = new SharePointCrawler(config)) {
+            assertEquals("a thread count below 1 must fall back to 1 rather than failing the job", 1, crawler.getNumberOfThreads());
+            assertNull("and it must take the no-pool path, not build a pool of one", crawler.getExecutorService());
+        }
+    }
+
+    /**
+     * A retry is the retry loop inside one unit's crawl, not a re-queue, so every attempt is made
+     * by the worker that owns the unit. This test is what says so if anyone ever "fixes" a failed
+     * target by putting it back on the queue: a re-queued target would be crawled a second time by
+     * another worker, repeating its requests and counting its own failure.
+     *
+     * <p>This says nothing about stats keys - two different units can share one id, and that is
+     * accepted; see {@code SharePointCrawler#crawlUnit}.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aRetryStaysOnTheWorkerThatOwnsTheUnit() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = emptyDocLibConfig(server);
+            config.setNumberOfThreads(4);
+            config.setRetryLimit(1);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            final List<Long> recordedSleeps = Collections.synchronizedList(new ArrayList<>());
+            crawler.setBackoff(new SharePointBackoff(1L, 2L, () -> 0.5d, recordedSleeps::add));
+            final List<String> attemptThreads = Collections.synchronizedList(new ArrayList<>());
+            final AtomicInteger attempts = new AtomicInteger();
+            crawler.offerCrawlTargetForTest(new SharePointCrawl(null) {
+                {
+                    statsKey = new StatsKeyObject("retried");
+                }
+
+                @Override
+                public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
+                    attemptThreads.add(Thread.currentThread().getName());
+                    if (attempts.incrementAndGet() == 1) {
+                        throw new SharePointClientException("GetFile Request failure. status:503 body:", 503);
+                    }
+                    final Map<String, Object> dataMap = new HashMap<>();
+                    dataMap.put("id", "retried");
+                    return dataMap;
+                }
+            });
+            try {
+                final List<String> ids = drain(crawler);
+
+                assertEquals("the retried target must still produce its document exactly once", List.of("retried"), ids);
+                assertEquals("it must have been attempted twice", 2, attemptThreads.size());
+                assertEquals("both attempts must be made by the one worker that owns the unit", attemptThreads.get(0),
+                        attemptThreads.get(1));
+                assertEquals("the 503 must still have been backed off before the retry", 1, recordedSleeps.size());
+                assertEquals("nothing may be counted as given up on", 0L, crawler.getFailureCount());
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    /**
+     * A worker that swallowed the exception its crawl target threw would leave the crawl reporting
+     * success with a target silently lost - and core deletes every document a successful crawl did
+     * not refresh. The exception has to arrive on the crawling thread, where
+     * {@code SharePointDataStore#storeData} already counts it.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aWorkerFailureIsRaisedOnTheCrawlingThread() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = emptyDocLibConfig(server);
+            config.setNumberOfThreads(4);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            crawler.offerCrawlTargetForTest(recordingCrawl("exploding", () -> {
+                throw new IllegalStateException("boom");
+            }));
+            try {
+                assertThrows(DataStoreCrawlingException.class, () -> drain(crawler),
+                        "a crawl target that fails on a worker must fail the caller's doCrawl, not disappear");
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    /**
+     * The same guarantee for the other way a target is lost: retries exhausted. The count is what
+     * {@code SharePointDataStore#store} reads to decide whether stale documents may be deleted, so
+     * a worker that failed to increment it would cost the index every document this crawl missed.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aTargetGivenUpOnByAWorkerIsStillCounted() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = emptyDocLibConfig(server);
+            config.setNumberOfThreads(4);
+            config.setRetryLimit(0);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            crawler.offerCrawlTargetForTest(recordingCrawl("always-503", () -> {
+                throw new SharePointClientException("GetFile Request failure. status:503 body:", 503);
+            }));
+            try {
+                drain(crawler);
+
+                assertEquals("a target a worker gave up on must be counted, or the crawl reports a clean run it did not have", 1L,
+                        crawler.getFailureCount());
             } finally {
                 crawler.close();
             }

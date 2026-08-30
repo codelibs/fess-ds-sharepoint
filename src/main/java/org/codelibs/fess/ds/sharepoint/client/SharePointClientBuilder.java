@@ -56,6 +56,7 @@ public class SharePointClientBuilder {
     private boolean verson2013 = false;
     private String proxyHost = null;
     private int proxyPort = -1;
+    private int maxConnections = 0;
 
     /**
      * Creates a new SharePointClientBuilder instance.
@@ -175,6 +176,27 @@ public class SharePointClientBuilder {
     }
 
     /**
+     * Sets how many HTTP connections the client may hold open, both in total and to the single
+     * route every request of a crawl takes.
+     *
+     * <p>Apache HttpClient's pool defaults to <b>2 connections per route</b>, and a SharePoint
+     * crawl is one route (one scheme, host and port), so without raising this every crawl thread
+     * past the second spends its time waiting for a pooled connection to free up rather than
+     * making requests - and waits only as long as the connection request timeout allows before
+     * failing outright. Set this to the number of threads that will share the client.
+     *
+     * <p>A value below 2 leaves Apache HttpClient's own defaults in place, so a single-threaded
+     * crawl keeps exactly the pool it has always had.
+     *
+     * @param maxConnections the maximum number of connections, in total and per route
+     * @return this builder instance
+     */
+    public SharePointClientBuilder setMaxConnections(final int maxConnections) {
+        this.maxConnections = maxConnections;
+        return this;
+    }
+
+    /**
      * Builds a new SharePointClient instance with the configured settings.
      *
      * @return a new SharePointClient instance
@@ -194,6 +216,12 @@ public class SharePointClientBuilder {
 
         final HttpClientBuilder builder = HttpClientBuilder.create();
         builder.setUserAgent(USER_AGENT);
+        if (maxConnections >= 2) {
+            // Only raised when asked for: below 2 this leaves Apache HttpClient's own defaults
+            // alone, so a single-threaded crawl keeps the pool it has always had rather than
+            // being narrowed to one connection.
+            builder.setMaxConnPerRoute(maxConnections).setMaxConnTotal(maxConnections);
+        }
         if (requestConfig != null) {
             builder.setDefaultRequestConfig(requestConfig);
         } else {

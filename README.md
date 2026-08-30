@@ -110,6 +110,49 @@ And only a 403 is skipped, never a **401**: the same credentials serve every sit
 a 401 is an authentication problem affecting the whole crawl (an expired Kerberos ticket, a rejected
 password, an OAuth token that could not be refreshed) rather than a per-site permission boundary.
 
+### number_of_threads
+
+`number_of_threads` (default `1`) is how many crawl targets are worked on at once. At the default
+the crawl runs exactly as it always has: every target is crawled on the crawling thread and **no
+thread pool is created at all**.
+
+The value is **capped at twice the processor count** of the machine running Fess, so a data config
+cannot ask for more concurrency than the host can serve. A value below `1` - or a blank or
+unparseable one - falls back to `1` rather than being honoured or failing the job. A value that was
+capped, or one below `1`, is logged with both the requested and the actual value; an unparseable one
+logs a warning. **A blank value logs nothing**, because a blank field means the parameter was simply
+not set.
+
+The HTTP connection pool is sized to match. This matters because Apache HttpClient allows only 2
+connections per route by default and a whole crawl is a single route: without raising it, every
+thread past the second would spend the crawl waiting for a connection rather than making requests.
+
+**`read_interval` still paces document hand-off, one document per interval, whatever this is set
+to.** Threads make the crawl discover and fetch faster; they do not make documents reach the indexer
+faster. That is deliberate: dividing an operator's configured interval by the thread count would
+multiply exactly the load they configured that interval to limit. A worker that finishes a document
+while the previous ones are still being handed over simply waits.
+
+What raising this **does** multiply is the request rate against SharePoint. The 503 backoff and the
+`X-SharePointHealthScore` wait described below are applied per crawl target, on the thread crawling
+it, so `n` threads make up to `n` times the requests a single-threaded crawl makes - including
+during a period the farm is signalling that it is busy. On an on-premises farm, raise this
+gradually.
+
+Two things put a ceiling on what more threads actually buy:
+
+- **The first time each SharePoint group's membership is read, it is read by one thread at a time.**
+  Permissions are resolved through a cache shared by the whole crawl, and that cache is guarded by a
+  single lock held across the group's member lookups. That lock is what stops one thread from
+  handing another a group whose members are still being read - which would index the items that
+  group protects with none of its permissions. Once a group is in the cache every later reference to
+  it is a cheap lookup, so this is a **cold-cache cost**: a crawl of a site with many distinct groups
+  spends its early minutes closer to single-threaded than to `n` threads, and one whose items share a
+  handful of groups barely notices. `role.skip=true`, which does not read permissions at all, avoids
+  it entirely.
+- Discovery is sequential per site: a site's folder and list listings are one crawl target, so the
+  threads have nothing to share out until that target has finished and queued what it found.
+
 ### User-Agent
 
 **Upgrade warning:** the User-Agent changed from Apache HttpClient's default
@@ -164,6 +207,7 @@ site.list_name={ListName of crawling target}
 ## (Option parameter)
 site.crawl_subsites={true or false. Recurse into the site's subsites. Only applies to a full site crawl (site.list_name/site.doclib_path unset). Default is false. See "site.crawl_subsites / site.max_depth" above.}
 site.max_depth={How many subsite hops below the root site site.crawl_subsites may recurse. The root is depth 0. Default is 10.}
+number_of_threads={How many crawl targets are worked on at once. Default is 1 (no thread pool at all), capped at twice the processor count. See "number_of_threads" above.}
 list.item.content.include_fields={FieldName to include to content.}
 list.item.content.exclude_fields={FieldName to exclude to content.}
 ignore_error={true or false. Log a content extraction failure instead of failing the crawl target. Default is false. See "ignore_error" above.}
@@ -206,6 +250,7 @@ site.name={SiteName of crawling target}
 site.path={Server-relative managed path of the site, e.g. /teams/eng or / for the root site collection. Optional: when set, site.name is no longer required. Leaving it unset keeps the existing /sites/{site.name} behavior exactly.}
 site.doclib_path={DocumentLibrary path. Ex) /Shared Documents}
 ## (Option parameter)
+number_of_threads={How many crawl targets are worked on at once. Default is 1 (no thread pool at all), capped at twice the processor count. See "number_of_threads" above.}
 ignore_error={true or false. Log a content extraction failure instead of failing the crawl target. Default is false. See "ignore_error" above.}
 default_permissions={Comma-separated permissions merged into every document's role list, e.g. {role}guest.}
 include_pattern={Regular expression a crawled item's URL-ish value must match to be crawled. See "include_pattern / exclude_pattern" above for what that value is.}

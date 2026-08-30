@@ -160,6 +160,18 @@ public class SharePointDataStore extends AbstractDataStore {
     protected static final String MAX_DEPTH_PARAM = "site.max_depth";
 
     /**
+     * How many crawl targets are worked on at once. Matches the spelling every other
+     * {@code fess-ds-*} plugin uses for the same thing, and the same default: {@code 1}, which
+     * creates no thread pool at all and leaves the crawl on exactly the single-threaded path it
+     * has always taken. Capped at twice the processor count - see
+     * {@code SharePointCrawler#resolveNumberOfThreads}.
+     *
+     * <p>It does not change how fast documents are handed to the indexer: {@code read_interval}
+     * still paces that, one document per interval, whatever this is set to. See the README.
+     */
+    protected static final String NUMBER_OF_THREADS = "number_of_threads";
+
+    /**
      * Carries the failure count from {@link #storeData} back to {@link #store}.
      *
      * <p>It cannot be a plain field: one data store instance is registered per handler name and
@@ -412,6 +424,9 @@ public class SharePointDataStore extends AbstractDataStore {
             // settings was the mistake - but not left silent.
             logger.warn("{} is enabled but {} is {}, so no subsite will be crawled. Set {} to 1 or more to crawl the root's children.",
                     CRAWL_SUBSITES_PARAM, MAX_DEPTH_PARAM, config.getMaxDepth(), MAX_DEPTH_PARAM);
+        }
+        if (paramMap.containsKey(NUMBER_OF_THREADS)) {
+            config.setNumberOfThreads(parseInt(paramMap.getAsString(NUMBER_OF_THREADS), config.getNumberOfThreads(), NUMBER_OF_THREADS));
         }
         if (paramMap.containsKey("site.list_id")) {
             config.setInitialListId(paramMap.getAsString("site.list_id"));

@@ -194,6 +194,13 @@ public class SharePointMockServer implements AutoCloseable {
         httpConfig.setUriCompliance(UriCompliance.DEFAULT.with("sharepoint", UriCompliance.Violation.AMBIGUOUS_PATH_ENCODING,
                 UriCompliance.Violation.AMBIGUOUS_PATH_SEPARATOR, UriCompliance.Violation.AMBIGUOUS_PATH_SEGMENT));
         final ServerConnector connector = new ServerConnector(server, new HttpConnectionFactory(httpConfig));
+        // Bound to the loopback address rather than the wildcard. On the wildcard, an ephemeral
+        // port already held by another process on 127.0.0.1 is still free to bind here - and then
+        // the client's request reaches that process instead, which answers with its own 404. That
+        // produces a failure that looks like a bug in this suite, in a test that has nothing to do
+        // with whatever else is running. getBaseUrl() still hands out the name localhost, which
+        // resolves to this address among others, and Apache HttpClient tries them all.
+        connector.setHost("127.0.0.1");
         connector.setPort(0);
         server.addConnector(connector);
         server.setHandler(new StubHandler());

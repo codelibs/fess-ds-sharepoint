@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.HashMap;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.TestInfo;
 
@@ -27,6 +28,8 @@ import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 import jakarta.validation.ValidationException;
 
@@ -235,6 +238,63 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
         try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
             assertEquals("a malformed site.max_depth must fall back to the default instead of throwing", 10,
                     crawler.getCrawlerConfig().getMaxDepth());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_createCrawler_numberOfThreadsDefaultsToOne() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("an unset number_of_threads must leave the crawl single-threaded", 1,
+                    crawler.getCrawlerConfig().getNumberOfThreads());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_createCrawler_numberOfThreadsReachesConfig() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("number_of_threads", "4");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("number_of_threads must reach the crawler config", 4, crawler.getCrawlerConfig().getNumberOfThreads());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_createCrawler_blankNumberOfThreadsFallsBackInsteadOfFailingTheJob() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        // The admin UI produces this by leaving the field empty rather than removing it.
+        // Integer.parseInt called directly on it throws, and createCrawler runs outside
+        // storeData's try block, so that would fail the whole data-config job.
+        paramMap.put("number_of_threads", "");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("a blank number_of_threads must fall back to the default instead of throwing", 1,
+                    crawler.getCrawlerConfig().getNumberOfThreads());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_createCrawler_malformedNumberOfThreadsFallsBackInsteadOfFailingTheJob() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("number_of_threads", "four");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("a malformed number_of_threads must fall back to the default instead of throwing", 1,
+                    crawler.getCrawlerConfig().getNumberOfThreads());
         }
     }
 }

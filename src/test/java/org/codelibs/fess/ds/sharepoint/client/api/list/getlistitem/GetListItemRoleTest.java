@@ -19,6 +19,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -384,6 +388,76 @@ public class GetListItemRoleTest extends UnitDsTestCase {
                         executeWithCache(httpClient, server, cache).getSharePointGroups().get(0);
                 assertEquals("the retry must rebuild the outer group and reattach the nested one", 1, outer.getSharePointGroups().size());
                 assertEquals("the retry must read the nested group's members too", 1, outer.getSharePointGroups().get(0).getUsers().size());
+            }
+        }
+    }
+
+    /**
+     * A group reaches the shared cache <em>before</em> its members are read - deliberately, because
+     * that is what breaks a membership cycle. With more than one crawl thread that publication is
+     * visible to the other threads, and a thread that took the still-empty group for a finished one
+     * would index every item that group protects with none of its permissions.
+     *
+     * <p>The map below counts down the moment the group is published, so the second thread starts
+     * exactly inside the window the fix has to close; the members endpoint is slow, so the window
+     * is a second wide rather than an instant. Against the unfixed code the second thread reads the
+     * empty group and this test fails on the very first assertion about it.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_twoThreadsResolvingTheSameGroupBothSeeACompleteGroup() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubSingleGroupAssignment(server, "7", "Marketing");
+            server.onPathStatus(usersPath("7"), 200, JSON,
+                    "{\"value\":[{\"Id\":\"9\",\"Title\":\"Alice\",\"LoginName\":\"i:0#.f|membership|alice@example.com\","
+                            + "\"PrincipalType\":1},"
+                            + "{\"Id\":\"10\",\"Title\":\"EXAMPLE\\\\engineers\",\"LoginName\":\"EXAMPLE\\\\engineers\","
+                            + "\"PrincipalType\":4}]}");
+            server.withDelay(usersPath("7"), 1000L);
+            server.start();
+
+            final CountDownLatch published = new CountDownLatch(1);
+            final Map<String, GetListItemRoleResponse.SharePointGroup> cache =
+                    new ConcurrentHashMap<String, GetListItemRoleResponse.SharePointGroup>() {
+                        private static final long serialVersionUID = 1L;
+
+                        @Override
+                        public GetListItemRoleResponse.SharePointGroup put(final String key,
+                                final GetListItemRoleResponse.SharePointGroup value) {
+                            final GetListItemRoleResponse.SharePointGroup previous = super.put(key, value);
+                            published.countDown();
+                            return previous;
+                        }
+                    };
+
+            // 4 connections, so neither thread is held up waiting for the other's slow request.
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().setMaxConnPerRoute(4).setMaxConnTotal(4).build()) {
+                final AtomicReference<GetListItemRoleResponse> firstResponse = new AtomicReference<>();
+                final AtomicReference<Throwable> firstFailure = new AtomicReference<>();
+                final Thread first = new Thread(() -> {
+                    try {
+                        firstResponse.set(executeWithCache(httpClient, server, cache));
+                    } catch (final Throwable t) {
+                        firstFailure.set(t);
+                    }
+                });
+                first.start();
+                try {
+                    assertTrue("the first thread must have published its still-empty group", published.await(30, TimeUnit.SECONDS));
+
+                    final GetListItemRoleResponse.SharePointGroup second =
+                            executeWithCache(httpClient, server, cache).getSharePointGroups().get(0);
+
+                    assertEquals("the second thread must not be handed a group whose members are still being read", 1,
+                            second.getUsers().size());
+                    assertEquals("and its security groups must be complete too", 1, second.getSecurityGroups().size());
+                } finally {
+                    first.join(30_000L);
+                }
+                assertNull("the first thread must not have failed", firstFailure.get());
+                final GetListItemRoleResponse.SharePointGroup firstGroup = firstResponse.get().getSharePointGroups().get(0);
+                assertEquals("the thread that built the group must see it complete as well", 1, firstGroup.getUsers().size());
+                assertEquals("including its security groups", 1, firstGroup.getSecurityGroups().size());
             }
         }
     }
