@@ -26,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.core.misc.Pair;
 import org.codelibs.fess.Constants;
+import org.codelibs.fess.app.service.FailureUrlService;
 import org.codelibs.fess.crawler.exception.CrawlingAccessException;
 import org.codelibs.fess.crawler.exception.MultipleCrawlingAccessException;
 import org.codelibs.fess.ds.AbstractDataStore;
@@ -132,7 +133,7 @@ public class SharePointDataStore extends AbstractDataStore {
             final long readInterval = getReadInterval(paramMap);
             final String scriptType = getScriptType(paramMap);
             boolean running = true;
-            while (running && crawler.hasCrawlTarget()) {
+            while (running && alive && crawler.hasCrawlTarget()) {
                 try {
                     final Pair<Map<String, Object>, StatsKeyObject> result = crawler.doCrawl(dataConfig);
                     if (logger.isDebugEnabled()) {
@@ -166,6 +167,10 @@ public class SharePointDataStore extends AbstractDataStore {
                                 }
                             }
                             crawlerStatsHelper.record(statsKey, StatsAction.EVALUATED);
+                            if (dataMap.get(fessConfig.getIndexFieldUrl()) instanceof final String statsUrl) {
+                                statsKey.setUrl(statsUrl);
+                            }
+                            paramMap.put(Constants.CRAWLER_STATS_KEY, statsKey);
                             callback.store(paramMap, dataMap);
                             crawlerStatsHelper.record(statsKey, StatsAction.FINISHED);
                         } finally {
@@ -184,12 +189,19 @@ public class SharePointDataStore extends AbstractDataStore {
                         }
                     }
 
-                    if (target instanceof DataStoreCrawlingException dce && dce.aborted()) {
-                        running = false;
+                    String url = "";
+                    if (target instanceof DataStoreCrawlingException dce) {
+                        url = dce.getUrl();
+                        if (dce.aborted()) {
+                            running = false;
+                        }
                     }
+                    ComponentUtil.getComponent(FailureUrlService.class)
+                            .store(dataConfig, target.getClass().getCanonicalName(), url, target);
                 } catch (final Throwable t) {
                     logger.warn("Crawling Access Exception: ", t);
                     failedTargets++;
+                    ComponentUtil.getComponent(FailureUrlService.class).store(dataConfig, t.getClass().getCanonicalName(), "", t);
                 }
                 if (readInterval > 0) {
                     sleep(readInterval);

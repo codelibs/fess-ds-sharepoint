@@ -32,9 +32,13 @@ class CapturingIndexUpdateCallback implements IndexUpdateCallback {
     /** The documents passed to {@link #store}, in the order they were received. */
     final List<Map<String, Object>> documents = new ArrayList<>();
 
+    /** The parameter maps passed to {@link #store}, in the order they were received. */
+    final List<DataStoreParams> paramMaps = new ArrayList<>();
+
     @Override
     public void store(final DataStoreParams paramMap, final Map<String, Object> dataMap) {
         documents.add(new LinkedHashMap<>(dataMap));
+        paramMaps.add(paramMap);
     }
 
     @Override
