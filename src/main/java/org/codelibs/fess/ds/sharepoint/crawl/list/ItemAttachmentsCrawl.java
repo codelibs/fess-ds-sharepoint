@@ -25,10 +25,8 @@ import java.util.Queue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
-import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachmentsResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
@@ -71,6 +69,10 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
     private final String[] supportedMimeTypes;
     /** The maximum attachment size in bytes, or a negative number for no limit */
     private final long maxContentLength;
+    /** Cache of each list's DISPLAY_FORM server-relative URL, keyed by listId */
+    private final Map<String, String> formsCache;
+    /** The include_pattern/exclude_pattern filter built for this crawl, or null when neither is configured */
+    private final UrlFilter urlFilter;
 
     /**
      * Constructs a new ItemAttachmentsCrawl instance for crawling list item attachments.
@@ -90,10 +92,13 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
      *            one of to be crawled
      * @param maxContentLength the maximum attachment size in bytes, or a negative number for no
      *            limit
+     * @param formsCache cache of each list's DISPLAY_FORM server-relative URL, keyed by listId
+     * @param urlFilter the include_pattern/exclude_pattern filter built for this crawl, or null
      */
     public ItemAttachmentsCrawl(final SharePointClient client, final String listId, final String listName, final String itemId,
             final Date created, final Date modified, final List<String> roles, final boolean ignoreError, final String extractorName,
-            final String[] supportedMimeTypes, final long maxContentLength) {
+            final String[] supportedMimeTypes, final long maxContentLength, final Map<String, String> formsCache,
+            final UrlFilter urlFilter) {
         super(client);
         this.itemId = itemId;
         this.listId = listId;
@@ -105,6 +110,8 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
         this.extractorName = extractorName;
         this.supportedMimeTypes = supportedMimeTypes;
         this.maxContentLength = maxContentLength;
+        this.formsCache = formsCache;
+        this.urlFilter = urlFilter;
         statsKey = new StatsKeyObject("item_attachment#" + listName + ":" + itemId);
     }
 
@@ -125,6 +132,15 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
 
         final GetListItemAttachmentsResponse response = client.api().list().getListItemAttachments().setId(listId, itemId).execute();
         response.getFiles().forEach(file -> {
+            // Matched per attachment, on the same server-relative URL a document library file is
+            // matched on in FolderCrawl: an item's own FileRef is checked in ItemCrawl, and an
+            // attachment has a URL of its own that no earlier check has seen.
+            if (!isUrlAllowed(urlFilter, file.getServerRelativeUrl())) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("{} is not matched with include_pattern/exclude_pattern.", file.getServerRelativeUrl());
+                }
+                return;
+            }
             final FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(), getWebLink(file.getFileName()),
                     file.getServerRelativeUrl(), created, modified, roles, Collections.emptyMap(), listName, ignoreError, extractorName,
                     supportedMimeTypes, maxContentLength);
@@ -138,23 +154,18 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
 
     /**
      * Generates the web link URL for accessing an attachment file.
-     * Creates a URL that points to the attachment within the SharePoint list item's display form.
+     * Creates a URL that points to the attachment within the SharePoint list item's display form,
+     * looked up through {@code getDisplayFormUrl}, which caches the form per {@code listId} - see
+     * that method for the one case it cannot answer from the cache.
      *
      * @param fileName name of the attachment file
      * @return web URL for accessing the attachment, or null if unable to generate
      */
     private String getWebLink(final String fileName) {
-        final GetForms getForms = client.api().list().getForms();
-        if (listId != null) {
-            getForms.setListId(listId);
-        }
-        final GetFormsResponse getFormsResponse = getForms.execute();
-        final GetFormsResponse.Form form =
-                getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
-        if (form == null) {
+        final String serverRelativeUrl = getDisplayFormUrl(listId, formsCache);
+        if (serverRelativeUrl == null) {
             return null;
         }
-        final String serverRelativeUrl = form.getServerRelativeUrl();
         return client.getUrl() + serverRelativeUrl.substring(1) + "?ID=" + itemId + "&attachments="
                 + URLEncoder.encode(fileName, StandardCharsets.UTF_8);
     }

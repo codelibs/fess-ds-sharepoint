@@ -28,6 +28,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ConnectionPoolTimeoutException;
@@ -177,6 +179,44 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
         }
     }
 
+    /**
+     * Every other 503 test here stubs a JSON body, which is what hid this: an error body is not
+     * necessarily JSON even when the request asked for JSON, and a 503 whose body is an HTML page -
+     * IIS's own default, or a load balancer's - used to be reported as a SharePointClientException
+     * carrying no status code at all, so this retry loop's {@code == 503} check was false and
+     * recordedSleeps stayed empty.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doCrawl_backsOffOnA503WhoseBodyIsNotJson() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathOnce(EMPTY_FOLDER_API, 503, "text/html",
+                    "<html><head><title>503 Service Unavailable</title></head><body><h1>Service Unavailable</h1></body></html>");
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = new CrawlerConfig();
+            config.setUrl(server.getBaseUrl());
+            config.setSiteName("test");
+            config.setInitialDocLibPath("/docs");
+            config.setRetryLimit(1);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            final List<Long> recordedSleeps = new ArrayList<>();
+            crawler.setBackoff(new SharePointBackoff(2000L, 30000L, () -> 0.5d, recordedSleeps::add));
+            try {
+                assertNull("the retried target produces no document itself", crawler.doCrawl(new DataConfig()));
+
+                assertEquals("a 503 must back off even when its body is not JSON", 1, recordedSleeps.size());
+                assertEquals("the backoff for the first retry (attempt 0) must be the initial delay", 2000L,
+                        recordedSleeps.get(0).longValue());
+                assertEquals("the retry must have succeeded, so nothing was given up on", 0L, crawler.getFailureCount());
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
     @Test
     @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
     public void test_doCrawl_doesNotBackOffOnANon503Error() throws Exception {
@@ -303,6 +343,95 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
 
                 assertTrue("a target given up on immediately (retry_limit 0) must not pay a wasted backoff wait", recordedSleeps.isEmpty());
                 assertEquals("the target must actually have been given up on, not silently skipped", 1, crawler.getFailureCount());
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    /** A crawl unit that records that it ran, runs {@code onCrawl}, and produces no document. */
+    private static SharePointCrawl recordingCrawl(final String id, final Runnable onCrawl) {
+        return new SharePointCrawl(null) {
+            {
+                statsKey = new StatsKeyObject(id);
+            }
+
+            @Override
+            public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
+                onCrawl.run();
+                return null;
+            }
+        };
+    }
+
+    /**
+     * Against the unfixed code the queue loop had no stop check at all, so it drained every
+     * remaining target before returning - the crawl unit below would have run.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doCrawl_stopsPollingTheQueueWhenAStopIsRequested() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = new CrawlerConfig();
+            config.setUrl(server.getBaseUrl());
+            config.setSiteName("test");
+            config.setInitialDocLibPath("/docs");
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            final AtomicBoolean stopped = new AtomicBoolean();
+            final AtomicInteger secondTargetRuns = new AtomicInteger();
+            crawler.setStopRequested(stopped::get);
+            crawler.offerCrawlTargetForTest(recordingCrawl("stub-stopper", () -> stopped.set(true)));
+            crawler.offerCrawlTargetForTest(recordingCrawl("stub-after-stop", secondTargetRuns::incrementAndGet));
+            try {
+                assertNull("no target here produces a document", crawler.doCrawl(new DataConfig()));
+
+                assertEquals("a target queued behind the stop must not be crawled", 0, secondTargetRuns.get());
+                assertTrue("it must still be queued rather than silently discarded", crawler.hasCrawlTarget());
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    /**
+     * Against the unfixed code the 503 branch called the backoff unconditionally, so a stop
+     * requested during the crawl still waited out the full delay - up to the backoff's 30-second
+     * cap - before the retry it was about to abandon anyway.
+     */
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doCrawl_doesNotWaitOutTheBackoffWhenAStopIsRequested() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(EMPTY_FOLDER_API, 200, "application/json", "{\"ItemCount\":0}");
+            server.start();
+
+            final CrawlerConfig config = new CrawlerConfig();
+            config.setUrl(server.getBaseUrl());
+            config.setSiteName("test");
+            config.setInitialDocLibPath("/docs");
+            config.setRetryLimit(3);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            final List<Long> recordedSleeps = new ArrayList<>();
+            crawler.setBackoff(new SharePointBackoff(2000L, 30000L, () -> 0.5d, recordedSleeps::add));
+            final AtomicBoolean stopped = new AtomicBoolean();
+            final AtomicInteger attempts = new AtomicInteger();
+            crawler.setStopRequested(stopped::get);
+            crawler.offerCrawlTargetForTest(recordingCrawl("stub-503-then-stop", () -> {
+                attempts.incrementAndGet();
+                stopped.set(true);
+                throw new SharePointClientException("GetFile Request failure. status:503 body:", 503);
+            }));
+            try {
+                // The empty-folder target built into config comes first and produces no document.
+                crawler.doCrawl(new DataConfig());
+
+                assertEquals("the stopping target must have been attempted exactly once", 1, attempts.get());
+                assertTrue("a stop must not sit out the 503 backoff before a retry it will not make", recordedSleeps.isEmpty());
             } finally {
                 crawler.close();
             }

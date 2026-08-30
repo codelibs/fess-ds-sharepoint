@@ -18,6 +18,7 @@ package org.codelibs.fess.ds.sharepoint.crawl.list;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
@@ -58,7 +59,8 @@ public class ItemCrawlTest extends UnitDsTestCase {
     }
 
     private static ItemCrawl itemCrawl(final SharePointClient client, final SimpleUrlFilter urlFilter) {
-        return new ItemCrawl(client, LIST_ID, "Tasks", "1", null, null, List.of(), true, List.of(), List.of(), urlFilter);
+        return new ItemCrawl(client, LIST_ID, "Tasks", "1", null, null, List.of(), true, List.of(), List.of(), new ConcurrentHashMap<>(),
+                urlFilter);
     }
 
     @Test

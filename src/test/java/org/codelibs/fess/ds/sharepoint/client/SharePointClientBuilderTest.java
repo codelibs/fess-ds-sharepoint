@@ -154,6 +154,11 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
      * ("Apache-HttpClient/4.5.14 (Java/21...)"), which an administrator cannot register with
      * SPHttpUserAgentAndMethodClassifier as a stable exemption - it embeds the running JRE
      * version.
+     *
+     * <p>The expected value is written out literally rather than read from
+     * {@code SharePointClientBuilder.USER_AGENT}. Comparing the header to that constant moves both
+     * sides of the assertion together, so the exact regression this guards against - the string
+     * growing something environment-derived again - passed unnoticed.
      */
     @Test
     @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
@@ -168,7 +173,19 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
 
             assertEquals(1, server.getRecordedRequests().size());
             assertEquals("the User-Agent must be the stable string an administrator can register as an exemption",
-                    SharePointClientBuilder.USER_AGENT, server.getRecordedRequests().get(0).getHeader("User-Agent"));
+                    "FessSharePointDataStore/1.0", server.getRecordedRequests().get(0).getHeader("User-Agent"));
         }
+    }
+
+    /**
+     * The constant an administrator is told to register with
+     * {@code SPHttpUserAgentAndMethodClassifier} - see the README - must stay exactly what the
+     * README says, so changing it is a deliberate act with a documentation change attached rather
+     * than a silent break of every exemption rule already deployed.
+     */
+    @Test
+    public void test_userAgentConstantIsTheDocumentedLiteral() {
+        assertEquals("the documented User-Agent must not change without the README changing with it", "FessSharePointDataStore/1.0",
+                SharePointClientBuilder.USER_AGENT);
     }
 }

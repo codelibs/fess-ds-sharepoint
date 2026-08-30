@@ -79,6 +79,8 @@ public class ListCrawl extends SharePointCrawl {
     private final int numberPerPage;
     /** Cache for SharePoint group information to avoid repeated API calls */
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
+    /** Cache of each list's DISPLAY_FORM server-relative URL, keyed by listId */
+    private final Map<String, String> formsCache;
     /** Flag indicating if items should be treated as subpages */
     private final Boolean isSubPage;
     /** Flag to skip role-based access control processing */
@@ -106,6 +108,7 @@ public class ListCrawl extends SharePointCrawl {
      * @param listName display name of the SharePoint list
      * @param numberPerPage number of items to retrieve per API call for pagination
      * @param sharePointGroupCache cache for SharePoint group information
+     * @param formsCache cache of each list's DISPLAY_FORM server-relative URL, keyed by listId
      * @param isSubPage flag indicating if items should be treated as subpages
      * @param skipRole flag to skip role-based access control processing
      * @param includeFields list of field names to include in content extraction
@@ -119,17 +122,20 @@ public class ListCrawl extends SharePointCrawl {
      * @param maxContentLength the maximum attachment size in bytes, or a negative number for no
      *            limit
      * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
-     *            or null - passed on to each item, not to its attachments
+     *            or null - passed on to each item and to each item's attachments, which are matched
+     *            separately because an attachment's URL is not the item's {@code FileRef}
      */
     public ListCrawl(final SharePointClient client, final String id, final String listName, final int numberPerPage,
-            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean isSubPage,
-            final boolean skipRole, final List<String> includeFields, final List<String> excludeFields, final boolean ignoreError,
-            final String extractorName, final String[] supportedMimeTypes, final long maxContentLength, final UrlFilter urlFilter) {
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final Map<String, String> formsCache,
+            final boolean isSubPage, final boolean skipRole, final List<String> includeFields, final List<String> excludeFields,
+            final boolean ignoreError, final String extractorName, final String[] supportedMimeTypes, final long maxContentLength,
+            final UrlFilter urlFilter) {
         super(client);
         this.id = id;
         this.listName = listName;
         this.numberPerPage = numberPerPage;
         this.sharePointGroupCache = sharePointGroupCache;
+        this.formsCache = formsCache;
         this.isSubPage = isSubPage;
         this.skipRole = skipRole;
         this.includeFields = includeFields;
@@ -200,10 +206,11 @@ public class ListCrawl extends SharePointCrawl {
 
                 final List<String> roles = getItemRoles(listId, item.getId(), sharePointGroupCache, skipRole);
                 crawlingQueue.offer(new ItemCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles,
-                        isSubPage, includeFields, excludeFields, urlFilter));
+                        isSubPage, includeFields, excludeFields, formsCache, urlFilter));
                 if (item.hasAttachments()) {
-                    crawlingQueue.offer(new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(),
-                            item.getModified(), roles, ignoreError, extractorName, supportedMimeTypes, maxContentLength));
+                    crawlingQueue
+                            .offer(new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(),
+                                    roles, ignoreError, extractorName, supportedMimeTypes, maxContentLength, formsCache, urlFilter));
                 }
             });
             if (page == MAX_PAGES - 1) {
