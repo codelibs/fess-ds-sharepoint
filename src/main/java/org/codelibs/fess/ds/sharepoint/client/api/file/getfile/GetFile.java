@@ -24,6 +24,7 @@ import org.apache.http.util.EntityUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
@@ -48,6 +49,19 @@ public class GetFile extends SharePointApi<GetFileResponse> {
      */
     public GetFile(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
+    }
+
+    /**
+     * Constructs a new GetFile API client with an explicit backoff, so a test can replace the
+     * wait applied when SharePoint reports itself busy with one that does not actually sleep.
+     *
+     * @param client the HTTP client to use for requests
+     * @param siteUrl the SharePoint site URL
+     * @param oAuth the OAuth authentication provider
+     * @param backoff the wait applied when SharePoint reports itself busy
+     */
+    public GetFile(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth, final SharePointBackoff backoff) {
+        super(client, siteUrl, oAuth, backoff);
     }
 
     /**
@@ -86,10 +100,35 @@ public class GetFile extends SharePointApi<GetFileResponse> {
         CloseableHttpResponse httpResponse = null;
         try {
             httpResponse = client.execute(httpGet);
+            // The shared path (SharePointApi#doJsonRequest/doXmlRequest) calls this too; GetFile
+            // bypasses that path by calling client.execute() directly above, so without this call
+            // a file download would never see a busy-server wait at all.
+            awaitIfServerIsBusy(httpResponse);
+            if (oAuth != null && httpResponse.getStatusLine().getStatusCode() == 401) {
+                // The build-time token never gets refreshed on its own (see
+                // SharePointClientBuilder#build), so once it lapses every remaining download
+                // would otherwise fail with 401 for the rest of the crawl. One refresh-and-retry
+                // recovers from exactly that.
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Got 401 for {}; refreshing the access token and retrying once.", buildUrl);
+                }
+                httpResponse.close();
+                httpResponse = null;
+                oAuth.updateAccessToken(client);
+                httpGet.removeHeaders("Authorization");
+                oAuth.apply(httpGet);
+                httpResponse = client.execute(httpGet);
+                awaitIfServerIsBusy(httpResponse);
+            }
             if (isErrorResponse(httpResponse)) {
                 final int status = httpResponse.getStatusLine().getStatusCode();
                 final String body = EntityUtils.toString(httpResponse.getEntity());
-                throw new SharePointClientException("GetFile Request failure. status:" + status + " body:" + body);
+                // Carries the status code (unlike a plain SharePointClientException(message)) so
+                // SharePointCrawler#doCrawl's retry loop can still recognize a 503 here and back
+                // off before retrying, exactly as it already does for a 503 from any other API
+                // call - and, just as importantly, so it does not wait before a final, abandoned
+                // attempt that will not be retried at all.
+                throw new SharePointClientException("GetFile Request failure. status:" + status + " body:" + body, status);
             }
             final GetFileResponse response = new GetFileResponse(httpResponse);
             // Ownership passes to the response, which closes it; the finally below must not.

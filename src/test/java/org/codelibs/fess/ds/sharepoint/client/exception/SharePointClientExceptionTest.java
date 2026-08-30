@@ -113,4 +113,22 @@ public class SharePointClientExceptionTest extends UnitDsTestCase {
         assertEquals(cause, exception.getCause());
         assertEquals("Root cause", exception.getCause().getMessage());
     }
+
+    @Test
+    public void test_constructor_withMessageAndStatusCode() {
+        final SharePointClientException exception = new SharePointClientException("GetFile Request failure. status:503 body:", 503);
+
+        assertEquals("GetFile Request failure. status:503 body:", exception.getMessage());
+        assertEquals("the status code must be preserved so the retry loop can key a backoff decision on it", 503,
+                exception.getStatusCode());
+    }
+
+    @Test
+    public void test_getStatusCode_defaultsToMinusOneForEveryOtherConstructor() {
+        assertEquals("no-args constructor", -1, new SharePointClientException().getStatusCode());
+        assertEquals("message-only constructor", -1, new SharePointClientException("m").getStatusCode());
+        assertEquals("message+cause constructor", -1, new SharePointClientException("m", new RuntimeException()).getStatusCode());
+        assertEquals("cause-only constructor", -1, new SharePointClientException(new RuntimeException()).getStatusCode());
+        assertEquals("full constructor", -1, new SharePointClientException("m", new RuntimeException(), true, true).getStatusCode());
+    }
 }

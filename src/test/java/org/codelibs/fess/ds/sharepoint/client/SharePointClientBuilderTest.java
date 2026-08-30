@@ -24,9 +24,12 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class SharePointClientBuilderTest extends UnitDsTestCase {
 
@@ -70,7 +73,6 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
         final SharePointClientBuilder builder = SharePointClient.builder()
                 .setUrl("https://example.com/")
                 .setSite("testsite")
-                .setRetryCount(3)
                 .setRequestConfig(requestConfig)
                 .setHttpClient(httpClient);
 
@@ -100,13 +102,6 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
     public void test_apply2013() {
         final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite").apply2013();
 
-        assertNotNull(builder);
-    }
-
-    @Test
-    public void test_setRetryCount() {
-        final SharePointClientBuilder builder = SharePointClient.builder();
-        builder.setRetryCount(5);
         assertNotNull(builder);
     }
 
@@ -152,5 +147,28 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
                 SharePointClient.builder().setUrl("https://example.com/").setSite("testsite").setProxyHost("proxy.example.com");
 
         assertNull("a proxy_host without a proxy_port must not be treated as configured", builder.buildRoutePlanner());
+    }
+
+    /**
+     * Against the unfixed code, the request arrives with Apache HttpClient's default User-Agent
+     * ("Apache-HttpClient/4.5.14 (Java/21...)"), which an administrator cannot register with
+     * SPHttpUserAgentAndMethodClassifier as a stable exemption - it embeds the running JRE
+     * version.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_build_sendsAStableUserAgent() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='/a.txt')/$value", 200, "text/plain", "hi");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite("test").build()) {
+                client.api().file().getFile().setServerRelativeUrl("/a.txt").execute().close();
+            }
+
+            assertEquals(1, server.getRecordedRequests().size());
+            assertEquals("the User-Agent must be the stable string an administrator can register as an exemption",
+                    SharePointClientBuilder.USER_AGENT, server.getRecordedRequests().get(0).getHeader("User-Agent"));
+        }
     }
 }

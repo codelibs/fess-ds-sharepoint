@@ -53,6 +53,7 @@ public class SharePointMockServer implements AutoCloseable {
     private final Map<String, StubResponse> stubs = new ConcurrentHashMap<>();
     private final Map<String, Queue<StubResponse>> onceStubs = new ConcurrentHashMap<>();
     private final Map<String, String> globalHeaders = new ConcurrentHashMap<>();
+    private final Map<String, Long> delaysMillis = new ConcurrentHashMap<>();
     private final List<RecordedRequest> recordedRequests = new CopyOnWriteArrayList<>();
 
     private Server server;
@@ -139,6 +140,26 @@ public class SharePointMockServer implements AutoCloseable {
      */
     public SharePointMockServer withHeader(final String name, final String value) {
         globalHeaders.put(name, value);
+        return this;
+    }
+
+    /**
+     * Delays the response to every request for a path by the given number of milliseconds,
+     * whichever stub ends up answering it.
+     *
+     * <p>Lets a test simulate a server that is slow or momentarily saturated: hold a connection
+     * open long enough for a concurrent request to exhaust the client's connection pool and time
+     * out waiting for one, or make a response arrive late enough for a health-score-driven wait to
+     * matter. The delay runs on the server's request-handling thread, after the request has
+     * already been recorded, so a request that never gets a response is still visible to
+     * {@link #getRecordedRequests()}.
+     *
+     * @param path the request path without query string
+     * @param delayMillis how long to wait before writing the response
+     * @return this instance for chaining
+     */
+    public SharePointMockServer withDelay(final String path, final long delayMillis) {
+        delaysMillis.put(path, delayMillis);
         return this;
     }
 
@@ -286,7 +307,17 @@ public class SharePointMockServer implements AutoCloseable {
             for (final HttpField field : request.getHeaders()) {
                 headers.put(field.getName().toLowerCase(Locale.ROOT), field.getValue());
             }
-            recordedRequests.add(new RecordedRequest(request.getMethod(), path, query, headers));
+            final String body = Content.Source.asString(request);
+            recordedRequests.add(new RecordedRequest(request.getMethod(), path, query, headers, body));
+
+            final Long delayMillis = delaysMillis.get(path);
+            if (delayMillis != null && delayMillis > 0) {
+                try {
+                    Thread.sleep(delayMillis);
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
 
             globalHeaders.forEach((name, value) -> response.getHeaders().put(name, value));
 
@@ -330,12 +361,14 @@ public class SharePointMockServer implements AutoCloseable {
         private final String path;
         private final String query;
         private final Map<String, String> headers;
+        private final String body;
 
-        RecordedRequest(final String method, final String path, final String query, final Map<String, String> headers) {
+        RecordedRequest(final String method, final String path, final String query, final Map<String, String> headers, final String body) {
             this.method = method;
             this.path = path;
             this.query = query;
             this.headers = headers;
+            this.body = body;
         }
 
         /**
@@ -373,6 +406,15 @@ public class SharePointMockServer implements AutoCloseable {
          */
         public String getHeader(final String name) {
             return headers.get(name.toLowerCase(Locale.ROOT));
+        }
+
+        /**
+         * Returns the raw request body, decoded as UTF-8.
+         *
+         * @return the request body, or an empty string if the request carried none
+         */
+        public String getBody() {
+            return body;
         }
     }
 }

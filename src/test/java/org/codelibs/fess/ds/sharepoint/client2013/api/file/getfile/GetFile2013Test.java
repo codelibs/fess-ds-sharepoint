@@ -17,12 +17,18 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.file.getfile;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
+import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class GetFile2013Test extends UnitDsTestCase {
 
@@ -50,6 +56,33 @@ public class GetFile2013Test extends UnitDsTestCase {
 
                 assertTrue("the status code must survive to the caller", e.getMessage().contains("status:403"));
                 assertTrue("the server's explanation must survive to the caller", e.getMessage().contains("Access denied."));
+            }
+        }
+    }
+
+    /**
+     * Same bypass as the modern GetFile, in its own copy of execute() - so it needs its own call
+     * to the busy-server wait too.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_execute_backsOffWhenTheServerReportsItselfBusy() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            final String path = "/sites/test/_api/web/GetFileByServerRelativeUrl('" + FILE_URL + "')/$value";
+            server.onPathStatus(path, 200, "text/plain", "file content");
+            server.withHeader("X-SharePointHealthScore", "10");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final List<Long> recordedSleeps = new ArrayList<>();
+                final SharePointBackoff backoff = new SharePointBackoff(2000L, 30000L, () -> 0.5d, recordedSleeps::add);
+                final GetFile2013 getFile =
+                        new GetFile2013(httpClient, server.getBaseUrl() + "sites/test", null, backoff).setServerRelativeUrl(FILE_URL);
+
+                getFile.execute().close();
+
+                assertEquals("a health score of 10 (attempt 1: 10 - threshold 8 - 1) must back off once", 1, recordedSleeps.size());
+                assertEquals("attempt 1 must double the initial delay once", 4000L, recordedSleeps.get(0).longValue());
             }
         }
     }

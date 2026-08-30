@@ -22,6 +22,8 @@ import java.net.http.HttpResponse;
 
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class SharePointMockServerTest extends UnitDsTestCase {
 
@@ -55,6 +57,65 @@ public class SharePointMockServerTest extends UnitDsTestCase {
             assertEquals("/sites/test/_api/lists", recorded.getPath());
             assertEquals("%24top=10", recorded.getQuery());
             assertEquals("application/json", recorded.getHeader("Accept"));
+        }
+    }
+
+    @Test
+    public void test_recordedRequestCapturesTheBody() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/oauth/token", 200, "application/json", "{\"access_token\":\"tok\"}");
+            server.start();
+
+            final HttpClient httpClient = HttpClient.newHttpClient();
+            final HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(server.getBaseUrl() + "oauth/token"))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials&client_id=abc%40def"))
+                    .build();
+            final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            assertEquals(200, response.statusCode());
+            assertEquals(1, server.getRecordedRequests().size());
+            final SharePointMockServer.RecordedRequest recorded = server.getRecordedRequests().get(0);
+            assertEquals("the raw POST body must be captured", "grant_type=client_credentials&client_id=abc%40def", recorded.getBody());
+        }
+    }
+
+    @Test
+    public void test_recordedRequestBodyIsEmptyForAGetRequest() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/sites/test/_api/lists", 200, "application/json", "{}");
+            server.start();
+
+            final HttpClient httpClient = HttpClient.newHttpClient();
+            final HttpRequest request = HttpRequest.newBuilder().uri(URI.create(server.getBaseUrl() + "sites/test/_api/lists")).build();
+            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            final SharePointMockServer.RecordedRequest recorded = server.getRecordedRequests().get(0);
+            assertEquals("a GET request carries no body", "", recorded.getBody());
+        }
+    }
+
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_withDelayDelaysTheResponseButStillRecordsTheRequest() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/slow", 200, "text/plain", "done");
+            server.withDelay("/slow", 500L);
+            server.start();
+
+            final HttpClient httpClient = HttpClient.newHttpClient();
+            final HttpRequest request = HttpRequest.newBuilder().uri(URI.create(server.getBaseUrl() + "slow")).build();
+
+            final long start = System.nanoTime();
+            final HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            final long elapsedMillis = (System.nanoTime() - start) / 1_000_000L;
+
+            assertEquals(200, response.statusCode());
+            assertEquals("done", response.body());
+            assertTrue("a path with a registered delay must take at least that long to answer", elapsedMillis >= 500L);
+            assertEquals(1, server.getRecordedRequests().size());
+            assertEquals("/slow", server.getRecordedRequests().get(0).getPath());
         }
     }
 

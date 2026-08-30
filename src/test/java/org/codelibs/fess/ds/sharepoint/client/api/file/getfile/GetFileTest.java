@@ -17,12 +17,21 @@ package org.codelibs.fess.ds.sharepoint.client.api.file.getfile;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
+import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class GetFileTest extends UnitDsTestCase {
 
@@ -51,6 +60,138 @@ public class GetFileTest extends UnitDsTestCase {
 
                 assertTrue("the status code must survive to the caller", e.getMessage().contains("status:403"));
                 assertTrue("the server's explanation must survive to the caller", e.getMessage().contains("Access denied."));
+            }
+        }
+    }
+
+    /**
+     * GetFile calls {@code client.execute()} directly instead of going through
+     * {@code SharePointApi#doJsonRequest}/{@code doXmlRequest}, so a busy-server wait added only
+     * to that shared path would never see a file download. Against the unfixed code this test
+     * fails because nothing ever reads {@code X-SharePointHealthScore} here at all.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_execute_backsOffWhenTheServerReportsItselfBusy() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            final String path = "/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='" + FILE_URL + "')/$value";
+            server.onPathStatus(path, 200, "text/plain", "file content");
+            server.withHeader("X-SharePointHealthScore", "10");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final List<Long> recordedSleeps = new ArrayList<>();
+                final SharePointBackoff backoff = new SharePointBackoff(2000L, 30000L, () -> 0.5d, recordedSleeps::add);
+                final GetFile getFile =
+                        new GetFile(httpClient, server.getBaseUrl() + "sites/test", null, backoff).setServerRelativeUrl(FILE_URL);
+
+                getFile.execute().close();
+
+                assertEquals("a health score of 10 (attempt 1: 10 - threshold 8 - 1) must back off once", 1, recordedSleeps.size());
+                assertEquals("attempt 1 must double the initial delay once", 4000L, recordedSleeps.get(0).longValue());
+            }
+        }
+    }
+
+    /**
+     * A health score at or below the busy threshold is normal load, not a signal to slow down.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_execute_doesNotBackOffWhenTheHealthScoreIsAtTheThreshold() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            final String path = "/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='" + FILE_URL + "')/$value";
+            server.onPathStatus(path, 200, "text/plain", "file content");
+            server.withHeader("X-SharePointHealthScore", "8");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final List<Long> recordedSleeps = new ArrayList<>();
+                final SharePointBackoff backoff = new SharePointBackoff(2000L, 30000L, () -> 0.5d, recordedSleeps::add);
+                final GetFile getFile =
+                        new GetFile(httpClient, server.getBaseUrl() + "sites/test", null, backoff).setServerRelativeUrl(FILE_URL);
+
+                getFile.execute().close();
+
+                assertTrue("a health score at the threshold must not trigger a wait", recordedSleeps.isEmpty());
+            }
+        }
+    }
+
+    /**
+     * GetFile itself does not back off on a 503 - it has no visibility into whether
+     * SharePointCrawler#doCrawl's retry loop will actually retry this target again, and waiting
+     * unconditionally would waste a stall on a final, abandoned attempt. Instead, it carries the
+     * status code on the exception it throws, so that retry loop can back off itself, exactly as
+     * it already does for a 503 from any other API call - see SharePointCrawlerTest for that.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_execute_reportsA503WithItsStatusCodeAndDoesNotBackOffItself() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            final String path = "/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='" + FILE_URL + "')/$value";
+            server.onPathStatus(path, 503, "text/plain", "throttled");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final List<Long> recordedSleeps = new ArrayList<>();
+                final SharePointBackoff backoff = new SharePointBackoff(2000L, 30000L, () -> 0.5d, recordedSleeps::add);
+                final GetFile getFile =
+                        new GetFile(httpClient, server.getBaseUrl() + "sites/test", null, backoff).setServerRelativeUrl(FILE_URL);
+
+                final SharePointClientException e =
+                        assertThrows(SharePointClientException.class, getFile::execute, "a 503 must still fail the request");
+
+                assertEquals("the status code must be preserved on the exception, for the retry loop to key a backoff decision on", 503,
+                        e.getStatusCode());
+                assertTrue("GetFile itself must not back off - only the retry loop knows whether a retry will follow",
+                        recordedSleeps.isEmpty());
+            }
+        }
+    }
+
+    /** An OAuth double that never makes a real ACS call, so this stays a self-contained unit test. */
+    private static OAuth recordingOAuth(final AtomicInteger refreshCount) {
+        return new OAuth("id", "secret", "tenant", "realm") {
+            @Override
+            public void updateAccessToken(final CloseableHttpClient httpClient) {
+                refreshCount.incrementAndGet();
+            }
+
+            @Override
+            public void apply(final HttpRequestBase httpRequest) {
+                httpRequest.addHeader("Authorization", "Bearer token-" + refreshCount.get());
+            }
+        };
+    }
+
+    /**
+     * GetFile applies the OAuth token itself, bypassing SharePointApi#doJsonRequest, so it needs
+     * its own refresh-and-retry - a fix added only to the shared path would never see a file
+     * download at all.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_execute_refreshesTheTokenAndRetriesOnceOn401() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            final String path = "/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='" + FILE_URL + "')/$value";
+            server.onPathOnce(path, 401, "application/json", "{}");
+            server.onPathStatus(path, 200, "text/plain", "file content");
+            server.start();
+
+            final AtomicInteger refreshCount = new AtomicInteger();
+            final OAuth oAuth = recordingOAuth(refreshCount);
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final GetFile getFile = new GetFile(httpClient, server.getBaseUrl() + "sites/test", oAuth).setServerRelativeUrl(FILE_URL);
+
+                getFile.execute().close();
+
+                assertEquals("a 401 must refresh the token exactly once", 1, refreshCount.get());
+                assertEquals("a 401 must be retried exactly once", 2, server.getRecordedRequests().size());
+                assertEquals("the first attempt must carry the original token", "Bearer token-0",
+                        server.getRecordedRequests().get(0).getHeader("Authorization"));
+                assertEquals("the retry must carry the refreshed token, not the stale one", "Bearer token-1",
+                        server.getRecordedRequests().get(1).getHeader("Authorization"));
             }
         }
     }
