@@ -15,7 +15,12 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.credential;
 
+import java.util.List;
+
+import org.apache.http.auth.AuthSchemeProvider;
+import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.Credentials;
+import org.apache.http.config.Lookup;
 
 /**
  * Interface for SharePoint authentication credentials.
@@ -23,6 +28,7 @@ import org.apache.http.auth.Credentials;
  * for connecting to SharePoint services (e.g., NTLM, OAuth).
  *
  * @see NtlmCredential
+ * @see KerberosCredential
  */
 public interface SharePointCredential {
     /**
@@ -31,4 +37,40 @@ public interface SharePointCredential {
      * @return credentials object suitable for HTTP authentication
      */
     Credentials getCredential();
+
+    /**
+     * The scope {@link #getCredential()} is registered under.
+     *
+     * <p>Defaults to {@link AuthScope#ANY}, which is what every credential registered by this
+     * connector used before a scheme-specific one existed. That default is deliberately kept:
+     * credentials registered at {@code ANY} answer a {@code Basic} or {@code Digest} challenge as
+     * well as the scheme they were meant for, and an installation pointing {@code auth.ntlm.user}
+     * at a SharePoint fronted by basic authentication depends on exactly that. Narrowing it would
+     * stop such an installation working with no error to explain why.
+     *
+     * @return the scope these credentials answer
+     */
+    default AuthScope getAuthScope() {
+        return AuthScope.ANY;
+    }
+
+    /**
+     * The authentication scheme registry the HTTP client is built with, replacing Apache
+     * HttpClient's default one, or {@code null} to keep that default.
+     *
+     * @return the scheme registry to install, or {@code null}
+     */
+    default Lookup<AuthSchemeProvider> getAuthSchemeRegistry() {
+        return null;
+    }
+
+    /**
+     * The authentication schemes to prefer for the target host, in order, or {@code null} to keep
+     * Apache HttpClient's default order.
+     *
+     * @return the preferred scheme names, or {@code null}
+     */
+    default List<String> getPreferredAuthSchemes() {
+        return null;
+    }
 }

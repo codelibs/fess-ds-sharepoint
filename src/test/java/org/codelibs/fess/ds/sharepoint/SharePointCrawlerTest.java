@@ -131,6 +131,114 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
         assertDoesNotThrow(() -> new SharePointCrawler(config), "a well-formed GUID list id must not be rejected");
     }
 
+    /**
+     * Two authentication methods at once must fail crawler construction.
+     *
+     * <p>Only one credential can be registered - {@code SharePointClientBuilder} holds a single
+     * one - and the scope it is registered under, {@code AuthScope.ANY} for everything except
+     * Kerberos, matches a {@code Negotiate} challenge as readily as an {@code NTLM} one. So the
+     * combination does not produce an error anywhere; it produces 401s that nothing explains. This
+     * is the loud failure that replaces that. See
+     * {@code KerberosAuthenticationTest#test_aNegotiateChallengeIsNotAnsweredWithNtlmCredentials}
+     * for the silent version demonstrated end to end.
+     */
+    @Test
+    public void test_construction_rejectsMoreThanOneAuthenticationMethod() {
+        final CrawlerConfig kerberosAndNtlm = baseConfig();
+        kerberosAndNtlm.setKerberosPrincipal("fess@EXAMPLE.COM");
+        kerberosAndNtlm.setNtlmUser("fess");
+        assertThrows(ValidationException.class, () -> new SharePointCrawler(kerberosAndNtlm),
+                "auth.kerberos.principal and auth.ntlm.user together must be rejected");
+
+        final CrawlerConfig kerberosAndOauth = baseConfig();
+        kerberosAndOauth.setKerberosPrincipal("fess@EXAMPLE.COM");
+        kerberosAndOauth.setOauthClientId("client-id");
+        assertThrows(ValidationException.class, () -> new SharePointCrawler(kerberosAndOauth),
+                "auth.kerberos.principal and auth.oauth.client_id together must be rejected");
+
+        final CrawlerConfig ntlmAndOauth = baseConfig();
+        ntlmAndOauth.setNtlmUser("fess");
+        ntlmAndOauth.setOauthClientId("client-id");
+        assertThrows(ValidationException.class, () -> new SharePointCrawler(ntlmAndOauth),
+                "auth.ntlm.user and auth.oauth.client_id together must be rejected");
+
+        final CrawlerConfig allThree = baseConfig();
+        allThree.setKerberosPrincipal("fess@EXAMPLE.COM");
+        allThree.setNtlmUser("fess");
+        allThree.setOauthClientId("client-id");
+        final ValidationException e =
+                assertThrows(ValidationException.class, () -> new SharePointCrawler(allThree), "all three together must be rejected");
+        assertTrue("the message must name every method that is set, not just the first two found",
+                e.getMessage().contains("auth.kerberos.principal") && e.getMessage().contains("auth.ntlm.user")
+                        && e.getMessage().contains("auth.oauth.client_id"));
+
+        // The two OAuth-carrying configs above are safe to construct here only because validate()
+        // runs before createClient(). SharePointClientBuilder#build calls OAuth#updateAccessToken,
+        // which posts to accounts.accesscontrol.windows.net - a live HTTPS request from a unit
+        // test. If the constructor is ever reordered so the client is built first, or if this
+        // validation is moved later, these become network-dependent and will fail (or hang) on a
+        // machine with no route out. Keep validate() first.
+    }
+
+    /**
+     * {@code auth.kerberos.keytab} and {@code auth.kerberos.password} are documented as mutually
+     * exclusive, and only the keytab is ever used when both are set - so the combination has to be
+     * rejected rather than silently resolved. Both parameters are new, so nothing can depend on the
+     * old behaviour.
+     */
+    @Test
+    public void test_construction_rejectsAKeytabAndAPasswordTogether() {
+        final CrawlerConfig both = baseConfig();
+        both.setKerberosPrincipal("fess@EXAMPLE.COM");
+        both.setKerberosKeytab("/etc/security/keytabs/fess.keytab");
+        both.setKerberosPassword("password");
+
+        final ValidationException e = assertThrows(ValidationException.class, () -> new SharePointCrawler(both),
+                "a keytab and a password together must be rejected rather than the keytab silently winning");
+        assertTrue("the message must name both parameters",
+                e.getMessage().contains("auth.kerberos.keytab") && e.getMessage().contains("auth.kerberos.password"));
+    }
+
+    /**
+     * The validation must not reject anything that works today: NTLM alone and no authentication
+     * at all are both still accepted, and a blank value is not "set" - the admin UI produces one
+     * from a field left empty rather than removed, and {@code createClient} already ignores it.
+     *
+     * <p>OAuth alone is deliberately not exercised here: constructing a crawler with an
+     * {@code auth.oauth.client_id} set makes {@code SharePointClientBuilder#build} call
+     * {@code OAuth#updateAccessToken}, which posts to {@code accounts.accesscontrol.windows.net}.
+     * A unit test must not reach the network. The rejection side above covers OAuth, because
+     * {@code validate} throws before any client is built.
+     */
+    @Test
+    public void test_construction_acceptsExactlyOneAuthenticationMethod() {
+        final CrawlerConfig ntlmOnly = baseConfig();
+        ntlmOnly.setNtlmUser("fess");
+        assertDoesNotThrow(() -> new SharePointCrawler(ntlmOnly), "NTLM alone must keep working");
+
+        final CrawlerConfig noneAtAll = baseConfig();
+        assertDoesNotThrow(() -> new SharePointCrawler(noneAtAll), "an unauthenticated crawl must keep working");
+
+        final CrawlerConfig blankKerberosAlongsideNtlm = baseConfig();
+        blankKerberosAlongsideNtlm.setKerberosPrincipal("");
+        blankKerberosAlongsideNtlm.setNtlmUser("fess");
+        assertDoesNotThrow(() -> new SharePointCrawler(blankKerberosAlongsideNtlm),
+                "a blank auth.kerberos.principal is not a configured authentication method");
+    }
+
+    /**
+     * {@code auth.ntlm.domain} and {@code auth.ntlm.workstation} were never exposed, so the
+     * credential was built with both hardcoded to null. Unset they must stay null, and set they
+     * must land in the right positions of {@link org.apache.http.auth.NTCredentials} - the two are
+     * easy to swap, and swapping them fails only against a real domain controller.
+     */
+    @Test
+    public void test_ntlmDomainAndWorkstationDefaultToNull() {
+        final CrawlerConfig config = baseConfig();
+        assertNull("auth.ntlm.domain must default to null", config.getNtlmDomain());
+        assertNull("auth.ntlm.workstation must default to null", config.getNtlmWorkstation());
+    }
+
     @Test
     public void test_initialDocLibPathUsesTheDefaultManagedPath() {
         final CrawlerConfig config = new CrawlerConfig();

@@ -49,6 +49,7 @@ import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
+import org.codelibs.fess.ds.sharepoint.client.credential.KerberosCredential;
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
@@ -242,6 +243,70 @@ public class SharePointCrawler implements Closeable {
         if (StringUtils.isNotBlank(config.initialListId)) {
             SharePointApi.requireGuidLiteral(config.initialListId, "site.list_id");
         }
+        validateSingleAuthenticationMethod(config);
+        validateSingleKerberosSecret(config);
+    }
+
+    /**
+     * Rejects a configuration that sets both {@code auth.kerberos.keytab} and
+     * {@code auth.kerberos.password}.
+     *
+     * <p>The two are documented as mutually exclusive, and the login can only use one: a keytab
+     * makes {@code Krb5LoginModule} run with {@code useKeyTab=true} and the password is never
+     * consulted. Left unchecked, an operator who added a keytab without removing the password they
+     * were using before would get the keytab silently and no sign that half the configuration is
+     * dead. Both parameters are new, so nothing can be relying on the old behaviour.
+     *
+     * @param config the crawler configuration
+     */
+    private void validateSingleKerberosSecret(final CrawlerConfig config) {
+        if (StringUtils.isNotBlank(config.kerberosKeytab) && StringUtils.isNotBlank(config.kerberosPassword)) {
+            throw new ValidationException("auth.kerberos.keytab and auth.kerberos.password are mutually exclusive, but both are set."
+                    + " A keytab makes the password unused rather than a fallback. Remove whichever one is not wanted.");
+        }
+    }
+
+    /**
+     * Rejects a configuration that sets more than one authentication method.
+     *
+     * <p>This is what keeps the combination from failing silently rather than loudly.
+     * {@link SharePointClientBuilder#setCredential} holds a single value, and {@link #createClient}
+     * sets the NTLM credential first and the Kerberos one second - so configuring both does not
+     * produce two registered credentials to choose between: the NTLM credential the operator
+     * configured is discarded before the client is ever built, with nothing logged. What is left
+     * registered is the Kerberos credential, and {@code KerberosCredential#getAuthScope} narrows
+     * it to {@code AuthSchemes.SPNEGO} rather than {@code AuthScope.ANY}. A farm - or a reverse
+     * proxy in front of one - that answers with a {@code Basic} or {@code NTLM} challenge instead
+     * of {@code Negotiate} therefore finds no credential registered for that scheme at all, and
+     * nothing says so: {@code AuthenticationStrategyImpl#select} skips a scheme with no credentials
+     * at debug level, and {@code HttpAuthenticator} logs the resulting authentication error and
+     * carries on. The operator sees unexplained 401s from a crawl configured with the very
+     * credentials that would have answered the challenge.
+     *
+     * <p>OAuth is in the same list because it is applied as an {@code Authorization} header by
+     * {@code SharePointApi}, independently of whatever the credentials provider answers with, so
+     * combining it with either of the others means two different identities racing on the same
+     * request.
+     *
+     * @param config the crawler configuration
+     */
+    private void validateSingleAuthenticationMethod(final CrawlerConfig config) {
+        final List<String> configured = new ArrayList<>(3);
+        if (StringUtils.isNotBlank(config.kerberosPrincipal)) {
+            configured.add("auth.kerberos.principal");
+        }
+        if (StringUtils.isNotBlank(config.ntlmUser)) {
+            configured.add("auth.ntlm.user");
+        }
+        if (StringUtils.isNotBlank(config.oauthClientId)) {
+            configured.add("auth.oauth.client_id");
+        }
+        if (configured.size() > 1) {
+            throw new ValidationException("Only one authentication method may be configured, but " + String.join(", ", configured)
+                    + " are all set. Only one credential is ever registered, so the others are silently discarded - or, for OAuth,"
+                    + " applied on top as a competing identity - leaving the crawl authenticating as something other than what was"
+                    + " configured, with no log line explaining it. Remove all but one.");
+        }
     }
 
     private SharePointClient createClient(final CrawlerConfig config) {
@@ -260,7 +325,19 @@ public class SharePointCrawler implements Closeable {
         final String ntlmUser = config.getNtlmUser();
         if (StringUtils.isNotBlank(ntlmUser)) {
             final String ntlmPass = config.getNtlmPassword();
-            builder.setCredential(new NtlmCredential(ntlmUser, ntlmPass, null, null));
+            // Both default to null, so an installation that has never set them gets exactly the
+            // credential this connector has always built. That includes one that writes
+            // DOMAIN\\user into auth.ntlm.user: NTCredentials does not split it, so the whole
+            // string keeps going out as the NTLM user name exactly as it does today.
+            builder.setCredential(new NtlmCredential(ntlmUser, ntlmPass, config.getNtlmWorkstation(), config.getNtlmDomain()));
+        }
+        final String kerberosPrincipal = config.getKerberosPrincipal();
+        if (StringUtils.isNotBlank(kerberosPrincipal)) {
+            // validate() has already rejected this being set alongside auth.ntlm.user or
+            // auth.oauth.client_id, so this never replaces a credential set above.
+            builder.setCredential(new KerberosCredential(kerberosPrincipal, config.getKerberosKeytab(), config.getKerberosPassword(),
+                    config.getKerberosKrb5Conf(), config.isKerberosStripPort(), config.isKerberosUseCanonicalHostname(),
+                    config.isKerberosDebug()));
         }
         if (StringUtils.isNotBlank(config.getOauthClientId())) {
             builder.setOAuth(
@@ -1064,6 +1141,15 @@ public class SharePointCrawler implements Closeable {
         private String initialDocLibPath = null;
         private String ntlmUser = null;
         private String ntlmPassword = null;
+        private String ntlmDomain = null;
+        private String ntlmWorkstation = null;
+        private String kerberosPrincipal = null;
+        private String kerberosKeytab = null;
+        private String kerberosPassword = null;
+        private String kerberosKrb5Conf = null;
+        private boolean kerberosStripPort = true;
+        private boolean kerberosUseCanonicalHostname = false;
+        private boolean kerberosDebug = false;
         private String oauthClientId = null;
         private String oauthClientSecret = null;
         private String oauthTenant = null;
@@ -1242,6 +1328,185 @@ public class SharePointCrawler implements Closeable {
          */
         public void setNtlmPassword(final String ntlmPassword) {
             this.ntlmPassword = ntlmPassword;
+        }
+
+        /**
+         * Returns the NTLM domain.
+         *
+         * @return the domain, or null when none is configured
+         */
+        public String getNtlmDomain() {
+            return ntlmDomain;
+        }
+
+        /**
+         * Sets the NTLM domain, sent as its own field of the NTLM negotiation.
+         *
+         * <p>Left unset the credential is built exactly as before, so an installation that writes
+         * the domain into the user name instead - as <code>DOMAIN&#92;user</code> - keeps sending
+         * exactly what it sends today. {@link org.apache.http.auth.NTCredentials} does not split
+         * that string; it passes the whole thing through as the user name, so whether it is
+         * accepted is up to the server.
+         *
+         * @param ntlmDomain the domain
+         */
+        public void setNtlmDomain(final String ntlmDomain) {
+            this.ntlmDomain = ntlmDomain;
+        }
+
+        /**
+         * Returns the NTLM workstation name.
+         *
+         * @return the workstation name, or null when none is configured
+         */
+        public String getNtlmWorkstation() {
+            return ntlmWorkstation;
+        }
+
+        /**
+         * Sets the NTLM workstation name - the {@code hostName} argument of
+         * {@link org.apache.http.auth.NTCredentials}. Left unset, the credential is built exactly
+         * as before.
+         *
+         * @param ntlmWorkstation the workstation name
+         */
+        public void setNtlmWorkstation(final String ntlmWorkstation) {
+            this.ntlmWorkstation = ntlmWorkstation;
+        }
+
+        /**
+         * Returns the Kerberos client principal.
+         *
+         * @return the principal, or null when Kerberos is not configured
+         */
+        public String getKerberosPrincipal() {
+            return kerberosPrincipal;
+        }
+
+        /**
+         * Sets the Kerberos client principal. Setting it is what enables Kerberos; write it as
+         * {@code user@REALM} so it does not depend on the JVM-global default realm.
+         *
+         * @param kerberosPrincipal the principal
+         */
+        public void setKerberosPrincipal(final String kerberosPrincipal) {
+            this.kerberosPrincipal = kerberosPrincipal;
+        }
+
+        /**
+         * Returns the path to the Kerberos keytab.
+         *
+         * @return the keytab path, or null when a password is used instead
+         */
+        public String getKerberosKeytab() {
+            return kerberosKeytab;
+        }
+
+        /**
+         * Sets the path to a keytab holding a key for the principal. Mutually exclusive with the
+         * password: a configured keytab wins.
+         *
+         * @param kerberosKeytab the keytab path
+         */
+        public void setKerberosKeytab(final String kerberosKeytab) {
+            this.kerberosKeytab = kerberosKeytab;
+        }
+
+        /**
+         * Returns the Kerberos password.
+         *
+         * @return the password, or null when a keytab is used instead
+         */
+        public String getKerberosPassword() {
+            return kerberosPassword;
+        }
+
+        /**
+         * Sets the Kerberos principal's password, used only when no keytab is configured.
+         *
+         * @param kerberosPassword the password
+         */
+        public void setKerberosPassword(final String kerberosPassword) {
+            this.kerberosPassword = kerberosPassword;
+        }
+
+        /**
+         * Returns the configured krb5.conf path.
+         *
+         * @return the path, or null when none is configured
+         */
+        public String getKerberosKrb5Conf() {
+            return kerberosKrb5Conf;
+        }
+
+        /**
+         * Sets the krb5.conf to point {@code java.security.krb5.conf} at, and only when nothing
+         * has set that property yet - it is JVM-global and one crawler JVM runs every data config
+         * of a crawl job.
+         *
+         * @param kerberosKrb5Conf the krb5.conf path
+         */
+        public void setKerberosKrb5Conf(final String kerberosKrb5Conf) {
+            this.kerberosKrb5Conf = kerberosKrb5Conf;
+        }
+
+        /**
+         * Returns whether the port is stripped from the service principal name.
+         *
+         * @return true if the port is stripped
+         */
+        public boolean isKerberosStripPort() {
+            return kerberosStripPort;
+        }
+
+        /**
+         * Sets whether the port is stripped from the service principal name. Defaults to true,
+         * matching Apache HttpClient.
+         *
+         * @param kerberosStripPort whether to strip the port
+         */
+        public void setKerberosStripPort(final boolean kerberosStripPort) {
+            this.kerberosStripPort = kerberosStripPort;
+        }
+
+        /**
+         * Returns whether the target host is resolved to its canonical name for the service
+         * principal name.
+         *
+         * @return true if the canonical host name is used
+         */
+        public boolean isKerberosUseCanonicalHostname() {
+            return kerberosUseCanonicalHostname;
+        }
+
+        /**
+         * Sets whether the target host is resolved to its canonical name for the service principal
+         * name. Defaults to false, deliberately unlike Apache HttpClient's own default: reverse
+         * DNS behind alternate access mappings or a load balancer resolves to a name no SPN is
+         * registered for, and the resulting failure says nothing about DNS.
+         *
+         * @param kerberosUseCanonicalHostname whether to use the canonical host name
+         */
+        public void setKerberosUseCanonicalHostname(final boolean kerberosUseCanonicalHostname) {
+            this.kerberosUseCanonicalHostname = kerberosUseCanonicalHostname;
+        }
+
+        /**
+         * Returns whether {@code Krb5LoginModule} debug output is enabled.
+         *
+         * @return true if debug output is enabled
+         */
+        public boolean isKerberosDebug() {
+            return kerberosDebug;
+        }
+
+        /**
+         * Sets whether {@code Krb5LoginModule} writes its debug output to standard output.
+         *
+         * @param kerberosDebug whether to enable debug output
+         */
+        public void setKerberosDebug(final boolean kerberosDebug) {
+            this.kerberosDebug = kerberosDebug;
         }
 
         /**
