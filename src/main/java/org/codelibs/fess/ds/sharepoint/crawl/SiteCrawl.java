@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.crawler.filter.UrlFilter;
@@ -67,6 +68,15 @@ public class SiteCrawl extends SharePointCrawl {
      */
     private static final int MAX_PAGES = 100;
 
+    /**
+     * The document library name the top-level folder listing already reports under its real,
+     * server-supplied, localized name on every site whose site-root listing reports it at all.
+     * Kept as a fallback for a farm whose listing does not report it; skipped when the listing
+     * already found a folder by this name, so an English-language site does not crawl its default
+     * library twice.
+     */
+    private static final String DEFAULT_DOCUMENT_LIBRARY_NAME = "Shared Documents";
+
     /** Crawler configuration containing site settings and filters */
     private final SharePointCrawler.CrawlerConfig config;
     /** Cache for SharePoint group information to optimize role lookups */
@@ -95,7 +105,20 @@ public class SiteCrawl extends SharePointCrawl {
         this.sharePointGroupCache = sharePointGroupCache;
         this.formsCache = formsCache;
         this.urlFilter = urlFilter;
-        statsKey = new StatsKeyObject("site#" + config.getSiteName());
+        statsKey = new StatsKeyObject("site#" + describeSite(config));
+    }
+
+    /**
+     * Names the site for a human reading a log line or a crawl statistic.
+     *
+     * <p>{@code site.name} is optional once {@code site.path} is set, so it can legitimately be
+     * absent; the server-relative path identifies the site just as well and is never blank.
+     *
+     * @param config the crawler configuration
+     * @return the configured site name, or the server-relative site path when no name is set
+     */
+    private static String describeSite(final SharePointCrawler.CrawlerConfig config) {
+        return StringUtils.isNotBlank(config.getSiteName()) ? config.getSiteName() : config.getSiteRelativePath();
     }
 
     /**
@@ -110,10 +133,10 @@ public class SiteCrawl extends SharePointCrawl {
     @Override
     public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
-            logger.info("[Crawling Site] [siteName:{}]", config.getSiteName());
+            logger.info("[Crawling Site] [site:{}]", describeSite(config));
         }
         final Set<String> targetFolderName = new HashSet<>();
-        final String siteFolderUrl = "/sites/" + config.getSiteName() + "/";
+        final String siteFolderUrl = client.getSitePath();
         int foldersStart = 0;
         for (int page = 0; page < MAX_PAGES; page++) {
             final GetFoldersResponse getFoldersResponse = client.api()
@@ -155,9 +178,15 @@ public class SiteCrawl extends SharePointCrawl {
                                 sharePointGroupCache, formsCache, isSubPageList(list.getEntityTypeName()), config.isSkipRole(),
                                 config.getListContentIncludeFields(), config.getListContentExcludeFields(), config.isIgnoreError(),
                                 config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(), urlFilter)));
-        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + config.getSiteName() + "/Shared Documents", false, sharePointGroupCache,
-                formsCache, config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(),
-                urlFilter));
+        // The top-level folder listing above already reports every document library's root folder
+        // under its real, server-supplied name, so on an English-language site this fallback would
+        // crawl the default library a second time. It is kept for a farm whose site-root listing
+        // does not report it, and skipped when the listing already did.
+        if (!targetFolderName.contains(DEFAULT_DOCUMENT_LIBRARY_NAME)) {
+            crawlingQueue.offer(new FolderCrawl(client, client.getSitePath() + DEFAULT_DOCUMENT_LIBRARY_NAME, config.isSkipRole(),
+                    sharePointGroupCache, formsCache, config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(),
+                    config.getMaxContentLength(), urlFilter));
+        }
         return null;
     }
 

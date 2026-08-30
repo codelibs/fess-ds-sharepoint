@@ -137,6 +137,13 @@ public class SharePointDataStore extends AbstractDataStore {
     protected static final String DEFAULT_PERMISSIONS = "default_permissions";
 
     /**
+     * The server-relative managed path of the site to crawl, such as {@code /teams/eng} or
+     * {@code /} for the root site collection. When set, {@code site.name} becomes optional;
+     * left unset, the crawl keeps building {@code /sites/<site.name>/} exactly as it always has.
+     */
+    protected static final String SITE_PATH_PARAM = "site.path";
+
+    /**
      * Carries the failure count from {@link #storeData} back to {@link #store}.
      *
      * <p>It cannot be a plain field: one data store instance is registered per handler name and
@@ -373,6 +380,9 @@ public class SharePointDataStore extends AbstractDataStore {
             config.setOauthRealm(paramMap.getAsString("auth.oauth.realm"));
         }
         config.setSiteName(paramMap.getAsString("site.name"));
+        if (paramMap.containsKey(SITE_PATH_PARAM)) {
+            config.setSitePath(paramMap.getAsString(SITE_PATH_PARAM));
+        }
         if (paramMap.containsKey("site.list_id")) {
             config.setInitialListId(paramMap.getAsString("site.list_id"));
         }

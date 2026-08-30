@@ -112,8 +112,8 @@ public class SharePointCrawler implements Closeable {
         if (config.url == null) {
             throw new ValidationException("url param is required.");
         }
-        if (config.siteName == null) {
-            throw new ValidationException("sitename param is required.");
+        if (config.siteName == null && StringUtils.isBlank(config.sitePath)) {
+            throw new ValidationException("sitename param is required unless site.path is set.");
         }
         // Validated here, in the constructor, rather than only where GetList/GetList2013
         // interpolate it into an OData guid'...' literal: this runs before
@@ -134,6 +134,7 @@ public class SharePointCrawler implements Closeable {
         final SharePointClientBuilder builder = SharePointClient.builder()
                 .setUrl(config.getUrl())
                 .setSite(config.getSiteName())
+                .setSitePath(config.getSiteRelativePath())
                 .setRequestConfig(buildRequestConfig(config));
         final String ntlmUser = config.getNtlmUser();
         if (StringUtils.isNotBlank(ntlmUser)) {
@@ -484,6 +485,7 @@ public class SharePointCrawler implements Closeable {
 
         private String url = null;
         private String siteName = null;
+        private String sitePath = null;
         private String initialListId = null;
         private String initialListName = null;
         private String initialDocLibPath = null;
@@ -551,6 +553,27 @@ public class SharePointCrawler implements Closeable {
         }
 
         /**
+         * Sets the server-relative managed path of the site, such as {@code /teams/eng} or
+         * {@code /} for the root site collection. Overrides the {@code /sites/<siteName>} path
+         * this connector builds by default; leaving this unset keeps that default exactly.
+         *
+         * @param sitePath the server-relative site path
+         */
+        public void setSitePath(final String sitePath) {
+            this.sitePath = sitePath;
+        }
+
+        /**
+         * Returns the server-relative path of the site being crawled, normalized to start and end
+         * with a slash. This is the single place the connector decides what that path is.
+         *
+         * @return the normalized, server-relative site path
+         */
+        public String getSiteRelativePath() {
+            return SharePointClient.normalizeSitePath(sitePath, siteName);
+        }
+
+        /**
          * Returns the initial list ID.
          *
          * @return the list ID
@@ -595,7 +618,9 @@ public class SharePointCrawler implements Closeable {
             if (initialDocLibPath == null) {
                 return null;
             }
-            return "/sites/" + siteName + initialDocLibPath;
+            final String base = getSiteRelativePath();
+            // base ends with a slash; initialDocLibPath begins with one.
+            return base.substring(0, base.length() - 1) + initialDocLibPath;
         }
 
         /**
