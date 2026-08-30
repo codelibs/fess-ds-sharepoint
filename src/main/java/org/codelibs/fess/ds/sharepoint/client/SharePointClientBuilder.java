@@ -15,13 +15,17 @@
  */
 package org.codelibs.fess.ds.sharepoint.client;
 
+import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpHost;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.codelibs.fess.ds.sharepoint.client.credential.SharePointCredential;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
@@ -37,6 +41,8 @@ public class SharePointClientBuilder {
     private CloseableHttpClient httpClient = null;
     private int retryCount = 0;
     private boolean verson2013 = false;
+    private String proxyHost = null;
+    private int proxyPort = -1;
 
     /**
      * Creates a new SharePointClientBuilder instance.
@@ -132,6 +138,28 @@ public class SharePointClientBuilder {
     }
 
     /**
+     * Sets the HTTP proxy host to route requests through.
+     *
+     * @param proxyHost the proxy host
+     * @return this builder instance
+     */
+    public SharePointClientBuilder setProxyHost(final String proxyHost) {
+        this.proxyHost = proxyHost;
+        return this;
+    }
+
+    /**
+     * Sets the HTTP proxy port to route requests through.
+     *
+     * @param proxyPort the proxy port
+     * @return this builder instance
+     */
+    public SharePointClientBuilder setProxyPort(final int proxyPort) {
+        this.proxyPort = proxyPort;
+        return this;
+    }
+
+    /**
      * Builds a new SharePointClient instance with the configured settings.
      *
      * @return a new SharePointClient instance
@@ -165,6 +193,23 @@ public class SharePointClientBuilder {
         if (retryCount > 0) {
             builder.setRetryHandler(new DefaultHttpRequestRetryHandler(retryCount, true));
         }
+        final HttpRoutePlanner routePlanner = buildRoutePlanner();
+        if (routePlanner != null) {
+            builder.setRoutePlanner(routePlanner);
+        }
         return builder.build();
+    }
+
+    /**
+     * Builds the route planner that sends requests through the configured HTTP proxy.
+     *
+     * @return a route planner targeting {@link #proxyHost}/{@link #proxyPort}, or {@code null}
+     *         when no proxy is configured
+     */
+    protected HttpRoutePlanner buildRoutePlanner() {
+        if (StringUtils.isBlank(proxyHost) || proxyPort <= 0) {
+            return null;
+        }
+        return new DefaultProxyRoutePlanner(new HttpHost(proxyHost, proxyPort));
     }
 }

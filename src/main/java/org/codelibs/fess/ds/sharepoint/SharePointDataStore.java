@@ -21,7 +21,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.core.misc.Pair;
@@ -31,11 +33,13 @@ import org.codelibs.fess.crawler.exception.CrawlingAccessException;
 import org.codelibs.fess.crawler.exception.MultipleCrawlingAccessException;
 import org.codelibs.fess.ds.AbstractDataStore;
 import org.codelibs.fess.ds.callback.IndexUpdateCallback;
+import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.codelibs.fess.entity.DataStoreParams;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
+import org.codelibs.fess.helper.PermissionHelper;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.util.ComponentUtil;
@@ -51,6 +55,66 @@ public class SharePointDataStore extends AbstractDataStore {
      * deleted from the index.
      */
     private static final String DELETE_OLD_DOCS = "delete_old_docs";
+
+    /**
+     * Whether a file's content extraction failure is logged instead of failing its crawl target.
+     * Matches the spelling and default used across the other {@code fess-ds-*} plugins.
+     */
+    protected static final String IGNORE_ERROR = "ignore_error";
+
+    /** The HTTP proxy host to route requests through. Matches the spelling used by every other {@code fess-ds-*} plugin. */
+    protected static final String PROXY_HOST = "proxy_host";
+
+    /** The HTTP proxy port to route requests through. Matches the spelling used by every other {@code fess-ds-*} plugin. */
+    protected static final String PROXY_PORT = "proxy_port";
+
+    /**
+     * The name of the extractor component used to extract a file's content.
+     *
+     * <p>No sibling {@code fess-ds-*} plugin reads this as a {@code DataStoreParams} key - every
+     * one of them holds it as a Java field ({@code protected String extractorName}) that only
+     * some expose a setter for. This plugin introduces {@code extractor_name} as a new,
+     * data-config-configurable parameter because the extractor name was otherwise a
+     * {@code private static final} constant nothing could change short of editing the jar.
+     */
+    protected static final String EXTRACTOR_NAME = "extractor_name";
+
+    /**
+     * Comma-separated regular expressions a file's MIME type must match at least one of to be
+     * crawled. Matches the spelling used across the other {@code fess-ds-*} plugins.
+     */
+    protected static final String SUPPORTED_MIMETYPES = "supported_mimetypes";
+
+    /**
+     * The maximum file size in bytes. Matches the spelling used by {@code fess-ds-microsoft365},
+     * the only sibling with this parameter.
+     */
+    protected static final String MAX_CONTENT_LENGTH = "max_content_length";
+
+    /**
+     * Regular expression a crawled item's URL-ish value must match to be crawled. Read once, in
+     * {@link #createCrawler}, into a {@link org.codelibs.fess.crawler.filter.UrlFilter} built
+     * there and threaded down through {@link SharePointCrawler.CrawlerConfig} - the same
+     * component every other {@code fess-ds-*} plugin with this parameter uses. It is matched
+     * against a file's server-relative URL or a list item's {@code FileRef}, not the URL actually
+     * indexed - see the README for what that means for a pattern copied from a sibling.
+     */
+    protected static final String INCLUDE_PATTERN = "include_pattern";
+
+    /**
+     * Regular expression that excludes a crawled item from being crawled. Read the same way as
+     * {@link #INCLUDE_PATTERN}.
+     */
+    protected static final String EXCLUDE_PATTERN = "exclude_pattern";
+
+    /**
+     * Comma-separated permissions merged into every document's role list in addition to whatever
+     * role SharePoint returned (or did not return) for it. Matches the spelling used across the
+     * other {@code fess-ds-*} plugins. Read directly from {@code paramMap} in {@link #storeData},
+     * not threaded through {@link SharePointCrawler.CrawlerConfig}: {@code storeData} already has
+     * {@code paramMap}, and the merge happens after the crawl, not during it.
+     */
+    protected static final String DEFAULT_PERMISSIONS = "default_permissions";
 
     /**
      * Carries the failure count from {@link #storeData} back to {@link #store}.
@@ -158,6 +222,36 @@ public class SharePointDataStore extends AbstractDataStore {
                                 }
                                 dataMap.put(roleField, roles);
                             }
+                            // Merged outside the guard above, on purpose: default_permissions must
+                            // reach the document even when SharePoint returned no role at all - the
+                            // exact case that guard exists to protect. Only runs when configured, so
+                            // a data config that never touches this parameter keeps producing
+                            // whatever role field shape it always has.
+                            //
+                            // The merge order below (existing roles, then default_permissions, then
+                            // distinct()) does not literally reproduce fess-ds-microsoft365's
+                            // OneDriveDataStore order (item-derived, then default_permissions, then
+                            // defaultDataMap): the guard above has already interleaved this plugin's
+                            // own two sources - defaultDataMap's configured role and SharePoint's
+                            // returned role - into "existing roles" by the time this code runs, so
+                            // there is no remaining seam to insert default_permissions into at that
+                            // exact point. Role membership is a set for filtering purposes, so this
+                            // does not change what a document is visible to; only the reference
+                            // followed for the merge+distinct() shape.
+                            final String defaultPermissions = paramMap.getAsString(DEFAULT_PERMISSIONS, StringUtils.EMPTY);
+                            if (StringUtils.isNotBlank(defaultPermissions)) {
+                                final List<Object> roles = new ArrayList<>();
+                                if (dataMap.get(roleField) instanceof List<?> roleList) {
+                                    roles.addAll(roleList);
+                                }
+                                final PermissionHelper permissionHelper = ComponentUtil.getPermissionHelper();
+                                for (final String permission : defaultPermissions.split(",")) {
+                                    if (StringUtils.isNotBlank(permission)) {
+                                        roles.add(permissionHelper.encode(permission));
+                                    }
+                                }
+                                dataMap.put(roleField, roles.stream().distinct().collect(Collectors.toList()));
+                            }
                             resultMap.remove(roleField);
                             crawlerStatsHelper.record(statsKey, StatsAction.PREPARED);
                             for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
@@ -257,7 +351,8 @@ public class SharePointDataStore extends AbstractDataStore {
             config.setExcludeFolder(paramMap.getAsString("site.exclude_folder"));
         }
         if (paramMap.containsKey("list.items.number_per_page")) {
-            config.setListItemNumPerPages(Integer.parseInt(paramMap.getAsString("list.items.number_per_page")));
+            config.setListItemNumPerPages(parseInt(paramMap.getAsString("list.items.number_per_page"), config.getListItemNumPerPages(),
+                    "list.items.number_per_page"));
         }
         if (paramMap.containsKey("list.item.content.include_fields")) {
             config.setListContentIncludeFields(paramMap.getAsString("list.item.content.include_fields"));
@@ -269,20 +364,85 @@ public class SharePointDataStore extends AbstractDataStore {
             config.setSubPage(Boolean.parseBoolean(paramMap.getAsString("list.is_sub_page")));
         }
         if (paramMap.containsKey("http.connection_timeout")) {
-            config.setConnectionTimeout(Integer.parseInt(paramMap.getAsString("http.connection_timeout")));
+            config.setConnectionTimeout(
+                    parseInt(paramMap.getAsString("http.connection_timeout"), config.getConnectionTimeout(), "http.connection_timeout"));
         }
         if (paramMap.containsKey("http.socket_timeout")) {
-            config.setSocketTimeout(Integer.parseInt(paramMap.getAsString("http.socket_timeout")));
+            config.setSocketTimeout(
+                    parseInt(paramMap.getAsString("http.socket_timeout"), config.getSocketTimeout(), "http.socket_timeout"));
         }
         if (paramMap.containsKey("sp.version")) {
             config.setSharePointVersion(paramMap.getAsString("sp.version"));
         }
         if (paramMap.containsKey("retry_limit")) {
-            config.setRetryLimit(Integer.parseInt(paramMap.getAsString("retry_limit")));
+            config.setRetryLimit(parseInt(paramMap.getAsString("retry_limit"), config.getRetryLimit(), "retry_limit"));
         }
         if (paramMap.containsKey("role.skip")) {
             config.setSkipRole(Boolean.parseBoolean(paramMap.getAsString("role.skip")));
         }
+        config.setIgnoreError(Constants.TRUE.equalsIgnoreCase(paramMap.getAsString(IGNORE_ERROR, Constants.TRUE)));
+        if (paramMap.containsKey(PROXY_HOST)) {
+            config.setProxyHost(paramMap.getAsString(PROXY_HOST));
+            config.setProxyPort(parseInt(paramMap.getAsString(PROXY_PORT), -1, PROXY_PORT));
+        }
+        if (paramMap.containsKey(EXTRACTOR_NAME)) {
+            config.setExtractorName(paramMap.getAsString(EXTRACTOR_NAME));
+        }
+        if (paramMap.containsKey(SUPPORTED_MIMETYPES)) {
+            config.setSupportedMimeTypes(paramMap.getAsString(SUPPORTED_MIMETYPES));
+        }
+        if (paramMap.containsKey(MAX_CONTENT_LENGTH)) {
+            config.setMaxContentLength(
+                    parseLong(paramMap.getAsString(MAX_CONTENT_LENGTH), FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, MAX_CONTENT_LENGTH));
+        }
+        config.setIncludePattern(paramMap.getAsString(INCLUDE_PATTERN));
+        config.setExcludePattern(paramMap.getAsString(EXCLUDE_PATTERN));
+        config.setSessionId(paramMap.getAsString(Constants.CRAWLING_INFO_ID));
         return new SharePointCrawler(config);
+    }
+
+    /**
+     * Parses a numeric parameter, falling back to a default instead of failing the whole crawl on
+     * a value the admin UI can trivially produce - an empty field, or a typo - the way
+     * {@code Integer.parseInt}/{@code Long.parseLong} called directly on it would.
+     * {@code createCrawler} runs outside {@link #storeData}'s try block, so an uncaught
+     * {@code NumberFormatException} here would fail the whole data-config job rather than one
+     * crawl target.
+     *
+     * @param value the raw parameter value, possibly blank or malformed
+     * @param defaultValue the value to use when {@code value} is blank or not a number
+     * @param paramName the parameter name, for the warning logged on a malformed value
+     * @return the parsed value, or {@code defaultValue}
+     */
+    private int parseInt(final String value, final int defaultValue, final String paramName) {
+        if (StringUtils.isBlank(value)) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (final NumberFormatException e) {
+            logger.warn("Invalid {}: \"{}\". Using the default ({}).", paramName, value, defaultValue, e);
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Same fallback as {@link #parseInt}, for a {@code long}-valued parameter.
+     *
+     * @param value the raw parameter value, possibly blank or malformed
+     * @param defaultValue the value to use when {@code value} is blank or not a number
+     * @param paramName the parameter name, for the warning logged on a malformed value
+     * @return the parsed value, or {@code defaultValue}
+     */
+    private long parseLong(final String value, final long defaultValue, final String paramName) {
+        if (StringUtils.isBlank(value)) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (final NumberFormatException e) {
+            logger.warn("Invalid {}: \"{}\". Using the default ({}).", paramName, value, defaultValue, e);
+            return defaultValue;
+        }
     }
 }

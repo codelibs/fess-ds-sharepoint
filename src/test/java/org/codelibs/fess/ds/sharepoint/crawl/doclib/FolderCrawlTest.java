@@ -22,6 +22,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
+import org.codelibs.fess.ds.sharepoint.crawl.SimpleUrlFilter;
+import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -60,7 +62,8 @@ public class FolderCrawlTest extends UnitDsTestCase {
     private static int crawlAndCountQueued(final SharePointMockServer server) throws Exception {
         try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite("test").build()) {
             final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
-            new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>()).doCrawl(null, crawlingQueue);
+            new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), true, FileCrawl.DEFAULT_EXTRACTOR_NAME,
+                    FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, null).doCrawl(null, crawlingQueue);
             return crawlingQueue.size();
         }
     }
@@ -92,6 +95,31 @@ public class FolderCrawlTest extends UnitDsTestCase {
             // One folder lookup, one page of subfolders, one page of files - no follow-up request
             // asking for a page the server already showed cannot exist.
             assertEquals("a short page must not cost another round trip", 3, server.getRecordedRequests().size());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_excludePatternSkipsAFileBeforeTheFourFollowUpRequests() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPath(FOLDER_API, "application/json", "fixtures/modern/doclib_folder.json");
+            server.onPathStatus(FOLDER_API + "/Folders", 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(FOLDER_API + "/Files", 200, "application/json",
+                    "{\"value\": [{\"Name\": \"report.pdf\", \"ServerRelativeUrl\": \"" + FOLDER_URL + "/report.pdf\"}]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite("test").build()) {
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                final SimpleUrlFilter urlFilter = new SimpleUrlFilter(null, ".*report\\.pdf");
+                new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), true, FileCrawl.DEFAULT_EXTRACTOR_NAME,
+                        FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, urlFilter).doCrawl(null,
+                                crawlingQueue);
+
+                assertEquals("an excluded file must not be queued for further crawling", 0, crawlingQueue.size());
+                // The folder lookup, the (empty) subfolder page and the file page - no getListItem,
+                // getListItemValue, getListItemRole or getForms request for the excluded file.
+                assertEquals("an excluded file must not cost its four follow-up requests", 3, server.getRecordedRequests().size());
+            }
         }
     }
 }

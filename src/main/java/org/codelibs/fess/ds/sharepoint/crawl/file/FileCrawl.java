@@ -17,6 +17,7 @@ package org.codelibs.fess.ds.sharepoint.crawl.file;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.core.exception.IORuntimeException;
 import org.codelibs.core.lang.StringUtil;
+import org.codelibs.fess.crawler.exception.MaxLengthExceededException;
 import org.codelibs.fess.crawler.helper.MimeTypeHelper;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFileResponse;
@@ -55,8 +57,19 @@ public class FileCrawl extends SharePointCrawl {
     private final Map<String, String> listValues;
     private final String listName;
     private final Map<String, String> additionalProperties = new HashMap<>();
+    private final boolean ignoreError;
+    private final String extractorName;
+    private final String[] supportedMimeTypes;
+    private final long maxContentLength;
 
-    private static final String DEFAULT_EXTRACTOR_NAME = "tikaExtractor";
+    /** The extractor component used unless {@code extractor_name} configures a different one. */
+    public static final String DEFAULT_EXTRACTOR_NAME = "tikaExtractor";
+
+    /** The pattern list used unless {@code supported_mimetypes} configures a different one: every MIME type. */
+    public static final String[] DEFAULT_SUPPORTED_MIMETYPES = { ".*" };
+
+    /** The bound used unless {@code max_content_length} configures a different one: unlimited. */
+    public static final long DEFAULT_MAX_CONTENT_LENGTH = -1L;
 
     /**
      * Constructs a FileCrawl instance for crawling a specific SharePoint file.
@@ -70,10 +83,16 @@ public class FileCrawl extends SharePointCrawl {
      * @param roles the list of roles/permissions for the file
      * @param listValues additional metadata values from the list item
      * @param listName the name of the list containing the file
+     * @param ignoreError whether a content extraction failure should be logged instead of failing
+     *            this crawl target
+     * @param extractorName the name of the extractor component used to extract file content
+     * @param supportedMimeTypes regular expressions a file's MIME type must match at least one of
+     *            to be crawled
+     * @param maxContentLength the maximum file size in bytes, or a negative number for no limit
      */
     public FileCrawl(final SharePointClient client, final String fileName, final String webUrl, final String serverRelativeUrl,
-            final Date created, final Date modified, final List<String> roles, final Map<String, String> listValues,
-            final String listName) {
+            final Date created, final Date modified, final List<String> roles, final Map<String, String> listValues, final String listName,
+            final boolean ignoreError, final String extractorName, final String[] supportedMimeTypes, final long maxContentLength) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.webUrl = webUrl;
@@ -83,6 +102,10 @@ public class FileCrawl extends SharePointCrawl {
         this.roles = roles;
         this.listValues = listValues;
         this.listName = listName != null ? listName : StringUtil.EMPTY;
+        this.ignoreError = ignoreError;
+        this.extractorName = extractorName;
+        this.supportedMimeTypes = supportedMimeTypes;
+        this.maxContentLength = maxContentLength;
         statsKey = new StatsKeyObject("file#" + serverRelativeUrl);
     }
 
@@ -102,11 +125,74 @@ public class FileCrawl extends SharePointCrawl {
             logger.info("[Crawling File] [serverRelativeUrl:{}]", serverRelativeUrl);
         }
 
+        // Checked against the file name alone, before any request for the file is made: SharePoint's
+        // listing APIs carry no content to sniff at this point, but MimeTypeHelper can resolve a
+        // type from a file name by itself (passing a null stream makes it skip content detection
+        // entirely), so a file supported_mimetypes excludes never costs the download this crawl
+        // would otherwise spend on it.
+        if (!isSupportedMimeType(fileName)) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("{} is not a supported mimetype.", fileName);
+            }
+            return null;
+        }
+
         try (GetFileResponse getFileResponse = client.api().file().getFile().setServerRelativeUrl(serverRelativeUrl).execute()) {
+            checkContentLength(getFileResponse);
             return buildDataMap(dataConfig, getFileResponse);
+        } catch (final MaxLengthExceededException e) {
+            // A deliberate policy exclusion, not a crawl failure - the same shape as a
+            // supported_mimetypes mismatch just above. It must not be reported as a lost crawl
+            // target: SharePointDataStore#store suppresses delete_old_docs for the whole run when
+            // any target is, and a file being over a configured size limit on purpose is not that.
+            if (logger.isDebugEnabled()) {
+                logger.debug("{} exceeds max_content_length.", serverRelativeUrl, e);
+            } else {
+                logger.info("{} exceeds max_content_length. {}", serverRelativeUrl, e.getMessage());
+            }
+            return null;
         } catch (final IOException e) {
             throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to file: " + fileName, e);
         }
+    }
+
+    /**
+     * Rejects a file whose declared {@code Content-Length} is over {@code max_content_length},
+     * before {@link GetFileResponse#getFileContent(long)} downloads it.
+     *
+     * <p>{@link GetFileResponse#getContentLength()} returns -1 - and this check does not fire -
+     * whenever the response does not declare an upfront length, which includes a gzip-compressed
+     * response as well as a chunked one (this plugin's client never disables content compression).
+     * {@link #getContent}'s call to {@link GetFileResponse#getFileContent(long)} is the backstop
+     * that still applies then: it bounds the download itself, not just extraction, by counting
+     * bytes as they are copied out of the response.
+     *
+     * @param response the file response to check
+     * @throws MaxLengthExceededException if the declared content length is over the configured
+     *             maximum
+     */
+    private void checkContentLength(final GetFileResponse response) {
+        if (maxContentLength < 0) {
+            return;
+        }
+        final long contentLength = response.getContentLength();
+        if (contentLength >= 0 && contentLength > maxContentLength) {
+            throw new MaxLengthExceededException("The content length (" + contentLength + " byte) is over " + maxContentLength
+                    + " byte. The url is " + serverRelativeUrl);
+        }
+    }
+
+    /**
+     * Checks whether a file name's MIME type, resolved without downloading the file, matches at
+     * least one {@code supported_mimetypes} pattern.
+     *
+     * @param filename the file name to resolve a MIME type from
+     * @return true if the file should be crawled
+     */
+    protected boolean isSupportedMimeType(final String filename) {
+        final MimeTypeHelper mimeTypeHelper = ComponentUtil.getComponent(MimeTypeHelper.class);
+        final String mimeType = mimeTypeHelper.getContentType(null, filename);
+        return Arrays.stream(supportedMimeTypes).anyMatch(mimeType::matches);
     }
 
     private Map<String, Object> buildDataMap(final DataConfig dataConfig, final GetFileResponse response) throws IOException {
@@ -150,18 +236,37 @@ public class FileCrawl extends SharePointCrawl {
     private String getContent(final GetFileResponse response, final String mimeType) {
         final StringBuilder content = new StringBuilder(1000);
 
-        try (final InputStream is = response.getFileContent()) {
+        try (final InputStream is = response.getFileContent(maxContentLength)) {
             final String fileText = ComponentUtil.getExtractorFactory()
                     .builder(is, null)
-                    .extractorName(DEFAULT_EXTRACTOR_NAME)
+                    .extractorName(extractorName)
                     .mimeType(mimeType)
+                    .maxContentLength(maxContentLength)
                     .extract()
                     .getContent();
             if (StringUtils.isNotBlank(fileText)) {
                 content.append(fileText);
             }
+        } catch (final MaxLengthExceededException e) {
+            // Reached only if the body were not already fully buffered (and validated) by
+            // getMimeType's earlier call to the same bounded getFileContent - not the normal case,
+            // but re-thrown rather than swallowed by ignore_error below either way, so doCrawl's
+            // own catch treats this the same as the Content-Length precheck: a skip, not a
+            // "continue with whatever text extraction managed" outcome.
+            throw e;
         } catch (final Exception e) {
-            if (!ComponentUtil.getFessConfig().isCrawlerIgnoreContentException()) {
+            // An OR, not a per-data-config override: this is suppressed whenever EITHER
+            // ignore_error is true OR the global crawler.ignore.content.exception setting is
+            // true. ignore_error=false alone cannot force a hard failure while the global setting
+            // says to ignore - it only matters when the global setting is false. Fess's own
+            // default for that global setting is true, so on an installation that has not
+            // touched it, extraction failures were already being suppressed before this
+            // parameter existed; ignore_error's default of true changes nothing there. On an
+            // installation that had deliberately set the global setting to false to get hard
+            // failures, this parameter's own default of true - chosen to match every sibling
+            // fess-ds-* plugin - reverses that: such an installation now gets log-and-continue
+            // unless it also sets ignore_error=false here.
+            if (!ignoreError && !ComponentUtil.getFessConfig().isCrawlerIgnoreContentException()) {
                 throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to get contents: " + fileName, e);
             }
             if (logger.isDebugEnabled()) {
@@ -187,7 +292,7 @@ public class FileCrawl extends SharePointCrawl {
      * @return the MIME type of the file
      */
     protected String getMimeType(final String filename, final GetFileResponse response) {
-        try (final InputStream is = response.getFileContent()) {
+        try (final InputStream is = response.getFileContent(maxContentLength)) {
             final MimeTypeHelper mimeTypeHelper = ComponentUtil.getComponent(MimeTypeHelper.class);
             return mimeTypeHelper.getContentType(is, filename);
         } catch (final IOException e) {

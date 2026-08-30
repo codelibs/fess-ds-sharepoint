@@ -21,6 +21,7 @@ import java.util.Queue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItemsResponse;
@@ -86,6 +87,16 @@ public class ListCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     /** Fields to exclude from content extraction for list items */
     private final List<String> excludeFields;
+    /** Whether an attachment's content extraction failure is logged instead of failing its crawl target */
+    private final boolean ignoreError;
+    /** The name of the extractor component used to extract an attachment's content */
+    private final String extractorName;
+    /** Regular expressions an attachment's MIME type must match at least one of to be crawled */
+    private final String[] supportedMimeTypes;
+    /** The maximum attachment size in bytes, or a negative number for no limit */
+    private final long maxContentLength;
+    /** The include_pattern/exclude_pattern filter built once for the whole crawl, or null */
+    private final UrlFilter urlFilter;
 
     /**
      * Constructs a new ListCrawl instance for crawling a SharePoint list.
@@ -99,10 +110,21 @@ public class ListCrawl extends SharePointCrawl {
      * @param skipRole flag to skip role-based access control processing
      * @param includeFields list of field names to include in content extraction
      * @param excludeFields list of field name patterns to exclude from content extraction
+     * @param ignoreError whether an attachment's content extraction failure is logged instead of
+     *            failing its crawl target
+     * @param extractorName the name of the extractor component used to extract an attachment's
+     *            content
+     * @param supportedMimeTypes regular expressions an attachment's MIME type must match at least
+     *            one of to be crawled
+     * @param maxContentLength the maximum attachment size in bytes, or a negative number for no
+     *            limit
+     * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
+     *            or null - passed on to each item, not to its attachments
      */
     public ListCrawl(final SharePointClient client, final String id, final String listName, final int numberPerPage,
             final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean isSubPage,
-            final boolean skipRole, final List<String> includeFields, final List<String> excludeFields) {
+            final boolean skipRole, final List<String> includeFields, final List<String> excludeFields, final boolean ignoreError,
+            final String extractorName, final String[] supportedMimeTypes, final long maxContentLength, final UrlFilter urlFilter) {
         super(client);
         this.id = id;
         this.listName = listName;
@@ -112,6 +134,11 @@ public class ListCrawl extends SharePointCrawl {
         this.skipRole = skipRole;
         this.includeFields = includeFields;
         this.excludeFields = excludeFields;
+        this.ignoreError = ignoreError;
+        this.extractorName = extractorName;
+        this.supportedMimeTypes = supportedMimeTypes;
+        this.maxContentLength = maxContentLength;
+        this.urlFilter = urlFilter;
         statsKey = new StatsKeyObject("list#" + listName + ":" + id);
     }
 
@@ -173,10 +200,10 @@ public class ListCrawl extends SharePointCrawl {
 
                 final List<String> roles = getItemRoles(listId, item.getId(), sharePointGroupCache, skipRole);
                 crawlingQueue.offer(new ItemCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles,
-                        isSubPage, includeFields, excludeFields));
+                        isSubPage, includeFields, excludeFields, urlFilter));
                 if (item.hasAttachments()) {
-                    crawlingQueue.offer(
-                            new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(), item.getModified(), roles));
+                    crawlingQueue.offer(new ItemAttachmentsCrawl(client, listId, listName, item.getId(), item.getCreated(),
+                            item.getModified(), roles, ignoreError, extractorName, supportedMimeTypes, maxContentLength));
                 }
             });
             if (page == MAX_PAGES - 1) {

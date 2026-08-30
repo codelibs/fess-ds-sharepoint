@@ -22,6 +22,7 @@ import java.util.Map;
 
 import org.codelibs.fess.entity.DataStoreParams;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
+import org.codelibs.fess.helper.PermissionHelper;
 import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.util.ComponentUtil;
 import org.junit.jupiter.api.Test;
@@ -44,12 +45,18 @@ public class SharePointDataStoreRoleTest extends UnitDsTestCase {
     public void setUp(final TestInfo testInfo) throws Exception {
         super.setUp(testInfo);
         ComponentUtil.register(new SystemHelper(), "systemHelper");
+        ComponentUtil.register(new PermissionHelper(), "permissionHelper");
         final CrawlerStatsHelper crawlerStatsHelper = new CrawlerStatsHelper();
         crawlerStatsHelper.init();
         ComponentUtil.register(crawlerStatsHelper, "crawlerStatsHelper");
     }
 
     private Map<String, Object> crawlSingleDocument(final Map<String, Object> crawlResult, final Map<String, Object> defaultDataMap) {
+        return crawlSingleDocument(crawlResult, defaultDataMap, new DataStoreParams());
+    }
+
+    private Map<String, Object> crawlSingleDocument(final Map<String, Object> crawlResult, final Map<String, Object> defaultDataMap,
+            final DataStoreParams paramMap) {
         final SharePointDataStore dataStore = new SharePointDataStore() {
             @Override
             protected SharePointCrawler createCrawler(final DataStoreParams paramMap) {
@@ -57,7 +64,7 @@ public class SharePointDataStoreRoleTest extends UnitDsTestCase {
             }
         };
         final CapturingIndexUpdateCallback callback = new CapturingIndexUpdateCallback();
-        dataStore.storeData(null, callback, new DataStoreParams(), new HashMap<>(), defaultDataMap);
+        dataStore.storeData(null, callback, paramMap, new HashMap<>(), defaultDataMap);
         assertEquals("exactly one document must reach the index", 1, callback.documents.size());
         return callback.documents.get(0);
     }
@@ -100,5 +107,66 @@ public class SharePointDataStoreRoleTest extends UnitDsTestCase {
         crawlSingleDocument(crawlResult, defaultDataMap);
 
         assertFalse("the role must be consumed so scripts cannot see it twice", crawlResult.containsKey(ROLE_FIELD));
+    }
+
+    @Test
+    public void test_defaultPermissionsAreMergedWhenSharePointYieldsNoRole() {
+        // The exact case the role-merge guard exists to protect: default_permissions must still
+        // reach the document here, since it is merged outside that guard.
+        final Map<String, Object> defaultDataMap = new HashMap<>();
+
+        final Map<String, Object> crawlResult = new HashMap<>();
+        crawlResult.put("title", "no-role document");
+
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("default_permissions", "1everyone");
+        final Map<String, Object> document = crawlSingleDocument(crawlResult, defaultDataMap, paramMap);
+
+        assertEquals("default_permissions must be indexed even when SharePoint returned no role", List.of("1everyone"),
+                document.get(ROLE_FIELD));
+    }
+
+    @Test
+    public void test_defaultPermissionsAreMergedOnTopOfCrawledAndConfiguredRoles() {
+        final Map<String, Object> defaultDataMap = new HashMap<>();
+        defaultDataMap.put(ROLE_FIELD, new ArrayList<>(List.of("1alice")));
+
+        final Map<String, Object> crawlResult = new HashMap<>();
+        crawlResult.put(ROLE_FIELD, new ArrayList<>(List.of("2sales")));
+
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("default_permissions", "1everyone");
+        final Map<String, Object> document = crawlSingleDocument(crawlResult, defaultDataMap, paramMap);
+
+        assertEquals("the configured, crawled and default permissions must all be indexed", List.of("1alice", "2sales", "1everyone"),
+                document.get(ROLE_FIELD));
+    }
+
+    @Test
+    public void test_defaultPermissionsAreDeduplicated() {
+        final Map<String, Object> defaultDataMap = new HashMap<>();
+        defaultDataMap.put(ROLE_FIELD, new ArrayList<>(List.of("1alice")));
+
+        final Map<String, Object> crawlResult = new HashMap<>();
+        crawlResult.put("title", "duplicate role document");
+
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("default_permissions", "1alice,1everyone");
+        final Map<String, Object> document = crawlSingleDocument(crawlResult, defaultDataMap, paramMap);
+
+        assertEquals("a permission already present must not be duplicated", List.of("1alice", "1everyone"), document.get(ROLE_FIELD));
+    }
+
+    @Test
+    public void test_defaultPermissionsNotConfiguredLeavesTheRoleFieldUntouched() {
+        final Map<String, Object> defaultDataMap = new HashMap<>();
+
+        final Map<String, Object> crawlResult = new HashMap<>();
+        crawlResult.put("title", "no-role document");
+
+        final Map<String, Object> document = crawlSingleDocument(crawlResult, defaultDataMap);
+
+        assertFalse("with default_permissions unset, a document with no role source must carry no role field at all",
+                document.containsKey(ROLE_FIELD));
     }
 }

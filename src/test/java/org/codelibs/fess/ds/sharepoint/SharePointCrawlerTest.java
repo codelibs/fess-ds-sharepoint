@@ -18,7 +18,10 @@ package org.codelibs.fess.ds.sharepoint;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Arrays;
+
 import org.codelibs.fess.ds.sharepoint.SharePointCrawler.CrawlerConfig;
+import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.junit.jupiter.api.Test;
 
 import jakarta.validation.ValidationException;
@@ -63,5 +66,28 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
         config.setInitialListId("11111111-1111-1111-1111-111111111111");
 
         assertDoesNotThrow(() -> new SharePointCrawler(config), "a well-formed GUID list id must not be rejected");
+    }
+
+    @Test
+    public void test_setSupportedMimeTypes_blankValueFallsBackToTheDefault() {
+        final CrawlerConfig config = new CrawlerConfig();
+
+        config.setSupportedMimeTypes("");
+
+        // A blank value split on "," used to become {""}, a pattern that matches no MIME type at
+        // all - supported_mimetypes="" silently excluded every file rather than leaving the
+        // parameter unset.
+        assertEquals("a blank supported_mimetypes must fall back to the default pattern, not {\"\"}",
+                Arrays.toString(FileCrawl.DEFAULT_SUPPORTED_MIMETYPES), Arrays.toString(config.getSupportedMimeTypes()));
+    }
+
+    @Test
+    public void test_setSupportedMimeTypes_blankAfterTrimFallsBackToTheDefault() {
+        final CrawlerConfig config = new CrawlerConfig();
+
+        config.setSupportedMimeTypes("   ");
+
+        assertEquals("whitespace-only supported_mimetypes must also fall back to the default",
+                Arrays.toString(FileCrawl.DEFAULT_SUPPORTED_MIMETYPES), Arrays.toString(config.getSupportedMimeTypes()));
     }
 }

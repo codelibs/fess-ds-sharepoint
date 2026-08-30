@@ -23,6 +23,7 @@ import java.util.Queue;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfiles.GetFilesResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
@@ -62,6 +63,11 @@ public class FolderCrawl extends SharePointCrawl {
     private final String serverRelativeUrl;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
     private final boolean skipRole;
+    private final boolean ignoreError;
+    private final String extractorName;
+    private final String[] supportedMimeTypes;
+    private final long maxContentLength;
+    private final UrlFilter urlFilter;
 
     /**
      * Constructs a FolderCrawl instance for crawling a SharePoint document library folder.
@@ -70,13 +76,27 @@ public class FolderCrawl extends SharePointCrawl {
      * @param serverRelativeUrl the server-relative URL of the folder to crawl
      * @param skipRole whether to skip role/permission checking
      * @param sharePointGroupCache cache for SharePoint group information
+     * @param ignoreError whether a file's content extraction failure should be logged instead of
+     *            failing its crawl target
+     * @param extractorName the name of the extractor component used to extract a file's content
+     * @param supportedMimeTypes regular expressions a file's MIME type must match at least one of
+     *            to be crawled
+     * @param maxContentLength the maximum file size in bytes, or a negative number for no limit
+     * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
+     *            or null
      */
     public FolderCrawl(final SharePointClient client, final String serverRelativeUrl, final boolean skipRole,
-            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean ignoreError,
+            final String extractorName, final String[] supportedMimeTypes, final long maxContentLength, final UrlFilter urlFilter) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.sharePointGroupCache = sharePointGroupCache;
         this.skipRole = skipRole;
+        this.ignoreError = ignoreError;
+        this.extractorName = extractorName;
+        this.supportedMimeTypes = supportedMimeTypes;
+        this.maxContentLength = maxContentLength;
+        this.urlFilter = urlFilter;
         statsKey = new StatsKeyObject("folder#" + serverRelativeUrl);
     }
 
@@ -103,7 +123,8 @@ public class FolderCrawl extends SharePointCrawl {
                 }
                 foldersStart += PAGE_SIZE;
                 folders.forEach(subFolder -> {
-                    crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl(), skipRole, sharePointGroupCache));
+                    crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl(), skipRole, sharePointGroupCache,
+                            ignoreError, extractorName, supportedMimeTypes, maxContentLength, urlFilter));
                 });
                 if (folders.size() < PAGE_SIZE) {
                     break;
@@ -132,6 +153,15 @@ public class FolderCrawl extends SharePointCrawl {
                 }
                 filesStart += PAGE_SIZE;
                 files.forEach(file -> {
+                    // Checked here, before the four requests below, precisely because a file's
+                    // server-relative URL is already in hand at this point - unlike a list item,
+                    // whose URL-ish value only exists after fetching its value (see ItemCrawl).
+                    if (!isUrlAllowed(urlFilter, file.getServerRelativeUrl())) {
+                        if (logger.isDebugEnabled()) {
+                            logger.debug("{} is not matched with include_pattern/exclude_pattern.", file.getServerRelativeUrl());
+                        }
+                        return;
+                    }
                     final GetDoclibListItemResponse getDoclibListItemResponse =
                             client.api().doclib().getListItem().setServerRelativeUrl(file.getServerRelativeUrl()).execute();
                     final List<String> roles = getItemRoles(getDoclibListItemResponse.getListId(), getDoclibListItemResponse.getItemId(),
@@ -146,7 +176,7 @@ public class FolderCrawl extends SharePointCrawl {
                     final String webLink =
                             getWebLink(getDoclibListItemResponse.getListId(), file.getServerRelativeUrl(), serverRelativeUrl);
                     crawlingQueue.offer(new FileCrawl(client, file.getFileName(), webLink, file.getServerRelativeUrl(), file.getCreated(),
-                            file.getModified(), roles, listValues, null));
+                            file.getModified(), roles, listValues, null, ignoreError, extractorName, supportedMimeTypes, maxContentLength));
                 });
                 if (files.size() < PAGE_SIZE) {
                     break;

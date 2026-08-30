@@ -91,4 +91,50 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
                 "a malformed site.list_id must fail the job, not be downgraded to a warning and a zero-document success");
         assertEquals("no document can reach the index when the crawl never starts", 0, callback.documents.size());
     }
+
+    @Test
+    public void test_createCrawler_blankMaxContentLengthFallsBackInsteadOfFailingTheJob() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        // Trivially produced by the admin UI: the field left empty rather than removed.
+        // Integer.parseInt/Long.parseLong called directly on this throws NumberFormatException,
+        // and createCrawler runs outside storeData's try block, so an uncaught one here fails the
+        // whole data-config job rather than one crawl target.
+        paramMap.put("max_content_length", "");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertNotNull("a blank max_content_length must fall back to the default instead of throwing", crawler);
+        }
+    }
+
+    @Test
+    public void test_createCrawler_malformedProxyPortFallsBackInsteadOfFailingTheJob() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("proxy_host", "proxy.example.com");
+        paramMap.put("proxy_port", "not-a-number");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertNotNull("a malformed proxy_port must fall back to the default instead of throwing", crawler);
+        }
+    }
+
+    @Test
+    public void test_createCrawler_blankRetryLimitFallsBackInsteadOfFailingTheJob() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        // Trivially produced by the admin UI: the field left empty rather than removed.
+        // containsKey("retry_limit") is still true for an empty value, so
+        // Integer.parseInt(paramMap.getAsString("retry_limit")) threw NumberFormatException here
+        // before this fix, and createCrawler runs outside storeData's try block, so an uncaught
+        // one failed the whole data-config job rather than one crawl target.
+        paramMap.put("retry_limit", "");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertNotNull("a blank retry_limit must fall back to the default instead of throwing", crawler);
+        }
+    }
 }

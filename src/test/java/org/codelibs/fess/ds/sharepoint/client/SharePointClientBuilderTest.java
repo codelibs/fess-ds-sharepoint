@@ -18,8 +18,10 @@ package org.codelibs.fess.ds.sharepoint.client;
 import org.junit.jupiter.api.TestInfo;
 
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.util.ComponentUtil;
@@ -120,5 +122,35 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
         assertEquals("testsite", client.getSiteName());
         assertEquals("https://example.com/", client.getUrl());
         assertEquals("https://example.com/sites/testsite/", client.getSiteUrl());
+    }
+
+    @Test
+    public void test_buildRoutePlanner_returnsNullWithNoProxyConfigured() {
+        final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite");
+
+        assertNull("no proxy_host/proxy_port configured must mean requests are not routed through a proxy", builder.buildRoutePlanner());
+    }
+
+    @Test
+    public void test_buildRoutePlanner_targetsTheConfiguredProxy() {
+        final SharePointClientBuilder builder = SharePointClient.builder()
+                .setUrl("https://example.com/")
+                .setSite("testsite")
+                .setProxyHost("proxy.example.com")
+                .setProxyPort(8080);
+
+        final HttpRoutePlanner routePlanner = builder.buildRoutePlanner();
+
+        assertNotNull("proxy_host/proxy_port must produce a route planner", routePlanner);
+        assertTrue("it must be a route planner that sends requests through a fixed proxy",
+                routePlanner instanceof DefaultProxyRoutePlanner);
+    }
+
+    @Test
+    public void test_buildRoutePlanner_returnsNullWhenOnlyHostIsConfigured() {
+        final SharePointClientBuilder builder =
+                SharePointClient.builder().setUrl("https://example.com/").setSite("testsite").setProxyHost("proxy.example.com");
+
+        assertNull("a proxy_host without a proxy_port must not be treated as configured", builder.buildRoutePlanner());
     }
 }

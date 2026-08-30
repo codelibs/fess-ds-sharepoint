@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
+import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -74,7 +75,8 @@ public class ListCrawlTest extends UnitDsTestCase {
             try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
                 final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
                 new ListCrawl(client, LIST_ID, "Announcements", NUMBER_PER_PAGE, new ConcurrentHashMap<>(), false, true, List.of(),
-                        List.of()).doCrawl(null, crawlingQueue);
+                        List.of(), true, FileCrawl.DEFAULT_EXTRACTOR_NAME, FileCrawl.DEFAULT_SUPPORTED_MIMETYPES,
+                        FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, null).doCrawl(null, crawlingQueue);
 
                 assertEquals("the listing must stop after its page bound", MAX_PAGES,
                         server.getRecordedRequests().stream().filter(request -> ITEMS_API.equals(request.getPath())).count());
