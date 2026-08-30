@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
@@ -241,7 +242,13 @@ public class SharePointCrawler implements Closeable {
         final Map<String, String> formsCache = new ConcurrentHashMap<>();
         if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null
                 && crawlerConfig.getInitialDocLibPath() == null) {
-            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig, sharePointGroupCache, formsCache, urlFilter));
+            // Shared by every SiteCrawl this crawl ever creates, including every subsite
+            // discovered along the way (see SiteCrawl#crawlSubsites), so a site reachable through
+            // more than one path is queued at most once. Seeded with the root's own path so a
+            // subsite that lists an ancestor - or itself - as a child cannot be queued again.
+            final Set<String> visitedSitePaths = ConcurrentHashMap.newKeySet();
+            visitedSitePaths.add(client.getSitePath());
+            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig, sharePointGroupCache, formsCache, urlFilter, 0, visitedSitePaths));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
                 crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(),
@@ -515,6 +522,8 @@ public class SharePointCrawler implements Closeable {
         private String includePattern = null;
         private String excludePattern = null;
         private String sessionId = null;
+        private boolean crawlSubsites = false;
+        private int maxDepth = 10;
 
         /**
          * Returns the SharePoint server URL.
@@ -1108,6 +1117,45 @@ public class SharePointCrawler implements Closeable {
          */
         public void setSessionId(final String sessionId) {
             this.sessionId = sessionId;
+        }
+
+        /**
+         * Returns whether a site crawl recurses into its subsites, discovered via
+         * {@code _api/web/webinfos}.
+         *
+         * @return true if subsite recursion is enabled
+         */
+        public boolean isCrawlSubsites() {
+            return crawlSubsites;
+        }
+
+        /**
+         * Sets whether a site crawl recurses into its subsites.
+         *
+         * @param crawlSubsites true to enable subsite recursion
+         */
+        public void setCrawlSubsites(final boolean crawlSubsites) {
+            this.crawlSubsites = crawlSubsites;
+        }
+
+        /**
+         * Returns how many subsite hops below the root site {@link #isCrawlSubsites()} may
+         * recurse. The root site itself is depth 0, so a value of 1 crawls the root's direct
+         * children and no further.
+         *
+         * @return the maximum subsite recursion depth
+         */
+        public int getMaxDepth() {
+            return maxDepth;
+        }
+
+        /**
+         * Sets how many subsite hops below the root site {@link #isCrawlSubsites()} may recurse.
+         *
+         * @param maxDepth the maximum subsite recursion depth
+         */
+        public void setMaxDepth(final int maxDepth) {
+            this.maxDepth = maxDepth;
         }
     }
 }

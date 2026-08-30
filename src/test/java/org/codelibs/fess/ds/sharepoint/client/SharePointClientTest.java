@@ -117,4 +117,15 @@ public class SharePointClientTest extends UnitDsTestCase {
         assertNotNull(builder2);
         // Each call should return a new builder instance
     }
+
+    @Test
+    public void test_forSitePathSharesTheConnectionPool() throws Exception {
+        final SharePointClient parent = SharePointClient.builder().setUrl("https://example.com").setSite("root").build();
+        final SharePointClient child = parent.forSitePath("/sites/root/child/");
+        assertEquals("/sites/root/child/", child.getSitePath());
+        assertEquals("https://example.com/sites/root/child/", child.getSiteUrl());
+        child.close();
+        // The parent must still be usable: closing a sibling must not release the shared pool.
+        assertNotNull("the parent client survives closing a sibling", parent.api().list().getLists());
+    }
 }

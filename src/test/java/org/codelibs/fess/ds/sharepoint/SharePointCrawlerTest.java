@@ -33,7 +33,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.ConnectionPoolTimeoutException;
+import org.codelibs.core.misc.Pair;
 import org.codelibs.fess.app.service.FailureUrlService;
+import org.codelibs.fess.crawler.container.CrawlerContainer;
+import org.codelibs.fess.crawler.entity.ExtractData;
+import org.codelibs.fess.crawler.extractor.Extractor;
+import org.codelibs.fess.crawler.extractor.ExtractorFactory;
+import org.codelibs.fess.crawler.helper.MimeTypeHelper;
+import org.codelibs.fess.crawler.helper.impl.MimeTypeHelperImpl;
 import org.codelibs.fess.ds.sharepoint.SharePointCrawler.CrawlerConfig;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
@@ -45,6 +52,7 @@ import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.helper.CrawlingInfoHelper;
+import org.codelibs.fess.helper.FileTypeHelper;
 import org.codelibs.fess.helper.SystemHelper;
 import org.codelibs.fess.opensearch.config.exentity.CrawlingConfig;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
@@ -566,6 +574,201 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
                 } finally {
                     occupiers.shutdownNow();
                 }
+            }
+        }
+    }
+
+    /**
+     * Registers a working, disconnected content extractor under "extractorFactory" (plus the
+     * MimeTypeHelper/FileTypeHelper components {@code FileCrawl} also reaches for), so a file
+     * crawled below actually reaches a produced document instead of failing at extraction - the
+     * same shape {@code FileCrawlTest#registerCapturingExtractorFactory} uses, but returning real
+     * content rather than recording the component name requested.
+     *
+     * @param content the content every extraction request returns
+     */
+    private static void registerContentExtractor(final String content) {
+        ComponentUtil.register(new MimeTypeHelperImpl(), MimeTypeHelper.class.getCanonicalName());
+        final FileTypeHelper fileTypeHelper = new FileTypeHelper();
+        fileTypeHelper.init();
+        ComponentUtil.register(fileTypeHelper, "fileTypeHelper");
+        final ExtractorFactory extractorFactory = new ExtractorFactory() {
+            {
+                this.crawlerContainer = new CrawlerContainer() {
+                    @Override
+                    @SuppressWarnings("unchecked")
+                    public <T> T getComponent(final String name) {
+                        if ("mimeTypeHelper".equals(name)) {
+                            return (T) new MimeTypeHelperImpl();
+                        }
+                        if ("extractorFactory".equals(name)) {
+                            return (T) new ExtractorFactory();
+                        }
+                        return (T) (Extractor) (in, params) -> new ExtractData(content);
+                    }
+
+                    @Override
+                    public boolean available() {
+                        return true;
+                    }
+
+                    @Override
+                    public void destroy() {
+                        // nothing to release
+                    }
+                };
+            }
+        };
+        ComponentUtil.register(extractorFactory, "extractorFactory");
+    }
+
+    /**
+     * End-to-end proof of the invariant Task 2's 403 handling exists to protect: a 403 listing a
+     * site's own subsites must not be counted as a failed crawl target, because
+     * {@code SharePointDataStore#store} suppresses the whole data config's stale-document cleanup
+     * whenever {@code getFailureCount()} is non-zero. A unit-level "doCrawl doesn't throw" check
+     * cannot show this - only driving a real {@link SharePointCrawler} end to end and reading
+     * {@link SharePointCrawler#getFailureCount()} afterwards can. This also confirms the root
+     * site's own documents are still produced - the 403 must not abandon the rest of the crawl.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doCrawl_a403OnWebinfosDoesNotFailTheCrawlOrStopTheRootSitesDocuments() throws Exception {
+        registerContentExtractor("hello world");
+
+        final String docLibUrl = "/sites/test/Shared Documents";
+        final String encodedDocLibUrl = "/sites/test/Shared%20Documents";
+        final String fileUrl = docLibUrl + "/a.txt";
+        final String encodedFileUrl = encodedDocLibUrl + "/a.txt";
+        final String sharedDocsFolderApi = "/sites/test/_api/web/GetFolderByServerRelativePath(decodedUrl='" + encodedDocLibUrl + "')";
+        final String listId = "33333333-3333-3333-3333-333333333333";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            // No top-level folders and no lists, so the "Shared Documents" fallback fires.
+            server.onPathStatus("/sites/test/_api/web/GetFolderByServerRelativePath(decodedUrl='/sites/test/')/Folders", 200,
+                    "application/json", "{\"value\": []}");
+            server.onPathStatus("/sites/test/_api/lists", 200, "application/json", "{\"value\":[]}");
+            // The subsite listing this crawl account cannot read - the case Task 2 exists for.
+            server.onPathStatus("/sites/test/_api/web/webinfos", 403, "application/json",
+                    "{\"error\":{\"message\":{\"value\":\"Access denied\"}}}");
+
+            server.onPathStatus(sharedDocsFolderApi, 200, "application/json", "{\"ItemCount\":1}");
+            server.onPathStatus(sharedDocsFolderApi + "/Folders", 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(sharedDocsFolderApi + "/Files", 200, "application/json",
+                    "{\"value\": [{\"Name\": \"a.txt\", \"ServerRelativeUrl\": \"" + fileUrl + "\"}]}");
+            server.onPathStatus("/sites/test/_api/Web/GetFolderByServerRelativePath(decodedurl='" + encodedFileUrl + "')/ListItemAllFields",
+                    200, "application/json", "{\"Id\":\"1\",\"odata.editLink\":\"Web/Lists(guid'" + listId + "')/Items(1)\"}");
+            server.onPathStatus("/sites/test/_api/Web/Lists(guid'" + listId + "')/Items(1)/FieldValuesAsText", 200, "application/json",
+                    "{}");
+            server.onPathStatus("/sites/test/_api/Web/Lists(guid'" + listId + "')/Forms", 200, "application/json",
+                    "{\"value\":[{\"Id\":\"f1\",\"ServerRelativeUrl\":\"/sites/test/Lists/Docs/DispForm.aspx\",\"FormType\":4}]}");
+            server.onPathStatus("/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='" + encodedFileUrl + "')/$value", 200,
+                    "text/plain", "hello world");
+            server.start();
+
+            final CrawlerConfig config = new CrawlerConfig();
+            config.setUrl(server.getBaseUrl());
+            config.setSiteName("test");
+            config.setCrawlSubsites(true);
+            // Avoids needing a RoleAssignments stub - not what this test is about.
+            config.setSkipRole(true);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            try {
+                Pair<Map<String, Object>, StatsKeyObject> result = null;
+                while (crawler.hasCrawlTarget() && result == null) {
+                    result = crawler.doCrawl(new DataConfig());
+                }
+
+                assertNotNull("the root site's own file must still be produced despite the 403 on webinfos", result);
+                assertEquals("a 403 listing a site's own subsites must not be counted as a failed crawl target - doing so would"
+                        + " suppress stale-document cleanup for the entire data config", 0L, crawler.getFailureCount());
+            } finally {
+                crawler.close();
+            }
+        }
+    }
+
+    /**
+     * The common shape of the permission boundary {@code webinfos} exposes, end to end: the
+     * listing succeeds - it is not security-trimmed - and names a child site the crawl account
+     * cannot read, so the 403 arrives when that child's own {@code SiteCrawl} runs, not on the
+     * listing. Before {@code SiteCrawl#doCrawl} caught it, that 403 propagated, exhausted
+     * {@code retry_limit} and left {@code getFailureCount() == 1}, which makes
+     * {@code SharePointDataStore#store} suppress the stale-document cleanup for the entire data
+     * config on every run - permanently, on any farm with one permission-partitioned subsite.
+     *
+     * <p>Only a real {@link SharePointCrawler} can show this: the retry loop and the failure
+     * counter both live there, and a unit-level check on {@code SiteCrawl} would pass either way.
+     * The document assertion is half the point - skipping the subsite must not cost the root
+     * site's own documents.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doCrawl_aListedButUnreadableSubsiteIsNotAFailure() throws Exception {
+        registerContentExtractor("hello world");
+
+        final String docLibUrl = "/sites/test/Shared Documents";
+        final String encodedDocLibUrl = "/sites/test/Shared%20Documents";
+        final String fileUrl = docLibUrl + "/a.txt";
+        final String encodedFileUrl = encodedDocLibUrl + "/a.txt";
+        final String sharedDocsFolderApi = "/sites/test/_api/web/GetFolderByServerRelativePath(decodedUrl='" + encodedDocLibUrl + "')";
+        final String subsiteFoldersApi = "/sites/test/sub/_api/web/GetFolderByServerRelativePath(decodedUrl='/sites/test/sub/')/Folders";
+        final String listId = "33333333-3333-3333-3333-333333333333";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            // No top-level folders and no lists, so the "Shared Documents" fallback fires.
+            server.onPathStatus("/sites/test/_api/web/GetFolderByServerRelativePath(decodedUrl='/sites/test/')/Folders", 200,
+                    "application/json", "{\"value\": []}");
+            server.onPathStatus("/sites/test/_api/lists", 200, "application/json", "{\"value\":[]}");
+            // The listing succeeds and names the child: webinfos is not security-trimmed.
+            server.onPathStatus("/sites/test/_api/web/webinfos", 200, "application/json",
+                    "{\"value\": [{\"Id\":\"1\",\"Title\":\"HR\",\"ServerRelativeUrl\":\"/sites/test/sub\"}]}");
+            // ... and the child's own first request is where the account's lack of access shows.
+            server.onPathStatus(subsiteFoldersApi, 403, "application/json", "{\"error\":{\"message\":{\"value\":\"Access denied\"}}}");
+
+            server.onPathStatus(sharedDocsFolderApi, 200, "application/json", "{\"ItemCount\":1}");
+            server.onPathStatus(sharedDocsFolderApi + "/Folders", 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(sharedDocsFolderApi + "/Files", 200, "application/json",
+                    "{\"value\": [{\"Name\": \"a.txt\", \"ServerRelativeUrl\": \"" + fileUrl + "\"}]}");
+            server.onPathStatus("/sites/test/_api/Web/GetFolderByServerRelativePath(decodedurl='" + encodedFileUrl + "')/ListItemAllFields",
+                    200, "application/json", "{\"Id\":\"1\",\"odata.editLink\":\"Web/Lists(guid'" + listId + "')/Items(1)\"}");
+            server.onPathStatus("/sites/test/_api/Web/Lists(guid'" + listId + "')/Items(1)/FieldValuesAsText", 200, "application/json",
+                    "{}");
+            server.onPathStatus("/sites/test/_api/Web/Lists(guid'" + listId + "')/Forms", 200, "application/json",
+                    "{\"value\":[{\"Id\":\"f1\",\"ServerRelativeUrl\":\"/sites/test/Lists/Docs/DispForm.aspx\",\"FormType\":4}]}");
+            server.onPathStatus("/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='" + encodedFileUrl + "')/$value", 200,
+                    "text/plain", "hello world");
+            server.start();
+
+            final CrawlerConfig config = new CrawlerConfig();
+            config.setUrl(server.getBaseUrl());
+            config.setSiteName("test");
+            config.setCrawlSubsites(true);
+            // Avoids needing a RoleAssignments stub - not what this test is about.
+            config.setSkipRole(true);
+
+            final SharePointCrawler crawler = new SharePointCrawler(config);
+            try {
+                // Drains the whole queue, so the unreadable subsite is actually reached: stopping
+                // at the first document would return before its SiteCrawl ever ran.
+                final List<Map<String, Object>> documents = new ArrayList<>();
+                while (crawler.hasCrawlTarget()) {
+                    final Pair<Map<String, Object>, StatsKeyObject> result = crawler.doCrawl(new DataConfig());
+                    if (result != null) {
+                        documents.add(result.getFirst());
+                    }
+                }
+
+                assertEquals(
+                        "a subsite the crawl account cannot read must be skipped, not counted as a failed crawl target -"
+                                + " counting it suppresses stale-document cleanup for the entire data config on every run",
+                        0L, crawler.getFailureCount());
+                assertEquals("the root site's own file must still be produced", 1, documents.size());
+                assertEquals("the document produced must be the root site's own file", fileUrl,
+                        documents.get(0).get(ComponentUtil.getFessConfig().getIndexFieldSite()));
+                assertEquals("the subsite must be skipped on its first 403, without spending a single retry", 1,
+                        server.getRecordedRequests().stream().filter(request -> subsiteFoldersApi.equals(request.getPath())).count());
+            } finally {
+                crawler.close();
             }
         }
     }

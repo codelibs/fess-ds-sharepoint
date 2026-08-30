@@ -144,6 +144,22 @@ public class SharePointDataStore extends AbstractDataStore {
     protected static final String SITE_PATH_PARAM = "site.path";
 
     /**
+     * Whether a site crawl recurses into its subsites, discovered via {@code _api/web/webinfos}.
+     * Defaults to {@code false}: with it unset, the crawl issues exactly the same requests it
+     * always has - including never requesting {@code webinfos} at all. {@code webinfos} is not
+     * security-trimmed, so a subsite the crawl account cannot read is skipped with a warning
+     * rather than counted as a crawl failure - see {@code SiteCrawl#doCrawl}.
+     */
+    protected static final String CRAWL_SUBSITES_PARAM = "site.crawl_subsites";
+
+    /**
+     * How many subsite hops below the root site {@link #CRAWL_SUBSITES_PARAM} may recurse. The
+     * root site itself is depth 0, so {@code site.max_depth=1} crawls the root's direct children
+     * and no further. Matches the name {@code fess-ds-json} uses for the same kind of bound.
+     */
+    protected static final String MAX_DEPTH_PARAM = "site.max_depth";
+
+    /**
      * Carries the failure count from {@link #storeData} back to {@link #store}.
      *
      * <p>It cannot be a plain field: one data store instance is registered per handler name and
@@ -382,6 +398,20 @@ public class SharePointDataStore extends AbstractDataStore {
         config.setSiteName(paramMap.getAsString("site.name"));
         if (paramMap.containsKey(SITE_PATH_PARAM)) {
             config.setSitePath(paramMap.getAsString(SITE_PATH_PARAM));
+        }
+        if (paramMap.containsKey(CRAWL_SUBSITES_PARAM)) {
+            config.setCrawlSubsites(Boolean.parseBoolean(paramMap.getAsString(CRAWL_SUBSITES_PARAM)));
+        }
+        if (paramMap.containsKey(MAX_DEPTH_PARAM)) {
+            config.setMaxDepth(parseInt(paramMap.getAsString(MAX_DEPTH_PARAM), config.getMaxDepth(), MAX_DEPTH_PARAM));
+        }
+        if (config.isCrawlSubsites() && config.getMaxDepth() < 1) {
+            // The recursion guard is depth < maxDepth and the root site is depth 0, so anything
+            // below 1 turns the feature the operator just switched on back off. Left as-is rather
+            // than corrected to a default, because there is no way to tell which of the two
+            // settings was the mistake - but not left silent.
+            logger.warn("{} is enabled but {} is {}, so no subsite will be crawled. Set {} to 1 or more to crawl the root's children.",
+                    CRAWL_SUBSITES_PARAM, MAX_DEPTH_PARAM, config.getMaxDepth(), MAX_DEPTH_PARAM);
         }
         if (paramMap.containsKey("site.list_id")) {
             config.setInitialListId(paramMap.getAsString("site.list_id"));

@@ -30,7 +30,9 @@ import org.codelibs.fess.ds.sharepoint.client2013.api.SharePoint2013Apis;
  *
  * <p>The client owns the {@link CloseableHttpClient} it was built with, including one handed to
  * {@link SharePointClientBuilder#setHttpClient}, and releases its connection pool in
- * {@link #close()}.
+ * {@link #close()}. A sibling client returned by {@link #forSitePath(String)} does not own that
+ * pool - it shares the parent's instead - so its {@link #close()} is a no-op; see that method's
+ * javadoc.
  */
 public class SharePointClient implements Closeable {
     private final String url;
@@ -41,11 +43,26 @@ public class SharePointClient implements Closeable {
     /** Kept so the connection pool can be released; the APIs below hold their own reference. */
     private final CloseableHttpClient httpClient;
 
+    /** Kept so {@link #forSitePath(String)} can hand it to the sibling it builds. */
+    private final OAuth oAuth;
+
+    /** Kept so {@link #forSitePath(String)} can hand it to the sibling it builds. */
+    private final boolean verson2013;
+
+    /**
+     * Whether this client owns {@link #httpClient} and must release it in {@link #close()}.
+     * True for a client built by {@link SharePointClientBuilder#build}; false for a sibling
+     * returned by {@link #forSitePath(String)}, which shares the owning client's connection pool
+     * instead of holding one of its own.
+     */
+    private final boolean ownsHttpClient;
+
     private SharePointApis sharePointApis;
     private final SharePointHelper sharePointHelper;
 
     /**
-     * Creates a new SharePointClient instance.
+     * Creates a new SharePointClient instance that owns {@code httpClient} and releases it in
+     * {@link #close()}.
      *
      * @param httpClient the HTTP client to use for requests
      * @param url the base URL of the SharePoint server
@@ -57,17 +74,58 @@ public class SharePointClient implements Closeable {
      */
     protected SharePointClient(final CloseableHttpClient httpClient, final String url, final String siteName, final String sitePath,
             final OAuth oAuth, final boolean verson2013) {
+        this(httpClient, url, siteName, sitePath, oAuth, verson2013, true);
+    }
+
+    /**
+     * Creates a new SharePointClient instance.
+     *
+     * @param httpClient the HTTP client to use for requests
+     * @param url the base URL of the SharePoint server
+     * @param siteName the name of the SharePoint site
+     * @param sitePath the server-relative managed path of the site, or blank to fall back to
+     *            {@code /sites/<siteName>/}
+     * @param oAuth the OAuth configuration, or null if not using OAuth
+     * @param verson2013 true if using SharePoint 2013 API
+     * @param ownsHttpClient true if this client owns {@code httpClient} and must release it in
+     *            {@link #close()}; false for a sibling created by {@link #forSitePath(String)}
+     */
+    private SharePointClient(final CloseableHttpClient httpClient, final String url, final String siteName, final String sitePath,
+            final OAuth oAuth, final boolean verson2013, final boolean ownsHttpClient) {
         this.sitePath = normalizeSitePath(sitePath, siteName);
         this.siteUrl = buildSiteUrl(url, this.sitePath);
         this.url = url;
         this.siteName = siteName;
         this.httpClient = httpClient;
+        this.oAuth = oAuth;
+        this.verson2013 = verson2013;
+        this.ownsHttpClient = ownsHttpClient;
         this.sharePointHelper = new SharePointHelper(this, verson2013);
         if (verson2013) {
             this.sharePointApis = new SharePoint2013Apis(httpClient, siteUrl, oAuth);
         } else {
             this.sharePointApis = new SharePointApis(httpClient, siteUrl, oAuth);
         }
+    }
+
+    /**
+     * Creates a sibling client bound to another server-relative site path in the same SharePoint
+     * farm - typically a subsite discovered via {@code _api/web/webinfos} - sharing this client's
+     * {@link CloseableHttpClient}, OAuth handler and SharePoint 2013 flag.
+     *
+     * <p><b>The sibling's {@link #close()} is a no-op.</b> It owns no resource of its own: the
+     * connection pool belongs to the client {@link SharePointClientBuilder#build} originally
+     * created, and only that client's {@link #close()} releases it - {@code SharePointCrawler}
+     * already calls that once for the whole crawl, however many sibling clients it built along
+     * the way. This is only safe as long as nothing closes that original client while a sibling
+     * built from it, directly or transitively, is still in use; do not give a sibling a second,
+     * independent owner.
+     *
+     * @param childSitePath the server-relative path of the site the sibling should target
+     * @return a new client for {@code childSitePath}, sharing this client's connection pool
+     */
+    public SharePointClient forSitePath(final String childSitePath) {
+        return new SharePointClient(httpClient, url, siteName, childSitePath, oAuth, verson2013, false);
     }
 
     /**
@@ -90,6 +148,13 @@ public class SharePointClient implements Closeable {
 
     /**
      * Returns the site name.
+     *
+     * <p>On a sibling created by {@link #forSitePath(String)}, this returns the <em>parent's</em>
+     * configured site name unchanged, not anything derived from the sibling's own site path -
+     * {@code forSitePath} never recomputes it. Nothing in this plugin reads a sibling's
+     * {@code getSiteName()} today (subsites are identified by {@link #getSitePath()} instead), so
+     * this is currently harmless, but a caller that adds one should not expect it to name the
+     * sibling's own site.
      *
      * @return the SharePoint site name
      */
@@ -127,16 +192,21 @@ public class SharePointClient implements Closeable {
     }
 
     /**
-     * Releases the underlying HTTP client and its connection pool.
+     * Releases the underlying HTTP client and its connection pool - unless this client is a
+     * sibling created by {@link #forSitePath(String)}, in which case this is a no-op: a sibling
+     * shares its owner's connection pool rather than holding one of its own, so it has nothing to
+     * release. See {@link #forSitePath(String)}.
      *
-     * <p>The client is unusable afterwards: the API objects it hands out all share that one
-     * {@link CloseableHttpClient}.
+     * <p>When this client does own {@link #httpClient}, it is unusable afterwards: the API
+     * objects it hands out all share that one {@link CloseableHttpClient}.
      *
      * @throws IOException if the HTTP client fails to close
      */
     @Override
     public void close() throws IOException {
-        httpClient.close();
+        if (ownsHttpClient) {
+            httpClient.close();
+        }
     }
 
     /**
