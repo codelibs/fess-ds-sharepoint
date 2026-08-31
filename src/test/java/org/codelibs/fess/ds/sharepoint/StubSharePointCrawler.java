@@ -16,6 +16,7 @@
 package org.codelibs.fess.ds.sharepoint;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,9 +34,30 @@ class StubSharePointCrawler extends SharePointCrawler {
 
     private final List<RuntimeException> pendingFailures = new ArrayList<>();
 
+    /** True for a crawler built by {@link #infinite}, which never runs out of crawl targets. */
+    private final boolean infinite;
+
     StubSharePointCrawler(final List<Map<String, Object>> results) {
+        this(results, false);
+    }
+
+    private StubSharePointCrawler(final List<Map<String, Object>> results, final boolean infinite) {
         super(stubConfig());
         this.pending = new ArrayList<>(results);
+        this.infinite = infinite;
+    }
+
+    /**
+     * Creates a crawler that reports one crawl target forever, each yielding a fresh copy of the
+     * same result, so a test can drive a loop that only an external stop signal - not exhausting
+     * the queue - can end.
+     *
+     * @param result the result to hand back on every call; copied on every call so the caller's
+     *               map is never the one {@code storeData} strips the role field out of
+     * @return a crawler with no natural end
+     */
+    static StubSharePointCrawler infinite(final Map<String, Object> result) {
+        return new StubSharePointCrawler(List.of(result), true);
     }
 
     /**
@@ -60,13 +82,16 @@ class StubSharePointCrawler extends SharePointCrawler {
 
     @Override
     public boolean hasCrawlTarget() {
-        return !pendingFailures.isEmpty() || !pending.isEmpty();
+        return infinite || !pendingFailures.isEmpty() || !pending.isEmpty();
     }
 
     @Override
     public Pair<Map<String, Object>, StatsKeyObject> doCrawl(final DataConfig dataConfig) {
         if (!pendingFailures.isEmpty()) {
             throw pendingFailures.remove(0);
+        }
+        if (infinite) {
+            return new Pair<>(new HashMap<>(pending.get(0)), new StatsKeyObject("stub"));
         }
         if (pending.isEmpty()) {
             return null;

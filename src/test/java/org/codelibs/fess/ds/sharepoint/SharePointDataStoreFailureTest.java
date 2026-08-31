@@ -18,18 +18,23 @@ package org.codelibs.fess.ds.sharepoint;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.codelibs.fess.app.service.FailureUrlService;
+import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.codelibs.fess.entity.DataStoreParams;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlingInfoHelper;
 import org.codelibs.fess.helper.SystemHelper;
+import org.codelibs.fess.opensearch.config.exentity.CrawlingConfig;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
+import org.codelibs.fess.opensearch.config.exentity.FailureUrl;
 import org.codelibs.fess.util.ComponentUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -64,6 +69,17 @@ public class SharePointDataStoreFailureTest extends UnitDsTestCase {
         final CrawlerStatsHelper crawlerStatsHelper = new CrawlerStatsHelper();
         crawlerStatsHelper.init();
         ComponentUtil.register(crawlerStatsHelper, "crawlerStatsHelper");
+
+        // storeData reaches FailureUrlService on every path that loses a crawl target. The real
+        // implementation needs OpenSearch, so register a no-op stub to keep this a self-contained
+        // unit test - registered under the class canonical name so ComponentUtil.getComponent(Class)
+        // resolves it the same way it would resolve the container's auto-scanned bean.
+        ComponentUtil.register(new FailureUrlService() {
+            @Override
+            public FailureUrl store(final CrawlingConfig crawlingConfig, final String errorName, final String url, final Throwable e) {
+                return null;
+            }
+        }, FailureUrlService.class.getCanonicalName());
     }
 
     /** A data config with the little core reads out of it before handing over to the data store. */
@@ -100,6 +116,30 @@ public class SharePointDataStoreFailureTest extends UnitDsTestCase {
         @Override
         public long getFailureCount() {
             return 1L;
+        }
+    }
+
+    /** One call {@link RecordingFailureUrlService#store} received. */
+    private static final class RecordedFailure {
+        final String errorName;
+        final String url;
+        final Throwable throwable;
+
+        RecordedFailure(final String errorName, final String url, final Throwable throwable) {
+            this.errorName = errorName;
+            this.url = url;
+            this.throwable = throwable;
+        }
+    }
+
+    /** Captures every call {@link FailureUrlService#store} receives instead of writing to OpenSearch. */
+    private static class RecordingFailureUrlService extends FailureUrlService {
+        final List<RecordedFailure> recorded = new ArrayList<>();
+
+        @Override
+        public FailureUrl store(final CrawlingConfig crawlingConfig, final String errorName, final String url, final Throwable e) {
+            recorded.add(new RecordedFailure(errorName, url, e));
+            return null;
         }
     }
 
@@ -279,5 +319,80 @@ public class SharePointDataStoreFailureTest extends UnitDsTestCase {
 
         assertNull("the clean crawl must keep its cleanup enabled", cleanParams.getAsString(DELETE_OLD_DOCS));
         assertEquals("the failing crawl must still suppress its own cleanup", "false", failingParams.getAsString(DELETE_OLD_DOCS));
+    }
+
+    /** Where {@code SiteCrawl} asks for a site's top-level folders, in {@code SharePointMockServerTest}'s style. */
+    private static final String FOLDER_API = "/sites/test/_api/web/GetFolderByServerRelativePath(decodedUrl='/sites/test/')/Folders";
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aTargetLostToExhaustedRetriesIsRecordedAsAFailureUrl() throws Exception {
+        // Retries are exhausted inside SharePointCrawler#doCrawl itself, which is the one path of
+        // the three that a stub crawler cannot exercise: replacing SharePointCrawler with a stub
+        // is exactly what would skip the retry loop this test is about. A real crawler is pointed
+        // at a server that always answers with an error, so every attempt - and there is only one,
+        // since retry_limit is 0 here - genuinely fails.
+        final RecordingFailureUrlService recordingService = new RecordingFailureUrlService();
+        ComponentUtil.register(recordingService, FailureUrlService.class.getCanonicalName());
+
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 500, "application/json", "{}");
+            server.start();
+
+            final DataStoreParams initParamMap = paramMapWithSession();
+            final SharePointDataStore dataStore = new SharePointDataStore() {
+                @Override
+                protected SharePointCrawler createCrawler(final DataStoreParams paramMap) {
+                    final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                    config.setUrl(server.getBaseUrl());
+                    config.setSiteName("test");
+                    config.setRetryLimit(0);
+                    return new SharePointCrawler(config);
+                }
+            };
+            dataStore.store(dataConfig(), new CapturingIndexUpdateCallback(), initParamMap);
+
+            assertEquals("the failed target must be recorded once", 1, recordingService.recorded.size());
+            assertNotNull("the record must carry the throwable", recordingService.recorded.get(0).throwable);
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aCrawlingAccessExceptionIsRecordedAsAFailureUrl() {
+        final RecordingFailureUrlService recordingService = new RecordingFailureUrlService();
+        ComponentUtil.register(recordingService, FailureUrlService.class.getCanonicalName());
+
+        final DataStoreParams initParamMap = paramMapWithSession();
+        final SharePointDataStore dataStore = new SharePointDataStore() {
+            @Override
+            protected SharePointCrawler createCrawler(final DataStoreParams paramMap) {
+                return new StubSharePointCrawler(List.of()).failingOnceWith(
+                        new DataStoreCrawlingException("stub", "Failed to crawl stub", new IOException("the farm hung up")));
+            }
+        };
+        dataStore.store(dataConfig(), new CapturingIndexUpdateCallback(), initParamMap);
+
+        assertEquals("the failed target must be recorded once", 1, recordingService.recorded.size());
+        assertNotNull("the record must carry the throwable", recordingService.recorded.get(0).throwable);
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_anUnexpectedThrowableIsRecordedAsAFailureUrl() {
+        final RecordingFailureUrlService recordingService = new RecordingFailureUrlService();
+        ComponentUtil.register(recordingService, FailureUrlService.class.getCanonicalName());
+
+        final DataStoreParams initParamMap = paramMapWithSession();
+        final SharePointDataStore dataStore = new SharePointDataStore() {
+            @Override
+            protected SharePointCrawler createCrawler(final DataStoreParams paramMap) {
+                return new StubSharePointCrawler(List.of()).failingOnceWith(new IllegalStateException("unexpected"));
+            }
+        };
+        dataStore.store(dataConfig(), new CapturingIndexUpdateCallback(), initParamMap);
+
+        assertEquals("the failed target must be recorded once", 1, recordingService.recorded.size());
+        assertNotNull("the record must carry the throwable", recordingService.recorded.get(0).throwable);
     }
 }

@@ -31,6 +31,7 @@ import org.apache.http.client.config.RequestConfig;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.core.misc.Pair;
+import org.codelibs.fess.app.service.FailureUrlService;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
@@ -167,6 +168,7 @@ public class SharePointCrawler implements Closeable {
             crawlerStatsHelper.begin(statsKey);
             int retryCount = 0;
             boolean succeeded = false;
+            RuntimeException lastFailure = null;
             while (retryCount <= config.getRetryLimit()) {
                 try {
                     final Map<String, Object> dataMap = crawl.doCrawl(dataConfig, crawlingQueue);
@@ -177,12 +179,14 @@ public class SharePointCrawler implements Closeable {
                     succeeded = true;
                     break;
                 } catch (final SharePointServerException e) {
+                    lastFailure = e;
                     if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
                     } else {
                         logger.warn("Api server error: {}", e.getMessage(), e);
                     }
                 } catch (final SharePointClientException e) {
+                    lastFailure = e;
                     if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Error occured: {}  [Retry:{}]", e.getMessage(), retryCount);
                     } else {
@@ -196,16 +200,31 @@ public class SharePointCrawler implements Closeable {
                 crawlerStatsHelper.record(statsKey, StatsAction.EXCEPTION.name().toLowerCase(Locale.ENGLISH) + "@" + retryCount);
             }
             if (!succeeded) {
-                // Giving up here loses every document this unit would have produced, and the
-                // caller cannot tell: the loop above just moves on to the next queue entry and
-                // ends the unit with the same done() a success ends with. Count it so the caller
-                // can decline to delete the documents this crawl failed to refresh.
+                // Losing this target loses every document it would have produced. Count it so the
+                // crawl can decline to delete stale documents, and record it so an operator can
+                // find it in the failure URL list instead of only in the log.
                 failureCount.incrementAndGet();
                 logger.warn("Gave up on {} after {} attempt(s).", statsKey.getId(), retryCount);
+                if (lastFailure != null) {
+                    storeFailureUrl(dataConfig, statsKey, lastFailure);
+                }
             }
             crawlerStatsHelper.done(statsKey);
         }
         return null;
+    }
+
+    /**
+     * Records a crawl unit lost to exhausted retries through the failure URL service, so an
+     * operator can find it in the admin UI instead of only in the log.
+     *
+     * @param dataConfig the data configuration being crawled
+     * @param statsKey identifies the crawl unit that was given up on
+     * @param lastFailure the exception from the final retry attempt
+     */
+    private void storeFailureUrl(final DataConfig dataConfig, final StatsKeyObject statsKey, final RuntimeException lastFailure) {
+        ComponentUtil.getComponent(FailureUrlService.class)
+                .store(dataConfig, lastFailure.getClass().getCanonicalName(), statsKey.getId(), lastFailure);
     }
 
     /**
