@@ -120,6 +120,34 @@ public class SharePointClientBuilderTest extends UnitDsTestCase {
     }
 
     @Test
+    public void test_sitePathDefaultsToTheSitesManagedPath() {
+        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com").setSite("testsite").build();
+        assertEquals("the default site path is unchanged", "/sites/testsite/", client.getSitePath());
+        assertEquals("the default site URL is unchanged", "https://example.com/sites/testsite/", client.getSiteUrl());
+    }
+
+    @Test
+    public void test_sitePathAcceptsAnotherManagedPath() {
+        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com").setSitePath("/teams/eng").build();
+        assertEquals("a leading and trailing slash are added", "/teams/eng/", client.getSitePath());
+        assertEquals("https://example.com/teams/eng/", client.getSiteUrl());
+    }
+
+    @Test
+    public void test_sitePathAcceptsTheRootSiteCollection() {
+        final SharePointClient client = SharePointClient.builder().setUrl("https://example.com").setSitePath("/").build();
+        assertEquals("/", client.getSitePath());
+        assertEquals("the root site collection has no path segment", "https://example.com/", client.getSiteUrl());
+    }
+
+    @Test
+    public void test_sitePathWinsOverSiteName() {
+        final SharePointClient client =
+                SharePointClient.builder().setUrl("https://example.com").setSite("ignored").setSitePath("teams/eng/").build();
+        assertEquals("/teams/eng/", client.getSitePath());
+    }
+
+    @Test
     public void test_buildRoutePlanner_returnsNullWithNoProxyConfigured() {
         final SharePointClientBuilder builder = SharePointClient.builder().setUrl("https://example.com/").setSite("testsite");
 

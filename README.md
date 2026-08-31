@@ -120,6 +120,7 @@ url={URL of SharePoint}
 auth.ntlm.user={Name of SharePoint User}
 auth.ntlm.password={Passsword}
 site.name={SiteName of crawling target}
+site.path={Server-relative managed path of the site, e.g. /teams/eng or / for the root site collection. Optional: when set, site.name is no longer required. Leaving it unset keeps the existing /sites/{site.name} behavior exactly.}
 site.list_name={ListName of crawling target}
 ## (Option parameter)
 list.item.content.include_fields={FieldName to include to content.}
@@ -161,6 +162,7 @@ url={URL of SharePoint}
 auth.ntlm.user={Name of SharePoint User}
 auth.ntlm.password={Passsword}
 site.name={SiteName of crawling target}
+site.path={Server-relative managed path of the site, e.g. /teams/eng or / for the root site collection. Optional: when set, site.name is no longer required. Leaving it unset keeps the existing /sites/{site.name} behavior exactly.}
 site.doclib_path={DocumentLibrary path. Ex) /Shared Documents}
 ## (Option parameter)
 ignore_error={true or false. Log a content extraction failure instead of failing the crawl target. Default is false. See "ignore_error" above.}

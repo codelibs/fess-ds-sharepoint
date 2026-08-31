@@ -119,6 +119,34 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
     }
 
     @Test
+    public void test_initialDocLibPathUsesTheDefaultManagedPath() {
+        final CrawlerConfig config = new CrawlerConfig();
+        config.setSiteName("mysite");
+        config.setInitialDocLibPath("/Shared Documents");
+
+        assertEquals("unchanged when site.path is unset", "/sites/mysite/Shared Documents", config.getInitialDocLibPath());
+    }
+
+    @Test
+    public void test_initialDocLibPathFollowsTheConfiguredSitePath() {
+        final CrawlerConfig config = new CrawlerConfig();
+        config.setSitePath("/teams/eng");
+        config.setInitialDocLibPath("/Shared Documents");
+
+        assertEquals("site.path is honoured here too", "/teams/eng/Shared Documents", config.getInitialDocLibPath());
+    }
+
+    @Test
+    public void test_sitePathAloneSatisfiesValidation() {
+        final CrawlerConfig config = new CrawlerConfig();
+        config.setUrl("https://example.com/");
+        config.setSitePath("/teams/eng");
+
+        // site.name is not set; constructing must not throw a ValidationException for it.
+        assertDoesNotThrow(() -> new SharePointCrawler(config), "site.path alone must satisfy the site.name/site.path validation");
+    }
+
+    @Test
     public void test_setSupportedMimeTypes_blankValueFallsBackToTheDefault() {
         final CrawlerConfig config = new CrawlerConfig();
 

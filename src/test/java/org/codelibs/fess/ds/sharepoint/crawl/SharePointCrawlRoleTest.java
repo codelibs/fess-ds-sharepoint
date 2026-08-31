@@ -128,7 +128,7 @@ public class SharePointCrawlRoleTest extends UnitDsTestCase {
         private final SharePointApis apis;
 
         StubClient(final GetListItemRoleResponse response) {
-            super(null, "http://localhost/", "test", null, false);
+            super(null, "http://localhost/", "test", null, null, false);
             apis = new SharePointApis(null, "http://localhost/sites/test/", null) {
                 @Override
                 public ListApis list() {

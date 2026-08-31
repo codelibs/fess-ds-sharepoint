@@ -48,6 +48,7 @@ public class SharePointClientBuilder {
 
     private String url = null;
     private String siteName = null;
+    private String sitePath = null;
     private SharePointCredential credential = null;
     private OAuth oAuth = null;
     private RequestConfig requestConfig = null;
@@ -81,6 +82,19 @@ public class SharePointClientBuilder {
      */
     public SharePointClientBuilder setSite(final String siteName) {
         this.siteName = siteName;
+        return this;
+    }
+
+    /**
+     * Sets the server-relative managed path of the site, such as {@code /teams/eng} or {@code /}
+     * for the root site collection. Overrides the {@code /sites/<siteName>} path this connector
+     * builds by default; leaving this unset keeps that default exactly.
+     *
+     * @param sitePath the server-relative site path
+     * @return this builder instance
+     */
+    public SharePointClientBuilder setSitePath(final String sitePath) {
+        this.sitePath = sitePath;
         return this;
     }
 
@@ -170,7 +184,7 @@ public class SharePointClientBuilder {
         if (oAuth != null) {
             oAuth.updateAccessToken(httpClient);
         }
-        return new SharePointClient(httpClient, url, siteName, oAuth, verson2013);
+        return new SharePointClient(httpClient, url, siteName, sitePath, oAuth, verson2013);
     }
 
     private CloseableHttpClient buildHttpClient() {
