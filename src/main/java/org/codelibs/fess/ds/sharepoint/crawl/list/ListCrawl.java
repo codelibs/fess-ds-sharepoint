@@ -51,25 +51,37 @@ public class ListCrawl extends SharePointCrawl {
     /**
      * Upper bound on the number of pages of list items this crawl may fetch.
      *
-     * <p>The listing ends when a page comes back empty. A server that ignores the paging token
-     * answers the same first page instead, so without this bound the loop would neither finish
-     * nor stay within memory - it keeps offering the same items to the crawling queue. This is
-     * the same hazard {@link org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl} guards
-     * against for the files inside one folder.
+     * <p>The listing ends when a page comes back empty, or once {@link
+     * #MAX_CONSECUTIVE_STALLED_PAGES} requests in a row fail to advance the paging cursor - see
+     * that constant for why one such response is tolerated and retried rather than ending the
+     * listing outright. A server that never honors the {@code p_ID} paging token is caught
+     * within a handful of requests that way, not by this bound.
      *
-     * <p>Unlike that guard, this one does not cap an item count. {@link
-     * org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems}'s paging token
-     * advances by item ID ({@code p_ID}), not by an offset into the list, so this bound caps an
-     * ID range instead: at the default 100 items per request it is an ID range of 1,000,000, and
-     * raising {@code list.items.number_per_page} raises the covered ID range in proportion. A
-     * real list's item IDs only grow, including past deleted items, so a long-lived list can run
-     * past this ceiling with far fewer live items than the ceiling number suggests - a 3,000-item
-     * list whose IDs have reached 50,000 after years of adds and deletes is nowhere near it. The
-     * value here gives that kind of list 20x headroom over that example while still bounding a
-     * runaway server, one that never stops paging, to a finite number of requests (at most 10,000
-     * against the default page size).
+     * <p>This bound instead protects against a list that is genuinely huge: with the cursor
+     * tracking real item IDs, each loop iteration is one real page or one retry of a stalled
+     * one, so this is a true bound on requests. At the default 100 items per request it allows
+     * up to 1,000,000 items, and raising {@code list.items.number_per_page} raises that ceiling
+     * in proportion. Reaching it still truncates the listing - the warning logged at that point
+     * is not counted as a crawl failure, so the stale-document cleanup still runs and documents
+     * past the bound can be removed from the index - but doing so now takes a list with that
+     * many live items, not merely one whose lowest item ID happens to be high.
      */
     private static final int MAX_PAGES = 10000;
+
+    /**
+     * How many consecutive page requests may fail to advance the paging cursor before the
+     * listing gives up on the list.
+     *
+     * <p>A single non-advancing response is tolerated and simply retried with the same cursor
+     * rather than treated as proof the server is permanently broken: a stale replica, a cache,
+     * or a retried request can repeat a page once and then continue correctly, and
+     * re-requesting the same cursor is exactly the retry that recovers from that. Only a run of
+     * these in a row - never once advancing after this many attempts - means the server is not
+     * honoring {@code p_ID} paging at all, and continuing would just keep re-reading the same
+     * items. This keeps a permanently broken server to a handful of requests rather than the
+     * {@link #MAX_PAGES} bound.
+     */
+    private static final int MAX_CONSECUTIVE_STALLED_PAGES = 3;
 
     /** SharePoint list identifier */
     private final String id;
@@ -167,7 +179,17 @@ public class ListCrawl extends SharePointCrawl {
         final GetListsResponse.SharePointList sharePointList = getListResponse.getList();
         final String listId = sharePointList.getId();
         final String listName = sharePointList.getListName();
+        // The item-ID cursor GetListItems's $skiptoken resumes from: SharePoint returns only
+        // items whose ID is greater than this value. It is not an offset into the list, so it
+        // must advance to the highest item ID actually seen, not by a fixed count per page. 0 is
+        // a safe "nothing seen yet" sentinel because SharePoint list item IDs are documented to
+        // start at 1: no real item can be mistaken for a page that failed to move the cursor off
+        // its initial value.
         int start = 0;
+        // How many requests in a row have come back without advancing the cursor - see
+        // MAX_CONSECUTIVE_STALLED_PAGES for why a small number of these is tolerated and retried
+        // rather than ending the listing on the first one.
+        int consecutiveStalledPages = 0;
         for (int page = 0; page < MAX_PAGES; page++) {
             GetListItemsResponse getListItemsResponse;
             if (listId == null) {
@@ -195,11 +217,41 @@ public class ListCrawl extends SharePointCrawl {
                         .setStart(start)
                         .execute();
             }
-            if (getListItemsResponse.getListItems().isEmpty()) {
+            final List<GetListItemsResponse.ListItem> listItems = getListItemsResponse.getListItems();
+            if (listItems.isEmpty()) {
                 break;
             }
-            start += numberPerPage;
-            getListItemsResponse.getListItems().forEach(item -> {
+
+            // The cursor advances to the largest item ID this page returned - the maximum rather
+            // than the last element, since that costs nothing and does not assume the server
+            // orders items by ascending ID. An item whose ID does not parse as a number cannot
+            // contribute to that maximum, but it is still a real item and is queued below like
+            // any other - see the forEach beneath this loop.
+            int maxId = start;
+            boolean sawNumericId = false;
+            for (final GetListItemsResponse.ListItem item : listItems) {
+                try {
+                    final int itemId = Integer.parseInt(item.getId());
+                    sawNumericId = true;
+                    if (itemId > maxId) {
+                        maxId = itemId;
+                    }
+                } catch (final NumberFormatException e) {
+                    // Handled above via sawNumericId: one bad ID alongside otherwise-good ones
+                    // does not invalidate the page, and the item itself is still queued below.
+                }
+            }
+
+            // Queued unconditionally, before the cursor is evaluated below: whether or not this
+            // loop can trust this page to have advanced the cursor, it is still a page of real
+            // items SharePoint just returned. An ItemCrawl/ItemAttachmentsCrawl is idempotent -
+            // the same item ID produces the same request and the same document - so queueing a
+            // repeated page again costs a little duplicate work and can never lose anything.
+            // Evaluating the cursor first and skipping this queueing on a stalled or
+            // unparseable page, as an earlier version of this method did, can: a single
+            // non-advancing response does not prove every item still to come is unreachable, and
+            // discarding this page's items on that guess throws real data away for nothing.
+            listItems.forEach(item -> {
                 if (item.getTitle().startsWith("$Resources")) {
                     return;
                 }
@@ -213,14 +265,29 @@ public class ListCrawl extends SharePointCrawl {
                                     roles, ignoreError, extractorName, supportedMimeTypes, maxContentLength, formsCache, urlFilter));
                 }
             });
+
             if (page == MAX_PAGES - 1) {
-                // "Pages" here is really an item-ID range: GetListItems's paging token advances
-                // by item ID (p_ID), not by an offset, so this stops at an ID ceiling rather than
-                // an item count. Truncating here is not counted as a crawl failure, so the
-                // stale-document cleanup still runs and documents past the bound can be removed
-                // from the index.
                 logger.warn("Stopped listing the items of list {} after {} pages; the listing may be truncated.", listName, MAX_PAGES);
             }
+
+            if (!sawNumericId) {
+                logger.warn("Stopped listing the items of list {} because none of the {} item(s) on its page had a numeric ID; "
+                        + "the server is not honoring $skiptoken paging.", listName, listItems.size());
+                break;
+            }
+            if (maxId <= start) {
+                consecutiveStalledPages++;
+                if (consecutiveStalledPages >= MAX_CONSECUTIVE_STALLED_PAGES) {
+                    logger.warn("Stopped listing the items of list {} after {} consecutive requests that did not advance the paging "
+                            + "token; the server is ignoring it.", listName, consecutiveStalledPages);
+                    break;
+                }
+                // Retry with the same cursor rather than treating one non-advancing response as
+                // proof the server is permanently broken - see MAX_CONSECUTIVE_STALLED_PAGES.
+                continue;
+            }
+            consecutiveStalledPages = 0;
+            start = maxId;
         }
         return null;
     }

@@ -117,9 +117,12 @@ public class GetListItems2013 extends GetListItems {
     }
 
     /**
-     * Sets the starting index for pagination.
+     * Sets the item-ID cursor the {@code $skiptoken=Paged=TRUE&amp;p_ID=...} paging token resumes
+     * from: SharePoint returns only items whose ID is greater than this value. This is not an
+     * offset into the list - passing an offset instead of the highest item ID already read
+     * silently re-reads whatever items happen to have that item ID or the next ones after it.
      *
-     * @param start the starting index for retrieving items
+     * @param start the item ID to resume paging after
      * @return this instance for method chaining
      */
     @Override
