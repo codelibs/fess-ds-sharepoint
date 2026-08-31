@@ -173,8 +173,9 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     private void addRoleAssignments(final List<Map<String, Object>> values, final GetListItemRoleResponse response) {
         values.stream().filter(value -> !isLimitedAccessOnly(value)).forEach(value -> {
             final String principalId = value.get("PrincipalId").toString();
-            if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
-                response.addSharePointGroup(sharePointGroupCache.get(principalId));
+            final GetListItemRoleResponse.SharePointGroup cachedGroup = getCachedSharePointGroup(principalId);
+            if (cachedGroup != null) {
+                response.addSharePointGroup(cachedGroup);
                 return;
             }
             final Map<String, Object> memberResponseMap = resolveMember(principalId, value);
@@ -323,6 +324,27 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     }
 
     /**
+     * Returns the group already cached under the given key, or null if there is none (or no cache
+     * at all).
+     *
+     * <p>Reads the cache under the one monitor described in
+     * {@link #cacheAndFillSharePointGroup}, which is what makes a cache hit mean a <em>complete</em>
+     * group: the entry is published before its members are read, so a reader that did not take the
+     * monitor could be handed a group whose member lists another thread is still appending to.
+     *
+     * @param cacheKey the key to look up
+     * @return the cached group, or null
+     */
+    private GetListItemRoleResponse.SharePointGroup getCachedSharePointGroup(final String cacheKey) {
+        if (sharePointGroupCache == null) {
+            return null;
+        }
+        synchronized (sharePointGroupCache) {
+            return sharePointGroupCache.get(cacheKey);
+        }
+    }
+
+    /**
      * Registers a still-empty SharePoint group in the cache and then reads its members into it.
      *
      * <p>The group has to reach the cache before the descent, because SharePoint lets groups
@@ -332,22 +354,44 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
      * and to every later item the group protects, each of them silently indexed without any of
      * this group's permissions. Removing the entry costs one rebuild; keeping it costs the roles.
      *
+     * <p><b>Why one monitor, on the cache map itself.</b> The publish-before-descent above is
+     * exactly what a second crawl thread must not observe: it would find the entry, take it as a
+     * finished group, and index its items with none of that group's permissions - and the descent
+     * fills the group through plain {@link java.util.ArrayList} appends, which are not safe to read
+     * concurrently anyway. Holding one monitor - the cache itself - across publish <em>and</em>
+     * fill, and taking that same monitor for every read of the cache
+     * ({@link #getCachedSharePointGroup}), means a thread either builds the group itself or waits
+     * and gets it complete. The monitor is reentrant, so the descent still sees the partially
+     * published entry it needs to break a membership cycle, and there is only ever one lock, so
+     * there is no ordering to deadlock on.
+     *
+     * <p>The two obvious "improvements" are both wrong here. <b>Per-key locks</b> deadlock on
+     * cyclic membership: group A's thread holds A and waits for B while group B's thread holds B
+     * and waits for A - the very cycle the publish-before-descent exists to survive. A
+     * <b>{@link java.util.concurrent.CompletableFuture}-based cache</b> deadlocks on the same
+     * cycle for the same reason, with the added twist that the thread would wait on its own
+     * unfinished future when a group transitively contains itself. The cost of the single monitor
+     * is that the first read of any one group is serialized across crawl threads; every later
+     * reference to it is a map lookup.
+     *
      * @param cacheKey the key this group is cached under
      * @param sharePointGroup the group to register and populate
      * @param id the ID of the SharePoint group, used to read its members
      */
     private void cacheAndFillSharePointGroup(final String cacheKey, final GetListItemRoleResponse.SharePointGroup sharePointGroup,
             final String id) {
-        if (sharePointGroupCache != null) {
-            sharePointGroupCache.put(cacheKey, sharePointGroup);
-        }
-        try {
+        if (sharePointGroupCache == null) {
             fillSharePointGroup(sharePointGroup, id);
-        } catch (final RuntimeException e) {
-            if (sharePointGroupCache != null) {
+            return;
+        }
+        synchronized (sharePointGroupCache) {
+            sharePointGroupCache.put(cacheKey, sharePointGroup);
+            try {
+                fillSharePointGroup(sharePointGroup, id);
+            } catch (final RuntimeException e) {
                 sharePointGroupCache.remove(cacheKey);
+                throw e;
             }
-            throw e;
         }
     }
 
@@ -408,8 +452,9 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                 break;
             case 8:
                 // SharePoint Group
-                if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
-                    sharePointGroup.addSharePointGroup(sharePointGroupCache.get(userId));
+                final GetListItemRoleResponse.SharePointGroup cachedGroup = getCachedSharePointGroup(userId);
+                if (cachedGroup != null) {
+                    sharePointGroup.addSharePointGroup(cachedGroup);
                 } else {
                     final GetListItemRoleResponse.SharePointGroup userSharePointGroup =
                             new GetListItemRoleResponse.SharePointGroup(userId, userTitle);
