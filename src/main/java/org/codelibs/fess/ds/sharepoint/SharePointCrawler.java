@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.config.RequestConfig;
@@ -81,6 +82,17 @@ public class SharePointCrawler implements Closeable {
     private SharePointBackoff backoff = SharePointBackoff.defaults();
 
     /**
+     * Answers whether the job this crawl belongs to has been asked to stop.
+     *
+     * <p>Core's stop is a flag, not an interrupt: {@code AbstractDataStore#stop} clears
+     * {@code alive} and nothing interrupts the crawling thread. {@code SharePointDataStore}
+     * supplies a supplier reading that flag, so the queue loop below can notice it too - see
+     * {@link #doCrawl} for the window that remains. Defaults to "never stop" so a crawler built
+     * outside {@code SharePointDataStore} behaves exactly as it did before.
+     */
+    private BooleanSupplier stopRequested = () -> false;
+
+    /**
      * Creates a new SharePointCrawler with the specified configuration.
      *
      * @param config the crawler configuration
@@ -134,9 +146,26 @@ public class SharePointCrawler implements Closeable {
         }
         if ("2013".equals(config.getSharePointVersion())) {
             builder.apply2013();
+            if (StringUtils.isNotBlank(config.getOauthClientId())) {
+                // Every SharePoint 2013 API call in this plugin goes through
+                // SharePointApi#doXmlRequest, which never calls OAuth#apply, or through
+                // GetFile2013#execute, which calls the HTTP client directly and does not either.
+                // No call under client2013 uses doJsonRequest, the one path that applies the
+                // token. So auth.oauth.* with sp.version=2013 sends no Authorization header at
+                // all, and the operator sees only unexplained 401s.
+                logger.warn("auth.oauth.* is configured together with sp.version=2013, but no SharePoint 2013 request applies an OAuth"
+                        + " token, so every request will be sent unauthenticated. Use auth.ntlm.* for SharePoint 2013.");
+            }
         }
         if (StringUtils.isNotBlank(config.getProxyHost())) {
-            builder.setProxyHost(config.getProxyHost()).setProxyPort(config.getProxyPort());
+            if (config.getProxyPort() > 0) {
+                builder.setProxyHost(config.getProxyHost()).setProxyPort(config.getProxyPort());
+            } else {
+                // SharePointClientBuilder#buildRoutePlanner returns null unless both are set, so
+                // this combination silently sends every request direct.
+                logger.warn("proxy_host is set to \"{}\" but proxy_port is not a positive number ({}), so no proxy is used at all."
+                        + " Set both proxy_host and proxy_port.", config.getProxyHost(), config.getProxyPort());
+            }
         }
         return builder.build();
     }
@@ -205,20 +234,24 @@ public class SharePointCrawler implements Closeable {
 
     private void setFirstCrawl(final CrawlerConfig crawlerConfig) {
         final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = new ConcurrentHashMap<>();
+        // Keyed by listId, shared the same way sharePointGroupCache is: getForms() depends only
+        // on the list, but is otherwise re-fetched once per list item, per file, and per
+        // attachment - see ItemCrawl, FolderCrawl and ItemAttachmentsCrawl.
+        final Map<String, String> formsCache = new ConcurrentHashMap<>();
         if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null
                 && crawlerConfig.getInitialDocLibPath() == null) {
-            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig, sharePointGroupCache, urlFilter));
+            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig, sharePointGroupCache, formsCache, urlFilter));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
                 crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(),
-                        crawlerConfig.listItemNumPerPages, sharePointGroupCache, crawlerConfig.isSubPage(), crawlerConfig.isSkipRole(),
-                        crawlerConfig.getListContentIncludeFields(), crawlerConfig.getListContentExcludeFields(),
-                        crawlerConfig.isIgnoreError(), crawlerConfig.getExtractorName(), crawlerConfig.getSupportedMimeTypes(),
-                        crawlerConfig.getMaxContentLength(), urlFilter));
+                        crawlerConfig.listItemNumPerPages, sharePointGroupCache, formsCache, crawlerConfig.isSubPage(),
+                        crawlerConfig.isSkipRole(), crawlerConfig.getListContentIncludeFields(),
+                        crawlerConfig.getListContentExcludeFields(), crawlerConfig.isIgnoreError(), crawlerConfig.getExtractorName(),
+                        crawlerConfig.getSupportedMimeTypes(), crawlerConfig.getMaxContentLength(), urlFilter));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
                 crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), crawlerConfig.isSkipRole(),
-                        sharePointGroupCache, crawlerConfig.isIgnoreError(), crawlerConfig.getExtractorName(),
+                        sharePointGroupCache, formsCache, crawlerConfig.isIgnoreError(), crawlerConfig.getExtractorName(),
                         crawlerConfig.getSupportedMimeTypes(), crawlerConfig.getMaxContentLength(), urlFilter));
             }
         }
@@ -244,6 +277,26 @@ public class SharePointCrawler implements Closeable {
     }
 
     /**
+     * Supplies the signal {@link #doCrawl} checks to decide whether the job has been asked to stop.
+     *
+     * @param stopRequested returns true once the crawl should stop; must be safe to call from the
+     *            crawling thread while another thread flips whatever it reads
+     */
+    public void setStopRequested(final BooleanSupplier stopRequested) {
+        this.stopRequested = stopRequested;
+    }
+
+    /**
+     * Returns the configuration this crawler was built from, for a test that needs to see what
+     * {@code SharePointDataStore#createCrawler} made of a set of data config parameters.
+     *
+     * @return the configuration passed to the constructor
+     */
+    CrawlerConfig getCrawlerConfig() {
+        return config;
+    }
+
+    /**
      * Appends a crawl unit directly to the queue, for a test that needs {@link #doCrawl} to see a
      * particular unit's behavior without it coming from real discovery (a folder or list listing).
      *
@@ -256,12 +309,27 @@ public class SharePointCrawler implements Closeable {
     /**
      * Performs a crawl operation.
      *
+     * <p>This drains the queue until a crawl unit produces a document, so a single call can span
+     * many crawl units and many requests - a {@code FolderCrawl} alone makes three requests per
+     * file for a whole folder listing and then returns null, which counts as success here and
+     * sends this loop straight to the next queue entry. The caller's own {@code alive} check only
+     * runs between the documents this returns, so without the {@link #stopRequested} checks below
+     * an operator's stop could not take effect until a whole queue's worth of listings had
+     * finished. The checks bound that to one crawl unit: the loop stops before polling the next
+     * queue entry, and a target being retried stops before waiting out a backoff and before
+     * spending another attempt. A listing already in progress inside {@code SharePointCrawl#doCrawl}
+     * still runs to completion - those inner loops take no stop signal.
+     *
      * @param dataConfig the data configuration
      * @return a pair containing the crawled data map and stats key, or null if no data
      */
     public Pair<Map<String, Object>, StatsKeyObject> doCrawl(final DataConfig dataConfig) {
         final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
         while (!crawlingQueue.isEmpty()) {
+            if (stopRequested.getAsBoolean()) {
+                logger.info("A stop was requested; leaving {} crawl target(s) uncrawled.", crawlingQueue.size());
+                return null;
+            }
             final SharePointCrawl crawl = crawlingQueue.poll();
             if (crawl == null) {
                 continue;
@@ -271,7 +339,7 @@ public class SharePointCrawler implements Closeable {
             int retryCount = 0;
             boolean succeeded = false;
             RuntimeException lastFailure = null;
-            while (retryCount <= config.getRetryLimit()) {
+            while (retryCount <= config.getRetryLimit() && !stopRequested.getAsBoolean()) {
                 try {
                     final Map<String, Object> dataMap = crawl.doCrawl(dataConfig, crawlingQueue);
                     crawlerStatsHelper.record(statsKey, StatsAction.ACCESSED);
@@ -289,7 +357,7 @@ public class SharePointCrawler implements Closeable {
                         // just said it is overloaded. Only a genuine 503 waits - a 404 or 403
                         // retrying anyway is not evidence of load, so it is not worth delaying.
                         if (e.getStatusCode() == 503) {
-                            backoff.await(retryCount);
+                            awaitUnlessStopping(retryCount);
                         }
                     } else {
                         logger.warn("Api server error: {}", e.getMessage(), e);
@@ -303,7 +371,7 @@ public class SharePointCrawler implements Closeable {
                         // SharePointClientException(String, int)), so a 503 from a file download
                         // backs off exactly like a 503 from any other API call.
                         if (e.getStatusCode() == 503) {
-                            backoff.await(retryCount);
+                            awaitUnlessStopping(retryCount);
                         }
                     } else {
                         logger.warn("Error occured. {}", e.getMessage(), e);
@@ -320,7 +388,15 @@ public class SharePointCrawler implements Closeable {
                 // crawl can decline to delete stale documents, and record it so an operator can
                 // find it in the failure URL list instead of only in the log.
                 failureCount.incrementAndGet();
-                logger.warn("Gave up on {} after {} attempt(s).", statsKey.getId(), retryCount);
+                if (retryCount == 0 && lastFailure == null && stopRequested.getAsBoolean()) {
+                    // The retry loop's own condition is the first stop check made after this
+                    // target was polled, so a stop requested in the window between the queue
+                    // check above and that condition leaves retryCount at 0 and lastFailure null
+                    // without a single attempt having been made.
+                    logger.warn("Gave up on {}: a stop was requested before it could be attempted.", statsKey.getId());
+                } else {
+                    logger.warn("Gave up on {} after {} attempt(s).", statsKey.getId(), retryCount);
+                }
                 if (lastFailure != null) {
                     storeFailureUrl(dataConfig, statsKey, lastFailure);
                 }
@@ -331,8 +407,35 @@ public class SharePointCrawler implements Closeable {
     }
 
     /**
+     * Waits out the backoff for the given retry, unless the job has been asked to stop.
+     *
+     * <p>The wait is up to about 38.7 seconds by default - the backoff's 30-second cap is applied
+     * before jitter, which can scale it up to 129% - and the crawling thread is never interrupted,
+     * so sitting it out after a stop is exactly the delay an operator experiences as the stop
+     * button doing nothing. Skipping it does not by itself end the retry loop; the same flag in
+     * that loop's own condition does, on the next check.
+     *
+     * @param retryCount the zero-based retry this wait precedes
+     */
+    private void awaitUnlessStopping(final int retryCount) {
+        if (stopRequested.getAsBoolean()) {
+            return;
+        }
+        backoff.await(retryCount);
+    }
+
+    /**
      * Records a crawl unit lost to exhausted retries through the failure URL service, so an
      * operator can find it in the admin UI instead of only in the log.
+     *
+     * <p>The value stored in that record's URL column is the stats key's id, which is not a URL:
+     * every {@code SharePointCrawl} builds it as {@code <type>#<identifier>}, so it reads as
+     * {@code file#/sites/x/a.pdf} or {@code folder#/sites/x/docs} for the paths that have a
+     * server-relative URL to name, and as {@code site#mysite}, {@code list#Tasks:<list id>},
+     * {@code item#Tasks:5} or {@code item_attachment#Tasks:5} for the paths that do not. It
+     * identifies the lost crawl unit; it is not something that can be opened or re-crawled as a
+     * URL. {@code SharePointDataStore#storeData} stores its own failure records for the exceptions
+     * that escape this method, and those carry a third and fourth shape - see that method.
      *
      * @param dataConfig the data configuration being crawled
      * @param statsKey identifies the crawl unit that was given up on
@@ -401,7 +504,7 @@ public class SharePointCrawler implements Closeable {
         private boolean skipRole = false;
         private List<String> excludeList = new ArrayList<>();
         private List<String> excludeFolder = new ArrayList<>();
-        private boolean ignoreError = true;
+        private boolean ignoreError = false;
         private String proxyHost = null;
         private int proxyPort = -1;
         private String extractorName = FileCrawl.DEFAULT_EXTRACTOR_NAME;

@@ -152,7 +152,7 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
      * @return the role assignments on this page, unfiltered
      */
     private List<Map<String, Object>> getRoleAssignmentPage(final int start, final int num) {
-        final String buildUrl = buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num) + "&%24expand=RoleDefinitionBindings";
+        final String buildUrl = buildRoleAssignmentsUrl() + "?" + getPagingParam(start, num) + "&%24expand=RoleDefinitionBindings,Member";
         if (logger.isDebugEnabled()) {
             logger.debug("buildUrl: {}", buildUrl);
         }
@@ -171,48 +171,68 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
      * @param response the response to add the resolved principals to
      */
     private void addRoleAssignments(final List<Map<String, Object>> values, final GetListItemRoleResponse response) {
-        values.stream()
-                .filter(value -> !isLimitedAccessOnly(value))
-                .map(value -> (value.get("PrincipalId").toString()))
-                .forEach(principalId -> {
-                    if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
-                        response.addSharePointGroup(sharePointGroupCache.get(principalId));
-                        return;
-                    }
-                    final String buildMemberUrl = buildMemberUrl(itemId, principalId);
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("buildMemberUrl: {}", buildMemberUrl);
-                    }
-                    final HttpGet memberRequest = new HttpGet(buildMemberUrl);
-                    final JsonResponse memberResponse = doJsonRequest(memberRequest);
-                    final Map<String, Object> memberResponseMap = memberResponse.getBodyAsMap();
-                    final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
-                    final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
-                    switch (principalType) {
-                    case 1:
-                        // User
-                        final GetListItemRoleResponse.User user =
-                                new GetListItemRoleResponse.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
-                                        DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
-                        response.addUser(user);
-                        break;
-                    case 4:
-                        // Security Group
-                        final GetListItemRoleResponse.SecurityGroup securityGroup = new GetListItemRoleResponse.SecurityGroup(id,
-                                DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+        values.stream().filter(value -> !isLimitedAccessOnly(value)).forEach(value -> {
+            final String principalId = value.get("PrincipalId").toString();
+            if (sharePointGroupCache != null && sharePointGroupCache.containsKey(principalId)) {
+                response.addSharePointGroup(sharePointGroupCache.get(principalId));
+                return;
+            }
+            final Map<String, Object> memberResponseMap = resolveMember(principalId, value);
+            final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
+            final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
+            switch (principalType) {
+            case 1:
+                // User
+                final GetListItemRoleResponse.User user =
+                        new GetListItemRoleResponse.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
                                 DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
-                        response.addSecurityGroup(securityGroup);
-                        break;
-                    case 8:
-                        final GetListItemRoleResponse.SharePointGroup sharePointGroup = new GetListItemRoleResponse.SharePointGroup(id,
-                                DocumentUtil.getValue(memberResponseMap, "Title", String.class));
-                        cacheAndFillSharePointGroup(principalId, sharePointGroup, id);
-                        response.addSharePointGroup(sharePointGroup);
-                        break;
-                    default:
-                        break;
-                    }
-                });
+                response.addUser(user);
+                break;
+            case 4:
+                // Security Group
+                final GetListItemRoleResponse.SecurityGroup securityGroup =
+                        new GetListItemRoleResponse.SecurityGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+                                DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
+                response.addSecurityGroup(securityGroup);
+                break;
+            case 8:
+                final GetListItemRoleResponse.SharePointGroup sharePointGroup =
+                        new GetListItemRoleResponse.SharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
+                cacheAndFillSharePointGroup(principalId, sharePointGroup, id);
+                response.addSharePointGroup(sharePointGroup);
+                break;
+            default:
+                break;
+            }
+        });
+    }
+
+    /**
+     * Resolves the principal named by one role assignment entry to its member's fields.
+     *
+     * <p>The role assignment listing is fetched with {@code $expand=Member}, so a server that
+     * honors it nests the member's fields directly under {@code "Member"} in the entry and this
+     * needs no extra request. A server that does not expand it - an older server, or one that
+     * simply leaves the property out - has no such nested object here, and the member is instead
+     * fetched with the per-principal request this expansion was meant to replace.
+     *
+     * @param principalId the principal ID of the role assignment
+     * @param value the role assignment entry, as returned by the server
+     * @return the resolved member's fields
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> resolveMember(final String principalId, final Map<String, Object> value) {
+        final Object member = value.get("Member");
+        if (member instanceof Map) {
+            return (Map<String, Object>) member;
+        }
+        final String buildMemberUrl = buildMemberUrl(itemId, principalId);
+        if (logger.isDebugEnabled()) {
+            logger.debug("buildMemberUrl: {}", buildMemberUrl);
+        }
+        final HttpGet memberRequest = new HttpGet(buildMemberUrl);
+        final JsonResponse memberResponse = doJsonRequest(memberRequest);
+        return memberResponse.getBodyAsMap();
     }
 
     /**

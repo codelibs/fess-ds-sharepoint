@@ -121,6 +121,38 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    /**
+     * The suppression in {@code FileCrawl#getContent} fires when either ignore_error or the global
+     * crawler.ignore.content.exception setting says to ignore, so a default of true here would make
+     * it unconditional and override an installation that had set that global setting to false to
+     * get hard failures. At false the condition reduces to the global setting alone, which is what
+     * this plugin did before the parameter existed.
+     */
+    @Test
+    public void test_createCrawler_ignoreErrorDefaultsToFalse() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertFalse("an unset ignore_error must leave the global setting in charge, not force suppression",
+                    crawler.getCrawlerConfig().isIgnoreError());
+        }
+    }
+
+    @Test
+    public void test_createCrawler_ignoreErrorIsHonoredWhenSet() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("ignore_error", "true");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertTrue("ignore_error=true must still suppress extraction failures regardless of the global setting",
+                    crawler.getCrawlerConfig().isIgnoreError());
+        }
+    }
+
     @Test
     public void test_createCrawler_blankRetryLimitFallsBackInsteadOfFailingTheJob() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();

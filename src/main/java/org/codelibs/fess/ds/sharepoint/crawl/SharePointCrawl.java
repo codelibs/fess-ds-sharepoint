@@ -27,6 +27,9 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
+import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
+import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.helper.SystemHelper;
@@ -155,6 +158,50 @@ public abstract class SharePointCrawl {
     }
 
     /**
+     * Returns the server-relative URL of a list's DISPLAY_FORM, the form the three crawl paths
+     * below list level all use to build a web link.
+     *
+     * <p>The result depends only on {@code listId}, but {@code ItemCrawl}, {@code FolderCrawl}
+     * and {@code ItemAttachmentsCrawl} each used to re-fetch it once per list item, per file, and
+     * per attachment - the same request repeated for every item in a list that may hold
+     * thousands. {@code formsCache} is shared across a whole crawl the same way
+     * {@code sharePointGroupCache} is, so the first caller to ask about a given list fetches it
+     * and every later caller for that list is answered from the cache - as long as the list has a
+     * DISPLAY_FORM. {@code computeIfAbsent} does not store a null, so a list with no such form is
+     * re-fetched by every caller, exactly as it was before.
+     *
+     * @param listId the list's GUID, or null if the caller has none
+     * @param formsCache the cache to read from and populate, keyed by listId
+     * @return the DISPLAY_FORM's server-relative URL, or null if the list has no such form
+     */
+    protected String getDisplayFormUrl(final String listId, final Map<String, String> formsCache) {
+        if (listId == null) {
+            return fetchDisplayFormUrl(null);
+        }
+        return formsCache.computeIfAbsent(listId, this::fetchDisplayFormUrl);
+    }
+
+    /**
+     * Fetches the server-relative URL of a list's DISPLAY_FORM directly, with no caching.
+     *
+     * @param listId the list's GUID, or null
+     * @return the DISPLAY_FORM's server-relative URL, or null if the list has no such form
+     */
+    private String fetchDisplayFormUrl(final String listId) {
+        final GetForms getForms = client.api().list().getForms();
+        if (listId != null) {
+            getForms.setListId(listId);
+        }
+        final GetFormsResponse getFormsResponse = getForms.execute();
+        return getFormsResponse.getForms()
+                .stream()
+                .filter(form -> form.getType() == PageType.DISPLAY_FORM)
+                .findFirst()
+                .map(GetFormsResponse.Form::getServerRelativeUrl)
+                .orElse(null);
+    }
+
+    /**
      * Builds a digest string from the content.
      *
      * @param content the content to create a digest from
@@ -180,8 +227,8 @@ public abstract class SharePointCrawl {
      * does not wire it - such as this plugin's own unit tests) means nothing is filtered.
      *
      * @param urlFilter the filter built for this crawl, or null
-     * @param value the URL-ish value to check - a server-relative path for a file, a list item's
-     *            {@code FileRef} for a list item
+     * @param value the URL-ish value to check - a server-relative path for a document library file
+     *            or a list item attachment, a list item's {@code FileRef} for a list item
      * @return true if the item should be crawled
      */
     protected boolean isUrlAllowed(final UrlFilter urlFilter, final String value) {

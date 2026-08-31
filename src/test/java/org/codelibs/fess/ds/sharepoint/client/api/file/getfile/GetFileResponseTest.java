@@ -17,7 +17,14 @@ package org.codelibs.fess.ds.sharepoint.client.api.file.getfile;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
@@ -89,6 +96,50 @@ public class GetFileResponseTest extends UnitDsTestCase {
                             "a body over the limit must be rejected while it is being copied, not only from its header");
                 }
             }
+        }
+    }
+
+    /** The threshold at which the download stops being buffered in memory and spills to a file. */
+    private static final int CACHE_FILE_SIZE = 1_000_000;
+
+    /**
+     * A rejection past that threshold used to leave a {@code fess-extractor-*.out} behind per
+     * rejected file: {@code copyBounded} throws from inside the try-with-resources,
+     * {@code DeferredFileOutputStream.close()} does not delete the file it spilled to, and
+     * {@code close()} only ever knew about the file the normal path assigned.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_getFileContentBoundedDeletesTheTempFileOfARejectedBody() throws Exception {
+        final long maxContentLength = CACHE_FILE_SIZE + 200_000L;
+        final String body = "x".repeat(CACHE_FILE_SIZE + 500_000);
+        final Set<String> before = listSpilledTempFiles();
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FILE_API, 200, "text/plain", body);
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final GetFile getFile = new GetFile(httpClient, server.getBaseUrl() + "sites/test", null).setServerRelativeUrl(FILE_URL);
+
+                try (GetFileResponse response = getFile.execute()) {
+                    // Over the limit, but only after more than the cache threshold has already
+                    // been copied - so the stream has spilled to disk by the time it is rejected.
+                    assertThrows(MaxLengthExceededException.class, () -> response.getFileContent(maxContentLength),
+                            "a body over the limit must still be rejected");
+                }
+            }
+        }
+        final Set<String> leaked = listSpilledTempFiles();
+        leaked.removeAll(before);
+        assertTrue("a rejected over-limit download must not leave a temporary file behind: " + leaked, leaked.isEmpty());
+    }
+
+    /** The {@code fess-extractor-*.out} files currently in the JVM's temporary directory. */
+    private static Set<String> listSpilledTempFiles() throws IOException {
+        try (Stream<Path> files = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+            return files.map(path -> path.getFileName().toString())
+                    .filter(name -> name.startsWith("fess-extractor-") && name.endsWith(".out"))
+                    .collect(Collectors.toCollection(HashSet::new));
         }
     }
 

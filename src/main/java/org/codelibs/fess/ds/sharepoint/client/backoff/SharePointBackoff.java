@@ -62,8 +62,10 @@ public class SharePointBackoff {
      *
      * @param initialDelayMillis the delay used for the first step (attempt 0)
      * @param maxDelayMillis the ceiling the computed delay is capped at
-     * @param jitterSupplier supplies a value in [0, 1] used to spread the delay across
-     *            {@link #JITTER_FLOOR_PERCENT}-{@link #JITTER_FLOOR_PERCENT}+{@link #JITTER_SPAN_PERCENT} percent of it
+     * @param jitterSupplier supplies a value in [0, 1) used to spread the delay from
+     *            {@link #JITTER_FLOOR_PERCENT} percent of it up to, but not including,
+     *            {@link #JITTER_FLOOR_PERCENT}+{@link #JITTER_SPAN_PERCENT} percent - so 70-129%
+     *            at these values, the product being truncated to a whole percent
      * @param sleeper performs the actual wait; a test supplies one that does not really sleep
      */
     public SharePointBackoff(final long initialDelayMillis, final long maxDelayMillis, final DoubleSupplier jitterSupplier,
@@ -76,7 +78,8 @@ public class SharePointBackoff {
 
     /**
      * Returns the backoff used in production: a two-second initial delay doubling up to a
-     * thirty-second cap, jittered to 70-130% of the computed value, sleeping for real.
+     * thirty-second cap, jittered to 70-129% of the computed value ({@link Math#random} never
+     * returns 1, and the resulting percentage is truncated to a whole number), sleeping for real.
      *
      * @return the default backoff
      */

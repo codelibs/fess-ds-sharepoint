@@ -258,14 +258,13 @@ public class FileCrawl extends SharePointCrawl {
             // An OR, not a per-data-config override: this is suppressed whenever EITHER
             // ignore_error is true OR the global crawler.ignore.content.exception setting is
             // true. ignore_error=false alone cannot force a hard failure while the global setting
-            // says to ignore - it only matters when the global setting is false. Fess's own
-            // default for that global setting is true, so on an installation that has not
-            // touched it, extraction failures were already being suppressed before this
-            // parameter existed; ignore_error's default of true changes nothing there. On an
-            // installation that had deliberately set the global setting to false to get hard
-            // failures, this parameter's own default of true - chosen to match every sibling
-            // fess-ds-* plugin - reverses that: such an installation now gets log-and-continue
-            // unless it also sets ignore_error=false here.
+            // says to ignore - it only matters when the global setting is false. That is why
+            // ignore_error defaults to false rather than to the true every sibling fess-ds-*
+            // plugin uses: at false this whole condition reduces to the global setting alone,
+            // which is what this plugin did before the parameter existed, on an installation that
+            // has left the global setting at Fess's own default of true as well as on one that
+            // had deliberately set it to false to get hard failures. Setting ignore_error=true
+            // suppresses the failure regardless of the global setting.
             if (!ignoreError && !ComponentUtil.getFessConfig().isCrawlerIgnoreContentException()) {
                 throw new DataStoreCrawlingException(serverRelativeUrl, "Failed to get contents: " + fileName, e);
             }

@@ -67,7 +67,7 @@ public class SiteCrawlTest extends UnitDsTestCase {
             final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
             config.setSiteName(SITE_NAME);
             final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
-            new SiteCrawl(client, config, new ConcurrentHashMap<>(), null).doCrawl(null, crawlingQueue);
+            new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null).doCrawl(null, crawlingQueue);
             return crawlingQueue.size();
         }
     }

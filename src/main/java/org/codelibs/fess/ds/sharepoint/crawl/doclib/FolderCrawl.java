@@ -29,9 +29,6 @@ import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfiles.GetFilesRespon
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFoldersResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getlistitem.GetDoclibListItemResponse;
-import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
@@ -62,6 +59,7 @@ public class FolderCrawl extends SharePointCrawl {
 
     private final String serverRelativeUrl;
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
+    private final Map<String, String> formsCache;
     private final boolean skipRole;
     private final boolean ignoreError;
     private final String extractorName;
@@ -76,6 +74,7 @@ public class FolderCrawl extends SharePointCrawl {
      * @param serverRelativeUrl the server-relative URL of the folder to crawl
      * @param skipRole whether to skip role/permission checking
      * @param sharePointGroupCache cache for SharePoint group information
+     * @param formsCache cache of each list's DISPLAY_FORM server-relative URL, keyed by listId
      * @param ignoreError whether a file's content extraction failure should be logged instead of
      *            failing its crawl target
      * @param extractorName the name of the extractor component used to extract a file's content
@@ -86,11 +85,13 @@ public class FolderCrawl extends SharePointCrawl {
      *            or null
      */
     public FolderCrawl(final SharePointClient client, final String serverRelativeUrl, final boolean skipRole,
-            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final boolean ignoreError,
-            final String extractorName, final String[] supportedMimeTypes, final long maxContentLength, final UrlFilter urlFilter) {
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final Map<String, String> formsCache,
+            final boolean ignoreError, final String extractorName, final String[] supportedMimeTypes, final long maxContentLength,
+            final UrlFilter urlFilter) {
         super(client);
         this.serverRelativeUrl = serverRelativeUrl;
         this.sharePointGroupCache = sharePointGroupCache;
+        this.formsCache = formsCache;
         this.skipRole = skipRole;
         this.ignoreError = ignoreError;
         this.extractorName = extractorName;
@@ -124,7 +125,7 @@ public class FolderCrawl extends SharePointCrawl {
                 foldersStart += PAGE_SIZE;
                 folders.forEach(subFolder -> {
                     crawlingQueue.offer(new FolderCrawl(client, subFolder.getServerRelativeUrl(), skipRole, sharePointGroupCache,
-                            ignoreError, extractorName, supportedMimeTypes, maxContentLength, urlFilter));
+                            formsCache, ignoreError, extractorName, supportedMimeTypes, maxContentLength, urlFilter));
                 });
                 if (folders.size() < PAGE_SIZE) {
                     break;
@@ -194,17 +195,10 @@ public class FolderCrawl extends SharePointCrawl {
     }
 
     private String getWebLink(final String listId, final String filePath, final String parentUrl) {
-        final GetForms getForms = client.api().list().getForms();
-        if (listId != null) {
-            getForms.setListId(listId);
-        }
-        final GetFormsResponse getFormsResponse = getForms.execute();
-        final GetFormsResponse.Form form =
-                getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
-        if (form == null) {
+        final String serverRelativeUrl = getDisplayFormUrl(listId, formsCache);
+        if (serverRelativeUrl == null) {
             return null;
         }
-        final String serverRelativeUrl = form.getServerRelativeUrl();
         return client.getUrl() + serverRelativeUrl.substring(1).replace("DispForm", "AllItems") + "?id=" + filePath + "&parent="
                 + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
     }

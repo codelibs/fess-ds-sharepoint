@@ -62,8 +62,9 @@ public class FolderCrawlTest extends UnitDsTestCase {
     private static int crawlAndCountQueued(final SharePointMockServer server) throws Exception {
         try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite("test").build()) {
             final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
-            new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), true, FileCrawl.DEFAULT_EXTRACTOR_NAME,
-                    FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, null).doCrawl(null, crawlingQueue);
+            new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), true,
+                    FileCrawl.DEFAULT_EXTRACTOR_NAME, FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, null)
+                            .doCrawl(null, crawlingQueue);
             return crawlingQueue.size();
         }
     }
@@ -111,14 +112,55 @@ public class FolderCrawlTest extends UnitDsTestCase {
             try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite("test").build()) {
                 final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
                 final SimpleUrlFilter urlFilter = new SimpleUrlFilter(null, ".*report\\.pdf");
-                new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), true, FileCrawl.DEFAULT_EXTRACTOR_NAME,
-                        FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, urlFilter).doCrawl(null,
-                                crawlingQueue);
+                new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), true,
+                        FileCrawl.DEFAULT_EXTRACTOR_NAME, FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH,
+                        urlFilter).doCrawl(null, crawlingQueue);
 
                 assertEquals("an excluded file must not be queued for further crawling", 0, crawlingQueue.size());
                 // The folder lookup, the (empty) subfolder page and the file page - no getListItem,
                 // getListItemValue, getListItemRole or getForms request for the excluded file.
                 assertEquals("an excluded file must not cost its four follow-up requests", 3, server.getRecordedRequests().size());
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_formsAreFetchedOnceForAllFilesInTheSameList() throws Exception {
+        // getForms() depends only on the list, but used to be re-fetched once per file. Two
+        // files in the same list must cost exactly one Forms request between them, not two.
+        final String listId = "22222222-2222-2222-2222-222222222222";
+        final String file1 = FOLDER_URL + "/file1.docx";
+        final String file2 = FOLDER_URL + "/file2.docx";
+        final String listItemApiPrefix = "/sites/test/_api/Web/GetFolderByServerRelativePath(decodedurl='";
+        final String formsApi = "/sites/test/_api/Web/Lists(guid'" + listId + "')/Forms";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPath(FOLDER_API, "application/json", "fixtures/modern/doclib_folder.json");
+            server.onPathStatus(FOLDER_API + "/Folders", 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(FOLDER_API + "/Files", 200, "application/json",
+                    "{\"value\": [{\"Name\": \"file1.docx\", \"ServerRelativeUrl\": \"" + file1 + "\"},"
+                            + "{\"Name\": \"file2.docx\", \"ServerRelativeUrl\": \"" + file2 + "\"}]}");
+            server.onPathStatus(listItemApiPrefix + file1 + "')/ListItemAllFields", 200, "application/json",
+                    "{\"Id\":\"101\",\"odata.editLink\":\"Web/Lists(guid'" + listId + "')/Items(101)\"}");
+            server.onPathStatus(listItemApiPrefix + file2 + "')/ListItemAllFields", 200, "application/json",
+                    "{\"Id\":\"102\",\"odata.editLink\":\"Web/Lists(guid'" + listId + "')/Items(102)\"}");
+            server.onPathStatus("/sites/test/_api/Web/Lists(guid'" + listId + "')/Items(101)/FieldValuesAsText", 200, "application/json",
+                    "{}");
+            server.onPathStatus("/sites/test/_api/Web/Lists(guid'" + listId + "')/Items(102)/FieldValuesAsText", 200, "application/json",
+                    "{}");
+            server.onPathStatus(formsApi, 200, "application/json",
+                    "{\"value\":[{\"Id\":\"f1\",\"ServerRelativeUrl\":\"/sites/test/Lists/Docs/DispForm.aspx\",\"FormType\":4}]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite("test").build()) {
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), true,
+                        FileCrawl.DEFAULT_EXTRACTOR_NAME, FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, null)
+                                .doCrawl(null, crawlingQueue);
+
+                assertEquals("both files must still be queued for further crawling", 2, crawlingQueue.size());
+                assertEquals("two files sharing one list must cost exactly one Forms request", 1,
+                        server.getRecordedRequests().stream().filter(request -> formsApi.equals(request.getPath())).count());
             }
         }
     }

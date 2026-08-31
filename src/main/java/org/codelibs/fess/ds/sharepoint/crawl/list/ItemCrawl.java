@@ -31,9 +31,6 @@ import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
-import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
-import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetFormsResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemValueResponse;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
@@ -79,6 +76,8 @@ public class ItemCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     /** Fields to exclude from content extraction */
     private final List<String> excludeFields;
+    /** Cache of each list's DISPLAY_FORM server-relative URL, keyed by listId */
+    private final Map<String, String> formsCache;
     /** The include_pattern/exclude_pattern filter built once for the whole crawl, or null */
     private final UrlFilter urlFilter;
 
@@ -97,12 +96,13 @@ public class ItemCrawl extends SharePointCrawl {
      * @param isSubPage flag indicating if this is a subpage item
      * @param includeFields list of field names to include in content extraction
      * @param excludeFields list of field name patterns to exclude from content extraction
+     * @param formsCache cache of each list's DISPLAY_FORM server-relative URL, keyed by listId
      * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
      *            or null
      */
     public ItemCrawl(final SharePointClient client, final String listId, final String listName, final String itemId, final Date created,
             final Date modified, final List<String> roles, final boolean isSubPage, final List<String> includeFields,
-            final List<String> excludeFields, final UrlFilter urlFilter) {
+            final List<String> excludeFields, final Map<String, String> formsCache, final UrlFilter urlFilter) {
         super(client);
         this.listId = listId;
         this.listName = listName != null ? listName : StringUtil.EMPTY;
@@ -115,6 +115,7 @@ public class ItemCrawl extends SharePointCrawl {
         final List<String> exList = new ArrayList<>(excludeFields);
         exList.addAll(EXCLUDE_FIELDS);
         this.excludeFields = exList;
+        this.formsCache = formsCache;
         this.urlFilter = urlFilter;
         statsKey = new StatsKeyObject("item#" + listName + ":" + itemId);
     }
@@ -286,23 +287,14 @@ public class ItemCrawl extends SharePointCrawl {
 
     /**
      * Retrieves the display form URL for the SharePoint list.
-     * Queries the list forms to find the display form that can be used
-     * for generating web links to list items.
+     * Looked up through {@code getDisplayFormUrl}, which caches the form in {@link #formsCache}
+     * per {@code listId}, shared across every item of the same list - see that method for the one
+     * case it cannot answer from the cache.
      *
      * @return server-relative URL of the list's display form, or null if not found
      */
     private String getFormUrl() {
-        final GetForms getForms = client.api().list().getForms();
-        if (listId != null) {
-            getForms.setListId(listId);
-        }
-        final GetFormsResponse getFormsResponse = getForms.execute();
-        final GetFormsResponse.Form form =
-                getFormsResponse.getForms().stream().filter(f -> f.getType() == PageType.DISPLAY_FORM).findFirst().orElse(null);
-        if (form == null) {
-            return null;
-        }
-        return form.getServerRelativeUrl();
+        return getDisplayFormUrl(listId, formsCache);
     }
 
     /**

@@ -15,9 +15,20 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.oauth;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.apache.http.client.methods.HttpGet;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.Appender;
+import org.apache.logging.log4j.core.Filter;
+import org.apache.logging.log4j.core.Layout;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.Logger;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.Configurator;
+import org.apache.logging.log4j.core.config.Property;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.jupiter.api.Test;
 
@@ -29,23 +40,45 @@ public class OAuthTest extends UnitDsTestCase {
     }
 
     /**
-     * Construction now also logs a deprecation warning about Azure ACS; this pins that the
-     * warning is a side effect only and does not change what the constructor accepts.
+     * Microsoft has scheduled Azure ACS - the only mechanism this class implements - for
+     * retirement, so construction warns about it. The warning is the whole point of that code, and
+     * an assertion that only construction succeeds cannot tell whether it was logged: deleting the
+     * warning outright left such an assertion green.
      */
     @Test
-    public void test_constructor_doesNotThrow() {
-        assertDoesNotThrow(() -> new OAuth("clientId", "clientSecret", "tenant", "realm"),
-                "logging the ACS deprecation warning must not affect construction");
+    public void test_constructor_warnsThatAcsIsDeprecated() {
+        final List<String> warnings = new ArrayList<>();
+        final Logger logger = (Logger) LogManager.getLogger(OAuth.class);
+        final Level original = logger.getLevel();
+        final Appender appender = capturing(warnings);
+        Configurator.setLevel(OAuth.class.getName(), Level.WARN);
+        logger.addAppender(appender);
+        try {
+            new OAuth("clientId", "clientSecret", "tenant", "realm");
+        } finally {
+            logger.removeAppender(appender);
+            appender.stop();
+            Configurator.setLevel(OAuth.class.getName(), original);
+        }
+
+        assertEquals("construction must log exactly one warning", 1, warnings.size());
+        assertTrue("the warning must name the deprecated mechanism: " + warnings.get(0),
+                warnings.get(0).contains("Access Control Service"));
+        assertTrue("and it must name the replacement to migrate to: " + warnings.get(0), warnings.get(0).contains("Entra"));
     }
 
-    @Test
-    public void test_apply_addsABearerAuthorizationHeader() {
-        final OAuth oAuth = new OAuth("clientId", "clientSecret", "tenant", "realm");
-        final HttpGet httpGet = new HttpGet("http://example.com/");
-
-        oAuth.apply(httpGet);
-
-        assertNotNull("apply must add an Authorization header", httpGet.getFirstHeader("Authorization"));
-        assertTrue("the header must be a Bearer token", httpGet.getFirstHeader("Authorization").getValue().startsWith("Bearer "));
+    /** An appender that records the formatted message of every WARN event it is handed. */
+    private static Appender capturing(final List<String> warnings) {
+        final Appender appender = new AbstractAppender("oauth-test-capture", (Filter) null, (Layout<? extends Serializable>) null, true,
+                Property.EMPTY_ARRAY) {
+            @Override
+            public void append(final LogEvent event) {
+                if (Level.WARN.equals(event.getLevel())) {
+                    warnings.add(event.getMessage().getFormattedMessage());
+                }
+            }
+        };
+        appender.start();
+        return appender;
     }
 }

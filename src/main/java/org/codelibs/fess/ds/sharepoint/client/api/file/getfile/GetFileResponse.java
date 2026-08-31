@@ -115,8 +115,10 @@ public class GetFileResponse implements SharePointApiResponse {
     public InputStream getFileContent(final long maxContentLength) throws IOException {
         if (responseData == null && responseFile == null) {
             HttpEntity entity = null;
+            DeferredFileOutputStream dfos = null;
             try (DeferredFileOutputStream out =
                     DeferredFileOutputStream.builder().setThreshold(cacheFileSize).setPrefix("fess-extractor-").setSuffix(".out").get()) {
+                dfos = out;
                 entity = httpResponse.getEntity();
                 copyBounded(entity.getContent(), out, maxContentLength);
                 out.flush();
@@ -128,12 +130,36 @@ public class GetFileResponse implements SharePointApiResponse {
                 }
             } finally {
                 EntityUtils.consumeQuietly(entity);
+                // copyBounded throws MaxLengthExceededException from inside the try above, so a
+                // body that had already spilled past the threshold left a temp file behind:
+                // DeferredFileOutputStream.close() does not delete it, and responseFile - the only
+                // thing close() below knows how to delete - is assigned on the normal path only.
+                // fess-crawler's own ExtractorBuilder.extract() deletes its stream's file in a
+                // finally for the same reason. responseFile is non-null here exactly when the
+                // normal path adopted this same file, which must be kept until close().
+                deleteSpilledFile(dfos);
             }
         }
         if (responseData != null) {
             return new ByteArrayInputStream(responseData);
         }
         return new FileInputStream(responseFile);
+    }
+
+    /**
+     * Deletes the temporary file {@code out} spilled to, unless {@link #getFileContent(long)}
+     * adopted it as {@link #responseFile} on its way out.
+     *
+     * @param out the stream the download was copied into, or null if it was never created
+     */
+    private void deleteSpilledFile(final DeferredFileOutputStream out) {
+        if (out == null || out.isInMemory() || responseFile != null) {
+            return;
+        }
+        final File spilled = out.getFile();
+        if (spilled != null && !spilled.delete()) {
+            logger.warn("Failed to delete {}.", spilled.getAbsolutePath());
+        }
     }
 
     /**

@@ -32,6 +32,7 @@ import javax.xml.parsers.SAXParserFactory;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.Header;
+import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -202,15 +203,15 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
             if (!isErrorResponse(httpResponse)) {
                 requireJsonContentType(httpResponse, httpRequest);
             }
-            final String body = EntityUtils.toString(httpResponse.getEntity());
+            final HttpEntity entity = httpResponse.getEntity();
+            final String body = entity == null ? StringUtil.EMPTY : EntityUtils.toString(entity);
             if (logger.isDebugEnabled()) {
                 logger.debug("API's ResponseBody. [url:{}] [body:{}]", httpRequest.getURI().toString(), body);
             }
             if (isErrorResponse(httpResponse)) {
-                @SuppressWarnings("unchecked")
-                final Map<String, Object> bodyMap = StringUtil.isNotBlank(body) ? objectMapper.readValue(body, Map.class) : null;
-                throw new SharePointServerException("Api returned error. code:" + httpResponse.getStatusLine().getStatusCode() + "url:"
-                        + httpRequest.getURI().toString() + " body:" + bodyMap, httpResponse.getStatusLine().getStatusCode());
+                final int statusCode = httpResponse.getStatusLine().getStatusCode();
+                throw new SharePointServerException("Api returned error. code:" + statusCode + "url:" + httpRequest.getURI().toString()
+                        + " body:" + describeErrorBody(body), statusCode);
             }
 
             @SuppressWarnings("unchecked")
@@ -229,6 +230,38 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
             throw e;
         } catch (final Exception e) {
             throw new SharePointClientException("Request failure. " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Renders an error response's body for the exception message, without letting a body that is
+     * not JSON prevent that exception from being thrown at all.
+     *
+     * <p>This used to be an {@code objectMapper.readValue} on the line before the
+     * {@link SharePointServerException} was constructed. An error body is not necessarily JSON
+     * even when the request asked for JSON - a 503 from IIS, a load balancer or a WAF is typically
+     * an HTML page - and parsing one threw from inside {@link #doJsonRequest}'s {@code try}, so
+     * what reached {@code SharePointCrawler#doCrawl} was the generic
+     * {@code catch (Exception)} branch's {@link SharePointClientException}, whose
+     * {@code getStatusCode()} is -1. That loop's {@code == 503} check was then false and the 503
+     * backoff never ran. Formatting the body here, after the status code is already in hand,
+     * keeps the status on the exception whatever the body turns out to be.
+     *
+     * @param body the raw response body, possibly blank and possibly not JSON
+     * @return the parsed body's map form when it is JSON, the raw body when it is not, and the
+     *         string "null" when it is blank - the same rendering a blank body always had
+     */
+    private String describeErrorBody(final String body) {
+        if (StringUtil.isBlank(body)) {
+            return String.valueOf((Object) null);
+        }
+        try {
+            return objectMapper.readValue(body, Map.class).toString();
+        } catch (final Exception e) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("An error response body was not JSON; reporting it verbatim.", e);
+            }
+            return body;
         }
     }
 

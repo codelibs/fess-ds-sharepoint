@@ -71,6 +71,8 @@ public class SiteCrawl extends SharePointCrawl {
     private final SharePointCrawler.CrawlerConfig config;
     /** Cache for SharePoint group information to optimize role lookups */
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
+    /** Cache of each list's DISPLAY_FORM server-relative URL, keyed by listId */
+    private final Map<String, String> formsCache;
     /** The include_pattern/exclude_pattern filter built once for the whole crawl, or null */
     private final UrlFilter urlFilter;
 
@@ -80,15 +82,18 @@ public class SiteCrawl extends SharePointCrawl {
      * @param client SharePoint client for API operations
      * @param config crawler configuration containing site settings and filters
      * @param sharePointGroupCache cache for SharePoint group information
+     * @param formsCache cache of each list's DISPLAY_FORM server-relative URL, keyed by listId
      * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
      *            or null
      */
     public SiteCrawl(final SharePointClient client, final SharePointCrawler.CrawlerConfig config,
-            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final UrlFilter urlFilter) {
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final Map<String, String> formsCache,
+            final UrlFilter urlFilter) {
         super(client);
         this.config = config;
 
         this.sharePointGroupCache = sharePointGroupCache;
+        this.formsCache = formsCache;
         this.urlFilter = urlFilter;
         statsKey = new StatsKeyObject("site#" + config.getSiteName());
     }
@@ -126,8 +131,8 @@ public class SiteCrawl extends SharePointCrawl {
             folders.stream().filter(folder -> !isExcludeFolder(folder.getName())).forEach(folder -> {
                 targetFolderName.add(folder.getName());
                 crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache,
-                        config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(),
-                        urlFilter));
+                        formsCache, config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(),
+                        config.getMaxContentLength(), urlFilter));
             });
             if (folders.size() < PAGE_SIZE) {
                 break;
@@ -145,12 +150,13 @@ public class SiteCrawl extends SharePointCrawl {
                 .filter(list -> !list.isNoCrawl() && !list.isHidden())
                 .filter(list -> !targetFolderName.contains(list.getListName()))
                 .filter(list -> !isExcludeList(list.getEntityTypeName()))
-                .forEach(list -> crawlingQueue.offer(new ListCrawl(client, list.getId(), list.getListName(),
-                        config.getListItemNumPerPages(), sharePointGroupCache, isSubPageList(list.getEntityTypeName()), config.isSkipRole(),
-                        config.getListContentIncludeFields(), config.getListContentExcludeFields(), config.isIgnoreError(),
-                        config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(), urlFilter)));
+                .forEach(
+                        list -> crawlingQueue.offer(new ListCrawl(client, list.getId(), list.getListName(), config.getListItemNumPerPages(),
+                                sharePointGroupCache, formsCache, isSubPageList(list.getEntityTypeName()), config.isSkipRole(),
+                                config.getListContentIncludeFields(), config.getListContentExcludeFields(), config.isIgnoreError(),
+                                config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(), urlFilter)));
         crawlingQueue.offer(new FolderCrawl(client, "/sites/" + config.getSiteName() + "/Shared Documents", false, sharePointGroupCache,
-                config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(),
+                formsCache, config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(),
                 urlFilter));
         return null;
     }

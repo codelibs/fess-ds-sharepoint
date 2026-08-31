@@ -235,9 +235,9 @@ public class GetListItemRoleTest extends UnitDsTestCase {
         // inheritance routinely has a whole page of them. The listing used to stop as soon as a
         // page contributed nothing, so every role assignment on the pages after it was lost.
         try (SharePointMockServer server = new SharePointMockServer()) {
-            server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + "&%24expand=RoleDefinitionBindings", JSON,
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + EXPAND_QUERY, JSON,
                     roleAssignmentPage("5", 1, PAGE_SIZE));
-            server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200&%24expand=RoleDefinitionBindings", JSON,
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200" + EXPAND_QUERY, JSON,
                     "{\"value\":[{\"PrincipalId\":12,\"RoleDefinitionBindings\":[{\"RoleTypeKind\":3}]}]}");
             server.onPathStatus(ITEM_PATH + "/RoleAssignments/GetByPrincipalId(12)/Member", 200, JSON,
                     "{\"Id\":\"12\",\"Title\":\"Carol\",\"LoginName\":\"i:0#.f|membership|carol@example.com\",\"PrincipalType\":1}");
@@ -247,6 +247,50 @@ public class GetListItemRoleTest extends UnitDsTestCase {
 
             assertEquals("the real assignment behind the Limited Access page must be read", 1, response.getUsers().size());
             assertEquals("and it must be the one from the second page", "Carol", response.getUsers().get(0).getTitle());
+        }
+    }
+
+    @Test
+    public void test_memberIsExpandedInlineInsteadOfFetchedPerPrincipal() throws Exception {
+        // Each role assignment used to cost a second GET to resolve its principal. Expanding
+        // Member inline removes that request entirely: the assignment listing already carries
+        // the principal's fields nested under "Member".
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + EXPAND_QUERY, JSON,
+                    "{\"value\":[{\"PrincipalId\":12,\"RoleDefinitionBindings\":[{\"RoleTypeKind\":3}],"
+                            + "\"Member\":{\"Id\":\"12\",\"Title\":\"Carol\","
+                            + "\"LoginName\":\"i:0#.f|membership|carol@example.com\",\"PrincipalType\":1}}]}");
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200" + EXPAND_QUERY, JSON, "{\"value\":[]}");
+            server.start();
+
+            final GetListItemRoleResponse response = executeAgainst(server);
+
+            assertEquals("the expanded member must still be resolved", 1, response.getUsers().size());
+            assertEquals("and it must be the expanded principal", "Carol", response.getUsers().get(0).getTitle());
+            assertEquals("the member endpoint must not be called at all", 0,
+                    server.getRecordedRequests().stream().filter(request -> request.getPath().contains("/Member")).count());
+        }
+    }
+
+    @Test
+    public void test_memberFallsBackToPerPrincipalFetchWhenNotExpanded() throws Exception {
+        // A server that does not expand Member inline - an older server, or one that simply
+        // leaves the property out - must still be resolved, via the per-principal request the
+        // expansion above replaces when it is honored.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + EXPAND_QUERY, JSON,
+                    "{\"value\":[{\"PrincipalId\":12,\"RoleDefinitionBindings\":[{\"RoleTypeKind\":3}]}]}");
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200" + EXPAND_QUERY, JSON, "{\"value\":[]}");
+            server.onPathStatus(ITEM_PATH + "/RoleAssignments/GetByPrincipalId(12)/Member", 200, JSON,
+                    "{\"Id\":\"12\",\"Title\":\"Carol\",\"LoginName\":\"i:0#.f|membership|carol@example.com\",\"PrincipalType\":1}");
+            server.start();
+
+            final GetListItemRoleResponse response = executeAgainst(server);
+
+            assertEquals("the fallback fetch must still resolve the principal", 1, response.getUsers().size());
+            assertEquals("and it must be Carol", "Carol", response.getUsers().get(0).getTitle());
+            assertEquals("exactly one fallback request must be made", 1,
+                    server.getRecordedRequests().stream().filter(request -> request.getPath().contains("/Member")).count());
         }
     }
 
@@ -355,6 +399,9 @@ public class GetListItemRoleTest extends UnitDsTestCase {
 
     private static final String MEMBER_PAGING_QUERY = "%24skip=0&%24top=200";
 
+    /** The $expand suffix GetListItemRole appends to every role assignment listing request. */
+    private static final String EXPAND_QUERY = "&%24expand=RoleDefinitionBindings,Member";
+
     private static final String LIST_ID = "11111111-1111-1111-1111-111111111111";
 
     private static final String ITEM_PATH = "/sites/test/_api/Web/Lists(guid'" + LIST_ID + "')/Items(1)";
@@ -368,10 +415,9 @@ public class GetListItemRoleTest extends UnitDsTestCase {
      * the role assignment loop.
      */
     private static void stubSingleGroupAssignment(final SharePointMockServer server, final String principalId, final String title) {
-        server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + "&%24expand=RoleDefinitionBindings", JSON,
+        server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + EXPAND_QUERY, JSON,
                 "{\"value\":[{\"PrincipalId\":" + principalId + ",\"RoleDefinitionBindings\":[{\"RoleTypeKind\":3}]}]}");
-        server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200&%24expand=RoleDefinitionBindings", JSON,
-                "{\"value\":[]}");
+        server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200" + EXPAND_QUERY, JSON, "{\"value\":[]}");
         server.onPathStatus(ITEM_PATH + "/RoleAssignments/GetByPrincipalId(" + principalId + ")/Member", 200, JSON,
                 "{\"Id\":\"" + principalId + "\",\"Title\":\"" + title + "\",\"LoginName\":\"\",\"PrincipalType\":8}");
     }

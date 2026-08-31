@@ -58,7 +58,17 @@ public class SharePointDataStore extends AbstractDataStore {
 
     /**
      * Whether a file's content extraction failure is logged instead of failing its crawl target.
-     * Matches the spelling and default used across the other {@code fess-ds-*} plugins.
+     * Matches the spelling used across the other {@code fess-ds-*} plugins, but not their default:
+     * they default it to {@code true}, this defaults it to {@code false}.
+     *
+     * <p>The suppression in {@code FileCrawl#getContent} fires when either this parameter or the
+     * global {@code crawler.ignore.content.exception} setting says to ignore. Defaulting this to
+     * {@code true} would therefore make the suppression unconditional, overriding an installation
+     * that had deliberately set that global setting to {@code false} to get hard failures. This
+     * plugin had no such parameter before, so it has a prior behaviour to preserve where the
+     * sibling plugins did not; at {@code false} the condition reduces to the global setting alone,
+     * which is exactly what this plugin did before the parameter existed. An operator who wants
+     * failures ignored regardless of the global setting sets this to {@code true}.
      */
     protected static final String IGNORE_ERROR = "ignore_error";
 
@@ -69,12 +79,21 @@ public class SharePointDataStore extends AbstractDataStore {
     protected static final String PROXY_PORT = "proxy_port";
 
     /**
-     * The name of the extractor component used to extract a file's content.
+     * The name of the extractor component used for a file whose MIME type the extractor factory
+     * does not map - not the extractor used for a file in general.
+     *
+     * <p>{@code ExtractorBuilder#extract} in fess-crawler asks
+     * {@code extractorFactory.getExtractor(mimeType)} first, and then
+     * {@code getExtractor(detectedMimeType)}; only when neither the declared nor the detected MIME
+     * type is mapped does it fall through to {@code crawlerContainer.getComponent(extractorName)}.
+     * {@code fess-crawler-lasta}'s {@code crawler/extractor.xml} maps around 1500 lines of MIME
+     * types, {@code application/pdf}, {@code text/html} and {@code text/plain} among them, so for
+     * essentially any real file this parameter changes nothing.
      *
      * <p>No sibling {@code fess-ds-*} plugin reads this as a {@code DataStoreParams} key - every
      * one of them holds it as a Java field ({@code protected String extractorName}) that only
      * some expose a setter for. This plugin introduces {@code extractor_name} as a new,
-     * data-config-configurable parameter because the extractor name was otherwise a
+     * data-config-configurable parameter because the fallback name was otherwise a
      * {@code private static final} constant nothing could change short of editing the jar.
      */
     protected static final String EXTRACTOR_NAME = "extractor_name";
@@ -96,8 +115,9 @@ public class SharePointDataStore extends AbstractDataStore {
      * {@link #createCrawler}, into a {@link org.codelibs.fess.crawler.filter.UrlFilter} built
      * there and threaded down through {@link SharePointCrawler.CrawlerConfig} - the same
      * component every other {@code fess-ds-*} plugin with this parameter uses. It is matched
-     * against a file's server-relative URL or a list item's {@code FileRef}, not the URL actually
-     * indexed - see the README for what that means for a pattern copied from a sibling.
+     * against a document library file's server-relative URL, a list item's {@code FileRef}, or a
+     * list item attachment's own server-relative URL - not the URL actually indexed. See the README
+     * for what that means for a pattern copied from a sibling.
      */
     protected static final String INCLUDE_PATTERN = "include_pattern";
 
@@ -188,6 +208,12 @@ public class SharePointDataStore extends AbstractDataStore {
         // malformed site.list_id - is meant to escape this method rather than be handled inside
         // it. It is store() that counts it, on its way out to core.
         final SharePointCrawler crawler = createCrawler(paramMap);
+        // Core's stop is a flag, not an interrupt: AbstractDataStore#stop clears alive and nothing
+        // interrupts this thread. The while below can only read that flag between the documents
+        // doCrawl returns, and one doCrawl call can span a whole folder or list listing - three
+        // requests per file - before it returns anything. Handing the crawler the same flag lets
+        // its own queue loop and its retry backoff notice a stop too.
+        crawler.setStopRequested(() -> !alive);
         // Targets this loop lost to an exception. The crawler counts the ones it gave up on after
         // exhausting their retries; neither counter can see the other's targets, because the
         // exception that lands below left SharePointCrawler#doCrawl at its generic catch, which
@@ -283,6 +309,12 @@ public class SharePointDataStore extends AbstractDataStore {
                         }
                     }
 
+                    // What lands in the admin UI's URL column for this record is whatever the
+                    // exception was constructed with, and this plugin does not construct it
+                    // uniformly: FileCrawl passes a file's server-relative URL
+                    // ("/sites/x/a.pdf"), while SharePointCrawler#doCrawl's generic catch passes
+                    // the stats key's id, which is "<type>#<identifier>" - not a URL. See
+                    // SharePointCrawler#storeFailureUrl for the full list of shapes.
                     String url = "";
                     if (target instanceof DataStoreCrawlingException dce) {
                         url = dce.getUrl();
@@ -295,6 +327,12 @@ public class SharePointDataStore extends AbstractDataStore {
                 } catch (final Throwable t) {
                     logger.warn("Crawling Access Exception: ", t);
                     failedTargets++;
+                    // Blank on purpose: this catch only sees exceptions that are not
+                    // CrawlingAccessException, which is the one type carrying a url - the
+                    // DataStoreCrawlingException doCrawl throws is a subclass of it and lands in
+                    // the catch above instead. Nothing left here identifies a crawl target, so the
+                    // admin UI shows this record with an empty URL column and the exception class
+                    // name plus the stack trace in the log are what identify it.
                     ComponentUtil.getComponent(FailureUrlService.class).store(dataConfig, t.getClass().getCanonicalName(), "", t);
                 }
                 if (readInterval > 0) {
@@ -380,7 +418,7 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("role.skip")) {
             config.setSkipRole(Boolean.parseBoolean(paramMap.getAsString("role.skip")));
         }
-        config.setIgnoreError(Constants.TRUE.equalsIgnoreCase(paramMap.getAsString(IGNORE_ERROR, Constants.TRUE)));
+        config.setIgnoreError(Constants.TRUE.equalsIgnoreCase(paramMap.getAsString(IGNORE_ERROR, Constants.FALSE)));
         if (paramMap.containsKey(PROXY_HOST)) {
             config.setProxyHost(paramMap.getAsString(PROXY_HOST));
             config.setProxyPort(parseInt(paramMap.getAsString(PROXY_PORT), -1, PROXY_PORT));
