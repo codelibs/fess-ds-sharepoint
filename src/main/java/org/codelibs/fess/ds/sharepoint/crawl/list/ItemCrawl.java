@@ -19,6 +19,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,6 +66,10 @@ public class ItemCrawl extends SharePointCrawl {
     private final String listName;
     /** Unique identifier of the list item */
     private final String itemId;
+    /** Creation date of the list item, from the list item listing's ISO 8601 value */
+    private final Date created;
+    /** Last modification date of the list item, from the list item listing's ISO 8601 value */
+    private final Date modified;
     /** Access roles for the list item */
     private final List<String> roles;
     /** Flag indicating if this is a subpage item */
@@ -81,17 +86,24 @@ public class ItemCrawl extends SharePointCrawl {
      * @param listId unique identifier of the SharePoint list
      * @param listName display name of the SharePoint list
      * @param itemId unique identifier of the list item to crawl
+     * @param created creation date of the list item, read from the list item listing rather than
+     *            the per-item field values, which SharePoint renders in the site's regional
+     *            format instead of a fixed one
+     * @param modified last modification date of the list item, read the same way as {@code created}
      * @param roles access roles for the list item
      * @param isSubPage flag indicating if this is a subpage item
      * @param includeFields list of field names to include in content extraction
      * @param excludeFields list of field name patterns to exclude from content extraction
      */
-    public ItemCrawl(final SharePointClient client, final String listId, final String listName, final String itemId,
-            final List<String> roles, final boolean isSubPage, final List<String> includeFields, final List<String> excludeFields) {
+    public ItemCrawl(final SharePointClient client, final String listId, final String listName, final String itemId, final Date created,
+            final Date modified, final List<String> roles, final boolean isSubPage, final List<String> includeFields,
+            final List<String> excludeFields) {
         super(client);
         this.listId = listId;
         this.listName = listName != null ? listName : StringUtil.EMPTY;
         this.itemId = itemId;
+        this.created = created;
+        this.modified = modified;
         this.roles = roles;
         this.isSubPage = isSubPage;
         this.includeFields = includeFields;
@@ -130,8 +142,11 @@ public class ItemCrawl extends SharePointCrawl {
         dataMap.put(fessConfig.getIndexFieldContent(), content);
         dataMap.put(fessConfig.getIndexFieldDigest(), buildDigest(content));
         dataMap.put(fessConfig.getIndexFieldContentLength(), content.length());
-        dataMap.put(fessConfig.getIndexFieldLastModified(), response.getModified());
-        dataMap.put(fessConfig.getIndexFieldCreated(), response.getCreated());
+        // Read from the list item listing's ISO 8601 values rather than response.getModified()/
+        // getCreated(), which SharePoint renders in the site's regional format and which a site
+        // configured for anything else can leave null.
+        dataMap.put(fessConfig.getIndexFieldLastModified(), modified);
+        dataMap.put(fessConfig.getIndexFieldCreated(), created);
         dataMap.put(fessConfig.getIndexFieldMimetype(), "text/html");
         dataMap.put(fessConfig.getIndexFieldFiletype(), ComponentUtil.getFileTypeHelper().get("text/html"));
         for (final Map.Entry<String, String> entry : response.getValues().entrySet()) {

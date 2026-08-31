@@ -26,6 +26,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.SharePointCrawler;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
+import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFoldersResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
@@ -49,6 +50,21 @@ import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 public class SiteCrawl extends SharePointCrawl {
     /** Logger for site crawling operations */
     private static final Logger logger = LogManager.getLogger(SiteCrawl.class);
+
+    /** What the top-level folder listing asks for per request. */
+    private static final int PAGE_SIZE = 100;
+
+    /**
+     * Upper bound on the number of pages the top-level folder listing may fetch.
+     *
+     * <p>The listing ends when a page comes back empty or shorter than {@link #PAGE_SIZE}. A
+     * server that ignores the skip parameter answers the same full first page instead, so without
+     * this bound the loop would neither finish nor stay within memory - the same hazard
+     * {@link FolderCrawl} guards against for the folders and files inside one folder, applied here
+     * to a site's top-level folders. At {@link #PAGE_SIZE} entries per page it allows 10,000
+     * top-level folders, twice SharePoint's own 5,000-item list view threshold.
+     */
+    private static final int MAX_PAGES = 100;
 
     /** Crawler configuration containing site settings and filters */
     private final SharePointCrawler.CrawlerConfig config;
@@ -86,12 +102,35 @@ public class SiteCrawl extends SharePointCrawl {
             logger.info("[Crawling Site] [siteName:{}]", config.getSiteName());
         }
         final Set<String> targetFolderName = new HashSet<>();
-        final GetFoldersResponse getFoldersResponse =
-                client.api().doclib().getFolders().setServerRelativeUrl("/sites/" + config.getSiteName() + "/").execute();
-        getFoldersResponse.getFolders().stream().filter(folder -> !isExcludeFolder(folder.getName())).forEach(folder -> {
-            targetFolderName.add(folder.getName());
-            crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache));
-        });
+        final String siteFolderUrl = "/sites/" + config.getSiteName() + "/";
+        int foldersStart = 0;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            final GetFoldersResponse getFoldersResponse = client.api()
+                    .doclib()
+                    .getFolders()
+                    .setServerRelativeUrl(siteFolderUrl)
+                    .setStart(foldersStart)
+                    .setNum(PAGE_SIZE)
+                    .execute();
+            final List<GetFolderResponse> folders = getFoldersResponse.getFolders();
+            if (folders.isEmpty()) {
+                break;
+            }
+            foldersStart += PAGE_SIZE;
+            folders.stream().filter(folder -> !isExcludeFolder(folder.getName())).forEach(folder -> {
+                targetFolderName.add(folder.getName());
+                crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache));
+            });
+            if (folders.size() < PAGE_SIZE) {
+                break;
+            }
+            if (page == MAX_PAGES - 1) {
+                // Truncating here is not counted as a crawl failure, so the stale-document
+                // cleanup still runs and documents past the bound can be removed from the index.
+                logger.warn("Stopped listing the top-level folders of site {} after {} pages; the listing may be truncated.",
+                        config.getSiteName(), MAX_PAGES);
+            }
+        }
         final GetListsResponse getListsResponse = client.api().list().getLists().execute();
         getListsResponse.getLists()
                 .stream()

@@ -230,6 +230,53 @@ public class GetListItemRoleTest extends UnitDsTestCase {
     }
 
     @Test
+    public void test_aFullPageOfLimitedAccessDoesNotEndTheListing() throws Exception {
+        // Limited Access assignments are filtered out of the result, and a list with broken
+        // inheritance routinely has a whole page of them. The listing used to stop as soon as a
+        // page contributed nothing, so every role assignment on the pages after it was lost.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + "&%24expand=RoleDefinitionBindings", JSON,
+                    roleAssignmentPage("5", 1, PAGE_SIZE));
+            server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200&%24expand=RoleDefinitionBindings", JSON,
+                    "{\"value\":[{\"PrincipalId\":12,\"RoleDefinitionBindings\":[{\"RoleTypeKind\":3}]}]}");
+            server.onPathStatus(ITEM_PATH + "/RoleAssignments/GetByPrincipalId(12)/Member", 200, JSON,
+                    "{\"Id\":\"12\",\"Title\":\"Carol\",\"LoginName\":\"i:0#.f|membership|carol@example.com\",\"PrincipalType\":1}");
+            server.start();
+
+            final GetListItemRoleResponse response = executeAgainst(server);
+
+            assertEquals("the real assignment behind the Limited Access page must be read", 1, response.getUsers().size());
+            assertEquals("and it must be the one from the second page", "Carol", response.getUsers().get(0).getTitle());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_roleAssignmentListingStopsWhenTheServerIgnoresSkip() throws Exception {
+        // A stub registered by path answers every query identically, so this mock ignores $skip
+        // exactly the way a broken SharePoint server does. Only the page bound can end the
+        // listing; without one this call never returns, which is what the timeout above turns
+        // into a failure instead of a hung suite.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            // One group repeated across the page: the group cache answers every repeat after the
+            // first, so the listing costs one member lookup rather than one per assignment.
+            server.onPathStatus(ITEM_PATH + "/RoleAssignments", 200, JSON, roleAssignmentPage("7", 3, PAGE_SIZE));
+            server.onPathStatus(ITEM_PATH + "/RoleAssignments/GetByPrincipalId(7)/Member", 200, JSON,
+                    "{\"Id\":\"7\",\"Title\":\"Marketing\",\"LoginName\":\"\",\"PrincipalType\":8}");
+            server.onPathStatus(usersPath("7"), 200, JSON, aliceMember("9"));
+            server.start();
+
+            executeAgainst(server);
+
+            assertEquals("the listing must stop after its page bound", MAX_PAGES,
+                    server.getRecordedRequests()
+                            .stream()
+                            .filter(request -> (ITEM_PATH + "/RoleAssignments").equals(request.getPath()))
+                            .count());
+        }
+    }
+
+    @Test
     public void test_groupMembersAreReadPageByPage() throws Exception {
         // A group with more members than one server page must yield all of them. The members
         // used to be fetched with a single unpaged request.
@@ -303,6 +350,9 @@ public class GetListItemRoleTest extends UnitDsTestCase {
 
     private static final int PAGE_SIZE = 200;
 
+    /** How many pages one listing is allowed to fetch. */
+    private static final int MAX_PAGES = 100;
+
     private static final String MEMBER_PAGING_QUERY = "%24skip=0&%24top=200";
 
     private static final String LIST_ID = "11111111-1111-1111-1111-111111111111";
@@ -324,6 +374,29 @@ public class GetListItemRoleTest extends UnitDsTestCase {
                 "{\"value\":[]}");
         server.onPathStatus(ITEM_PATH + "/RoleAssignments/GetByPrincipalId(" + principalId + ")/Member", 200, JSON,
                 "{\"Id\":\"" + principalId + "\",\"Title\":\"" + title + "\",\"LoginName\":\"\",\"PrincipalType\":8}");
+    }
+
+    /**
+     * A page of role assignments naming one principal {@code count} times.
+     *
+     * @param principalId the principal every entry names
+     * @param roleTypeKind the bound role type; 1 is Limited Access, which the filter drops
+     * @param count how many entries the page holds
+     * @return the JSON body
+     */
+    private static String roleAssignmentPage(final String principalId, final int roleTypeKind, final int count) {
+        final StringBuilder buf = new StringBuilder("{\"value\":[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                buf.append(',');
+            }
+            buf.append("{\"PrincipalId\":")
+                    .append(principalId)
+                    .append(",\"RoleDefinitionBindings\":[{\"RoleTypeKind\":")
+                    .append(roleTypeKind)
+                    .append("}]}");
+        }
+        return buf.append("]}").toString();
     }
 
     private static String userPage(final int firstId, final int count) {

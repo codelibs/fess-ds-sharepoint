@@ -41,6 +41,9 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
 
     private final List<AttachmentFile> files = new ArrayList<>();
 
+    /** The Atom feed's {@code rel="next"} link, if the server indicated there is a next page. */
+    private String nextLink;
+
     /**
      * Builds a GetListItemAttachments2013Response from an XML response.
      *
@@ -53,6 +56,7 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
 
+        response.nextLink = DocumentUtil.getValue(dataMap, "nextLink", String.class);
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> valueList = (List<Map<String, Object>>) dataMap.get("value");
         valueList.stream().forEach(value -> {
@@ -62,6 +66,15 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
         });
 
         return response;
+    }
+
+    /**
+     * Returns the Atom feed's {@code rel="next"} link for this page.
+     *
+     * @return the URL of the next page, or null if this was the last page
+     */
+    public String getNextLink() {
+        return nextLink;
     }
 
     @Override
@@ -105,6 +118,10 @@ public class GetListItemAttachments2013Response extends GetListItemAttachmentsRe
             } else if ("d:ServerRelativeUrl".equals(qName)) {
                 fieldName = "ServerRelativeUrl";
                 buffer.setLength(0);
+            } else if ("link".equals(qName) && "next".equals(attributes.getValue("rel"))) {
+                // The Atom feed's own paging link, present only when the server has more
+                // attachments than fit on this page.
+                dataMap.put("nextLink", attributes.getValue("href"));
             }
         }
 

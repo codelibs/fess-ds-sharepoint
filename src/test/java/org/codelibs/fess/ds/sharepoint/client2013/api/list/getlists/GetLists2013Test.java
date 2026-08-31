@@ -23,6 +23,8 @@ import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class GetLists2013Test extends UnitDsTestCase {
 
@@ -80,5 +82,71 @@ public class GetLists2013Test extends UnitDsTestCase {
                 assertTrue("Hidden must be read from the entry, not from the feed", tripwire.isHidden());
             }
         }
+    }
+
+    @Test
+    public void test_followsAtomNextLinkAcrossPages() throws Exception {
+        // A feed with a <link rel="next"> used to be a dead end: GetLists2013 read only the
+        // first page and never followed it, silently truncating a site with more lists than the
+        // server's own default page size.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.start();
+            final String nextUrl = server.getBaseUrl() + "sites/test/_api/lists?nextpage=1";
+            server.onPathStatus("/sites/test/_api/lists", 200, "application/xml",
+                    listsFeed(nextUrl, "11111111-1111-1111-1111-111111111111", "List A"));
+            server.onPathQuery("/sites/test/_api/lists", "nextpage=1", "application/xml",
+                    listsFeed(null, "22222222-2222-2222-2222-222222222222", "List B"));
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final GetLists2013 api = new GetLists2013(httpClient, server.getBaseUrl() + "sites/test/", null);
+                final List<GetListsResponse.SharePointList> lists = api.execute().getLists();
+
+                assertEquals("both pages must be read", 2, lists.size());
+                assertEquals("List A", lists.get(0).getListName());
+                assertEquals("List B", lists.get(1).getListName());
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_stopsFollowingAtomNextLinkAfterPageBound() throws Exception {
+        // A server that always answers with a next link pointing back at itself must not be
+        // followed forever. Without a bound this call never returns, which is what the timeout
+        // above turns into a failure instead of a hung suite.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.start();
+            final String selfUrl = server.getBaseUrl() + "sites/test/_api/lists?next=1";
+            // Registered by path only, so it answers the initial request and every "?next=1"
+            // follow-up identically - exactly how a server that never advances would behave.
+            server.onPathStatus("/sites/test/_api/lists", 200, "application/xml",
+                    listsFeed(selfUrl, "11111111-1111-1111-1111-111111111111", "List A"));
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final GetLists2013 api = new GetLists2013(httpClient, server.getBaseUrl() + "sites/test/", null);
+                final List<GetListsResponse.SharePointList> lists = api.execute().getLists();
+
+                assertEquals("the loop must stop at its page bound, one list per page", 100, lists.size());
+            }
+        }
+    }
+
+    private static String listsFeed(final String nextLink, final String id, final String title) {
+        final StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+        xml.append("<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\" "
+                + "xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">");
+        if (nextLink != null) {
+            xml.append("<link rel=\"next\" href=\"").append(nextLink).append("\"/>");
+        }
+        xml.append("<entry><content type=\"application/xml\"><m:properties>");
+        xml.append("<d:Id m:type=\"Edm.Guid\">").append(id).append("</d:Id>");
+        xml.append("<d:Title>").append(title).append("</d:Title>");
+        xml.append("<d:EntityTypeName>GenericList</d:EntityTypeName>");
+        xml.append("<d:NoCrawl m:type=\"Edm.Boolean\">false</d:NoCrawl>");
+        xml.append("<d:Hidden m:type=\"Edm.Boolean\">false</d:Hidden>");
+        xml.append("</m:properties></content></entry>");
+        xml.append("</feed>");
+        return xml.toString();
     }
 }

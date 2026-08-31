@@ -22,6 +22,8 @@ import java.util.Map;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRole;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
@@ -34,6 +36,18 @@ import org.xml.sax.helpers.DefaultHandler;
  * This class extends GetListItemRole to provide SharePoint 2013-specific XML-based API functionality.
  */
 public class GetListItemRole2013 extends GetListItemRole {
+    private static final Logger logger = LogManager.getLogger(GetListItemRole2013.class);
+
+    /** What each listing asks for per request, matching {@code GetListItemRole}. */
+    private static final int PAGE_SIZE = 200;
+
+    /**
+     * Upper bound on the number of pages the role assignment and group member listings may fetch.
+     * See {@code FolderCrawl} for the reasoning; both were read with a single unpaged request,
+     * silently truncating an item's permissions past the server's own page size.
+     */
+    private static final int MAX_PAGES = 100;
+
     private String listId = null;
     private String itemId = null;
     private Map<String, GetListItemRole2013Response.SharePointGroup> sharePointGroupCache = null;
@@ -69,15 +83,32 @@ public class GetListItemRole2013 extends GetListItemRole {
             throw new SharePointClientException("listId/itemId is required.");
         }
 
-        final HttpGet httpGet = new HttpGet(buildRoleAssignmentsUrl());
-        final XmlResponse xmlResponse = doXmlRequest(httpGet);
-
         final GetListItemRole2013Response response = new GetListItemRole2013Response();
-        final GetListItemRoleDocHandler getListItemRoleDocHandler = new GetListItemRoleDocHandler();
-        xmlResponse.parseXml(getListItemRoleDocHandler);
-        final Map<String, Object> bodyMap = getListItemRoleDocHandler.getDataMap();
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> values = (List<Map<String, Object>>) bodyMap.get("value");
+        final List<Map<String, Object>> values = new ArrayList<>();
+        int start = 0;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            final HttpGet httpGet = new HttpGet(buildRoleAssignmentsUrl() + "?" + getPagingParam(start, PAGE_SIZE));
+            final XmlResponse xmlResponse = doXmlRequest(httpGet);
+            final GetListItemRoleDocHandler getListItemRoleDocHandler = new GetListItemRoleDocHandler();
+            xmlResponse.parseXml(getListItemRoleDocHandler);
+            final Map<String, Object> bodyMap = getListItemRoleDocHandler.getDataMap();
+            @SuppressWarnings("unchecked")
+            final List<Map<String, Object>> pageValues = (List<Map<String, Object>>) bodyMap.get("value");
+            if (pageValues.isEmpty()) {
+                break;
+            }
+            start += PAGE_SIZE;
+            values.addAll(pageValues);
+            if (pageValues.size() < PAGE_SIZE) {
+                break;
+            }
+            if (page == MAX_PAGES - 1) {
+                // Truncating here is not counted as a crawl failure, so the item is still indexed
+                // with whatever permissions were read - some permissions may be missing.
+                logger.warn("Stopped listing the role assignments of item {} after {} pages; the listing may be truncated.", itemId,
+                        MAX_PAGES);
+            }
+        }
         values.stream()
                 .map(value -> (DocumentUtil.getValue(value, "PrincipalId", String.class)))
                 .filter(principalId -> !isLimitedAccessOnly(principalId))
@@ -228,13 +259,29 @@ public class GetListItemRole2013 extends GetListItemRole {
      * @param id the ID of the SharePoint group
      */
     private void fillSharePointGroup(final GetListItemRole2013Response.SharePointGroup sharePointGroup, final String id) {
-        final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
-        final XmlResponse usersResponse = doXmlRequest(usersRequest);
-        final UsersDocHandler usersDocHandler = new UsersDocHandler();
-        usersResponse.parseXml(usersDocHandler);
-        final Map<String, Object> usersResponseMap = usersDocHandler.getDataMap();
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> usersList = (List<Map<String, Object>>) usersResponseMap.get("value");
+        final List<Map<String, Object>> usersList = new ArrayList<>();
+        int start = 0;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            final HttpGet usersRequest = new HttpGet(buildUsersUrl(id) + "?" + getPagingParam(start, PAGE_SIZE));
+            final XmlResponse usersResponse = doXmlRequest(usersRequest);
+            final UsersDocHandler usersDocHandler = new UsersDocHandler();
+            usersResponse.parseXml(usersDocHandler);
+            final Map<String, Object> usersResponseMap = usersDocHandler.getDataMap();
+            @SuppressWarnings("unchecked")
+            final List<Map<String, Object>> users = (List<Map<String, Object>>) usersResponseMap.get("value");
+            if (users == null || users.isEmpty()) {
+                break;
+            }
+            start += PAGE_SIZE;
+            usersList.addAll(users);
+            if (users.size() < PAGE_SIZE) {
+                break;
+            }
+            if (page == MAX_PAGES - 1) {
+                logger.warn("Stopped listing the members of SharePoint group {} after {} pages; the listing may be truncated.", id,
+                        MAX_PAGES);
+            }
+        }
         usersList.forEach(user -> {
             final String userId = DocumentUtil.getValue(user, "Id", String.class);
             final String userTitle = DocumentUtil.getValue(user, "Title", String.class);

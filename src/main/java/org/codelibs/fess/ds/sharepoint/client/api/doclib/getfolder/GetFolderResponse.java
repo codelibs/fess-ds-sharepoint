@@ -18,11 +18,14 @@ package org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
-import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.util.DocumentUtil;
 
 /**
@@ -36,6 +39,7 @@ import org.codelibs.fess.util.DocumentUtil;
  * @see SharePointApiResponse
  */
 public class GetFolderResponse implements SharePointApiResponse {
+    private static final Logger logger = LogManager.getLogger(GetFolderResponse.class);
 
     /** The unique identifier of the folder */
     protected String id = null;
@@ -141,7 +145,6 @@ public class GetFolderResponse implements SharePointApiResponse {
      *
      * @param jsonMap the map containing folder data from SharePoint
      * @return a new GetFolderResponse instance populated with the data
-     * @throws SharePointClientException if date parsing fails
      */
     public static GetFolderResponse buildFromMap(final Map<String, Object> jsonMap) {
         final GetFolderResponse response = new GetFolderResponse();
@@ -149,20 +152,38 @@ public class GetFolderResponse implements SharePointApiResponse {
         response.name = DocumentUtil.getValue(jsonMap, "Name", String.class);
         response.exists = DocumentUtil.getValue(jsonMap, "Exists", Boolean.class, false);
         response.serverRelativeUrl = DocumentUtil.getValue(jsonMap, "ServerRelativeUrl", String.class);
-        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-        try {
-            final String created = DocumentUtil.getValue(jsonMap, "TimeCreated", String.class);
-            if (created != null) {
-                response.created = sdf.parse(created);
-            }
-            final String modified = DocumentUtil.getValue(jsonMap, "TimeLastModified", String.class);
-            if (modified != null) {
-                response.modified = sdf.parse(modified);
-            }
-        } catch (final ParseException e) {
-            throw new SharePointClientException(e);
-        }
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT);
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        response.created = parseDate(sdf, DocumentUtil.getValue(jsonMap, "TimeCreated", String.class));
+        response.modified = parseDate(sdf, DocumentUtil.getValue(jsonMap, "TimeLastModified", String.class));
         response.itemCount = DocumentUtil.getValue(jsonMap, "ItemCount", Integer.class, 0);
         return response;
+    }
+
+    /**
+     * Parses an ISO 8601 date, tolerating an absent or unparseable value.
+     *
+     * <p>A folder's date failing to parse used to abort the whole subtree at the caller's first
+     * call - see {@code FolderCrawl}, which reads this folder before it lists anything inside it.
+     * Losing just the date keeps the folder and everything under it.
+     *
+     * <p>Parsed per field rather than under one {@code try}, so a malformed {@code TimeCreated}
+     * costs only itself and leaves {@code TimeLastModified} - the value the index actually uses -
+     * intact.
+     *
+     * @param sdf the date format to parse with
+     * @param value the date text, may be null
+     * @return the parsed date, or null if {@code value} is null or does not match the format
+     */
+    private static Date parseDate(final SimpleDateFormat sdf, final String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return sdf.parse(value);
+        } catch (final ParseException e) {
+            logger.warn("Failed to parse date: {}", value, e);
+            return null;
+        }
     }
 }

@@ -20,7 +20,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -87,20 +89,34 @@ public class GetFilesResponse implements SharePointApiResponse {
         docLibFile.fileName = DocumentUtil.getValue(dataMap, "Name", String.class);
         docLibFile.title = DocumentUtil.getValue(dataMap, "Title", String.class, StringUtil.EMPTY);
         docLibFile.serverRelativeUrl = DocumentUtil.getValue(dataMap, "ServerRelativeUrl", String.class);
-        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-        try {
-            final String created = DocumentUtil.getValue(dataMap, "TimeCreated", String.class);
-            if (created != null) {
-                docLibFile.created = sdf.parse(created);
-            }
-            final String modified = DocumentUtil.getValue(dataMap, "TimeLastModified", String.class);
-            if (modified != null) {
-                docLibFile.modified = sdf.parse(modified);
-            }
-        } catch (final ParseException e) {
-            logger.warn("Failed to parse date.", e);
-        }
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT);
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        docLibFile.created = parseDate(sdf, DocumentUtil.getValue(dataMap, "TimeCreated", String.class));
+        docLibFile.modified = parseDate(sdf, DocumentUtil.getValue(dataMap, "TimeLastModified", String.class));
         return docLibFile;
+    }
+
+    /**
+     * Parses an ISO 8601 date, tolerating an absent or unparseable value.
+     *
+     * <p>Parsed per field rather than under one {@code try}, so a malformed {@code TimeCreated}
+     * costs only itself and leaves {@code TimeLastModified} - the value the index actually uses -
+     * intact.
+     *
+     * @param sdf the date format to parse with
+     * @param value the date text, may be null
+     * @return the parsed date, or null if {@code value} is null or does not match the format
+     */
+    private static Date parseDate(final SimpleDateFormat sdf, final String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return sdf.parse(value);
+        } catch (final ParseException e) {
+            logger.warn("Failed to parse date: {}", value, e);
+            return null;
+        }
     }
 
     /**

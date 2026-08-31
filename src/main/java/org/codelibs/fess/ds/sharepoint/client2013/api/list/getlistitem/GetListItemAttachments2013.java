@@ -17,6 +17,8 @@ package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemAttachments;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
@@ -26,6 +28,14 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
  * This class extends GetListItemAttachments to provide SharePoint 2013-specific XML-based API functionality.
  */
 public class GetListItemAttachments2013 extends GetListItemAttachments {
+    private static final Logger logger = LogManager.getLogger(GetListItemAttachments2013.class);
+
+    /**
+     * Upper bound on the number of pages this request may follow via the Atom feed's
+     * {@code rel="next"} link. See {@code GetLists#execute()} for the reasoning.
+     */
+    private static final int MAX_PAGES = 100;
+
     private String listId = null;
     private String itemId = null;
 
@@ -52,13 +62,27 @@ public class GetListItemAttachments2013 extends GetListItemAttachments {
         if (listId == null || itemId == null) {
             throw new SharePointClientException("listId/itemId is required.");
         }
-        final HttpGet httpGet = new HttpGet(buildUrl());
-        final XmlResponse xmlResponse = doXmlRequest(httpGet);
-        try {
-            return GetListItemAttachments2013Response.build(xmlResponse);
-        } catch (final Exception e) {
-            throw new SharePointClientException(e);
+        final GetListItemAttachments2013Response response = new GetListItemAttachments2013Response();
+        String url = buildUrl();
+        for (int page = 0; page < MAX_PAGES; page++) {
+            final HttpGet httpGet = new HttpGet(url);
+            final XmlResponse xmlResponse = doXmlRequest(httpGet);
+            try {
+                final GetListItemAttachments2013Response pageResponse = GetListItemAttachments2013Response.build(xmlResponse);
+                response.getFiles().addAll(pageResponse.getFiles());
+                final String nextLink = pageResponse.getNextLink();
+                if (nextLink == null) {
+                    return response;
+                }
+                url = nextLink;
+            } catch (final Exception e) {
+                throw new SharePointClientException(e);
+            }
+            if (page == MAX_PAGES - 1) {
+                logger.warn("Stopped listing the attachments of item {} after {} pages; the listing may be truncated.", itemId, MAX_PAGES);
+            }
         }
+        return response;
     }
 
     @Override

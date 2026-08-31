@@ -36,6 +36,18 @@ public class GetLists extends SharePointApi<GetListsResponse> {
     private static final String API_PATH = "_api/lists";
 
     /**
+     * Upper bound on the number of pages this request may follow via {@code odata.nextLink}.
+     *
+     * <p>The loop ends when a response carries no {@code odata.nextLink}. A server that kept
+     * returning a link back to itself would otherwise loop forever, so this bound turns that into
+     * a truncated listing with a warning instead - the same hazard {@link org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl}
+     * guards against for folder and file listings, applied here to a site's lists. At the
+     * server's own default page size this allows several thousand lists, far more than a real
+     * site ever defines.
+     */
+    private static final int MAX_PAGES = 100;
+
+    /**
      * Constructor.
      *
      * @param client HTTP client
@@ -48,19 +60,29 @@ public class GetLists extends SharePointApi<GetListsResponse> {
 
     @Override
     public GetListsResponse execute() {
-        final String buildUrl = siteUrl + "/" + API_PATH;
-        if (logger.isDebugEnabled()) {
-            logger.debug("buildUrl: {}", buildUrl);
+        final List<GetListsResponse.SharePointList> sharePointLists = new ArrayList<>();
+        String url = siteUrl + "/" + API_PATH;
+        for (int page = 0; page < MAX_PAGES; page++) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("buildUrl: {}", url);
+            }
+            final HttpGet httpGet = new HttpGet(url);
+            final JsonResponse jsonResponse = doJsonRequest(httpGet);
+            final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
+            appendLists(jsonMap, sharePointLists);
+            final String nextLink = DocumentUtil.getValue(jsonMap, "odata.nextLink", String.class);
+            if (nextLink == null) {
+                return new GetListsResponse(sharePointLists);
+            }
+            url = nextLink;
+            if (page == MAX_PAGES - 1) {
+                logger.warn("Stopped listing {} after {} pages; the listing may be truncated.", API_PATH, MAX_PAGES);
+            }
         }
-        final HttpGet httpGet = new HttpGet(buildUrl);
-        final JsonResponse jsonResponse = doJsonRequest(httpGet);
-        return buildResponse(jsonResponse);
+        return new GetListsResponse(sharePointLists);
     }
 
-    private GetListsResponse buildResponse(final JsonResponse jsonResponse) {
-        final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
-
-        final List<GetListsResponse.SharePointList> sharePointLists = new ArrayList<>();
+    private void appendLists(final Map<String, Object> jsonMap, final List<GetListsResponse.SharePointList> sharePointLists) {
         @SuppressWarnings("unchecked")
         final List<Map<String, Object>> valueList = (List<Map<String, Object>>) jsonMap.get("value");
         valueList.forEach(value -> {
@@ -82,7 +104,5 @@ public class GetLists extends SharePointApi<GetListsResponse> {
                     new GetListsResponse.SharePointList(id, title, noCrawl, hidden, entityTypeName);
             sharePointLists.add(sharePointList);
         });
-
-        return new GetListsResponse(sharePointLists);
     }
 }

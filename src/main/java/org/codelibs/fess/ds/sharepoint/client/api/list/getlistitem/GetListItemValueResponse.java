@@ -19,9 +19,12 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApiResponse;
@@ -32,6 +35,7 @@ import org.codelibs.fess.util.DocumentUtil;
  * This class encapsulates all the field values and metadata for a single list item.
  */
 public class GetListItemValueResponse implements SharePointApiResponse {
+    private static final Logger logger = LogManager.getLogger(GetListItemValueResponse.class);
 
     private String id;
     private String title;
@@ -207,18 +211,17 @@ public class GetListItemValueResponse implements SharePointApiResponse {
      *
      * @param jsonResponse the JSON response from the SharePoint API
      * @return the parsed response containing item field values
-     * @throws ParseException if date parsing fails
      */
-    public static GetListItemValueResponse build(final SharePointApi.JsonResponse jsonResponse) throws ParseException {
+    public static GetListItemValueResponse build(final SharePointApi.JsonResponse jsonResponse) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
-        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm");
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.ROOT);
 
         final GetListItemValueResponse response = new GetListItemValueResponse();
         response.id = DocumentUtil.getValue(jsonMap, "ID", String.class);
         response.title = DocumentUtil.getValue(jsonMap, "Title", String.class,
                 DocumentUtil.getValue(jsonMap, "FileLeafRef", String.class, StringUtil.EMPTY));
-        response.modified = sdf.parse(DocumentUtil.getValue(jsonMap, "Modified", String.class));
-        response.created = sdf.parse(DocumentUtil.getValue(jsonMap, "Created", String.class));
+        response.modified = parseDate(sdf, DocumentUtil.getValue(jsonMap, "Modified", String.class));
+        response.created = parseDate(sdf, DocumentUtil.getValue(jsonMap, "Created", String.class));
         response.author = DocumentUtil.getValue(jsonMap, "Author", String.class);
         response.editor = DocumentUtil.getValue(jsonMap, "Editor", String.class);
         response.fileRef = DocumentUtil.getValue(jsonMap, "FileRef", String.class, StringUtil.EMPTY);
@@ -241,6 +244,33 @@ public class GetListItemValueResponse implements SharePointApiResponse {
         jsonMap.entrySet().stream().forEach(entry -> response.values.put(entry.getKey(), entry.getValue().toString()));
 
         return response;
+    }
+
+    /**
+     * Parses a date rendered in the site's regional format, tolerating an absent or unexpected
+     * value.
+     *
+     * <p>{@code FieldValuesAsText} renders every field the way the site is configured to display
+     * it, so a site using a format other than the one hard-coded here would otherwise throw while
+     * the item is being built and lose the whole item - title, content and permissions included -
+     * rather than just its date. Callers that have the raw ISO 8601 {@code Created}/{@code
+     * Modified} values from the list item listing should prefer those instead; this exists for
+     * the case where only this rendered text is available.
+     *
+     * @param sdf the date format to parse with
+     * @param value the rendered date text, may be null
+     * @return the parsed date, or null if {@code value} is null or does not match the format
+     */
+    private static Date parseDate(final SimpleDateFormat sdf, final String value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return sdf.parse(value);
+        } catch (final ParseException e) {
+            logger.warn("Failed to parse date: {}", value, e);
+            return null;
+        }
     }
 
     /**

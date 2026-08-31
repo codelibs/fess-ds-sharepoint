@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -88,6 +89,57 @@ public class GetListItemRole2013Test extends UnitDsTestCase {
             final GetListItemRole2013Response.SharePointGroup nested = parent.getSharePointGroups().get(0);
             assertEquals("the nested group must carry its own title", "Engineering", nested.getTitle());
             assertEquals("the nested group's member must be read from the nested group", 1, nested.getUsers().size());
+        }
+    }
+
+    @Test
+    public void test_roleAssignmentsAreReadPageByPage() throws Exception {
+        // RoleAssignments used to be fetched with a single unpaged request, silently truncating
+        // an item's permissions past the server's own page size. The modern (non-2013) API
+        // already pages this at 200 per request; SharePoint 2013 did not.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathQuery(roleAssignmentsPath(), "%24skip=0&%24top=200", XML, roleAssignmentsFeedRepeated("10", 200));
+            server.onPathQuery(roleAssignmentsPath(), "%24skip=200&%24top=200", XML, roleAssignmentsFeed("12"));
+            server.onPathStatus(memberPath("10"), 200, XML, member("10", "Alice", 1, "i:0#.f|membership|alice@example.com"));
+            server.onPathStatus(memberPath("12"), 200, XML, member("12", "Carol", 1, "i:0#.f|membership|carol@example.com"));
+            server.onPathStatus(roleDefinitionBindingsPath("10"), 200, XML, roleTypeKindFeed(3));
+            server.onPathStatus(roleDefinitionBindingsPath("12"), 200, XML, roleTypeKindFeed(3));
+            server.start();
+
+            final GetListItemRole2013Response response = executeAgainst(server, new HashMap<>());
+
+            // 200 identical entries from the first (full) page, plus the one entry from the
+            // second (short) page that ends the loop. Without paging, only the first page's 200
+            // would ever be read, and the second page's principal would never be requested.
+            assertEquals("every principal across both pages must be read", 201, response.getUsers().size());
+            assertTrue("the second page's request must carry paging parameters",
+                    server.getRecordedRequests()
+                            .stream()
+                            .anyMatch(request -> roleAssignmentsPath().equals(request.getPath())
+                                    && "%24skip=200&%24top=200".equals(request.getQuery())));
+        }
+    }
+
+    @Test
+    public void test_groupMembersAreReadPageByPage() throws Exception {
+        // A group with more members than one server page must yield all of them. The members
+        // used to be fetched with a single unpaged request, so every document that group protects
+        // was indexed without the users past the server's own page size.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubRoleAssignment(server, "7");
+            server.onPathStatus(memberPath("7"), 200, XML, member("7", "Big", 8, ""));
+            // The first page answers any query, so an unpaged request gets it too and the
+            // assertion below reports the members that were lost rather than a missing stub.
+            server.onPathStatus(usersPath("7"), 200, XML, usersFeed(0, PAGE_SIZE));
+            server.onPathQuery(usersPath("7"), "%24skip=200&%24top=200", XML, usersFeed(PAGE_SIZE, 1));
+            server.start();
+
+            final GetListItemRole2013Response.SharePointGroup group = executeAgainst(server, new HashMap<>()).getSharePointGroups().get(0);
+
+            assertEquals("every member of both pages must be read", PAGE_SIZE + 1, group.getUsers().size());
+            assertTrue("the members request must carry paging parameters", server.getRecordedRequests()
+                    .stream()
+                    .anyMatch(request -> usersPath("7").equals(request.getPath()) && "%24skip=200&%24top=200".equals(request.getQuery())));
         }
     }
 
@@ -297,6 +349,9 @@ public class GetListItemRole2013Test extends UnitDsTestCase {
 
     private static final String XML = "application/xml";
 
+    /** What each listing asks for per request. */
+    private static final int PAGE_SIZE = 200;
+
     private static final String LIST_ID = "11111111-1111-1111-1111-111111111111";
 
     private static final String ITEM_ID = "1";
@@ -330,11 +385,24 @@ public class GetListItemRole2013Test extends UnitDsTestCase {
         server.onPathStatus(roleDefinitionBindingsPath(principalId), 200, XML, roleTypeKindFeed(3));
     }
 
-    private static String roleAssignmentsFeed(final String principalId) {
-        return "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-                + "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\">"
-                + "<entry><content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">"
-                + "<d:PrincipalId>" + principalId + "</d:PrincipalId>" + "</m:properties></content></entry></feed>";
+    private static String roleAssignmentsFeed(final String... principalIds) {
+        final StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+        xml.append("<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\">");
+        for (final String principalId : principalIds) {
+            xml.append("<entry><content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">");
+            xml.append("<d:PrincipalId>").append(principalId).append("</d:PrincipalId>");
+            xml.append("</m:properties></content></entry>");
+        }
+        xml.append("</feed>");
+        return xml.toString();
+    }
+
+    /** Repeats one role assignment entry {@code count} times, for cheaply filling a full page. */
+    private static String roleAssignmentsFeedRepeated(final String principalId, final int count) {
+        final String[] principalIds = new String[count];
+        Arrays.fill(principalIds, principalId);
+        return roleAssignmentsFeed(principalIds);
     }
 
     private static String roleTypeKindFeed(final int roleTypeKind) {
@@ -350,6 +418,23 @@ public class GetListItemRole2013Test extends UnitDsTestCase {
                 + "<content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">" + "<d:Id>" + id
                 + "</d:Id><d:Title>" + title + "</d:Title>" + "<d:PrincipalType>" + principalType + "</d:PrincipalType>" + "<d:LoginName>"
                 + loginName + "</d:LoginName>" + "</m:properties></content></entry>";
+    }
+
+    /** A page of {@code count} distinct users, starting at {@code firstId}. */
+    private static String usersFeed(final int firstId, final int count) {
+        final StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+        xml.append("<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\">");
+        for (int i = 0; i < count; i++) {
+            final int id = firstId + i;
+            xml.append("<entry><content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">");
+            xml.append("<d:Id>").append(id).append("</d:Id><d:Title>User ").append(id).append("</d:Title>");
+            xml.append("<d:PrincipalType>1</d:PrincipalType>");
+            xml.append("<d:LoginName>i:0#.f|membership|u").append(id).append("@example.com</d:LoginName>");
+            xml.append("</m:properties></content></entry>");
+        }
+        xml.append("</feed>");
+        return xml.toString();
     }
 
     private static String usersFeedOneEntry(final String id, final String title, final int principalType, final String loginName) {
