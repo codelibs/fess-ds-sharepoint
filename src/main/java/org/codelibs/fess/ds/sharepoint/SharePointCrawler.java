@@ -32,6 +32,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.core.misc.Pair;
 import org.codelibs.fess.app.service.FailureUrlService;
+import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
@@ -43,6 +44,7 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.codelibs.fess.ds.sharepoint.crawl.SharePointCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.SiteCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
+import org.codelibs.fess.ds.sharepoint.crawl.file.FileCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
@@ -50,6 +52,7 @@ import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.util.ComponentUtil;
+import org.lastaflute.di.core.exception.ComponentNotFoundException;
 
 import jakarta.validation.ValidationException;
 
@@ -67,6 +70,8 @@ public class SharePointCrawler implements Closeable {
 
     private final AtomicLong failureCount = new AtomicLong();
 
+    private final UrlFilter urlFilter;
+
     /**
      * Creates a new SharePointCrawler with the specified configuration.
      *
@@ -76,6 +81,7 @@ public class SharePointCrawler implements Closeable {
         validate(config);
         this.client = createClient(config);
         this.config = config;
+        this.urlFilter = buildUrlFilter(config);
         setFirstCrawl(config);
         if (crawlingQueue.isEmpty()) {
             logger.error("Failed to start crawl.");
@@ -121,23 +127,66 @@ public class SharePointCrawler implements Closeable {
         if ("2013".equals(config.getSharePointVersion())) {
             builder.apply2013();
         }
+        if (StringUtils.isNotBlank(config.getProxyHost())) {
+            builder.setProxyHost(config.getProxyHost()).setProxyPort(config.getProxyPort());
+        }
         return builder.build();
+    }
+
+    /**
+     * Builds the {@code include_pattern}/{@code exclude_pattern} filter once for the whole crawl,
+     * using the same {@link UrlFilter} component every other {@code fess-ds-*} plugin with this
+     * parameter uses.
+     *
+     * <p>Built once here, in the constructor, rather than fetched fresh wherever a crawl unit
+     * needs to check a value: {@link UrlFilter} is prototype-scoped and backed by an in-memory
+     * service keyed by session ID (see {@code UrlFilterServiceImpl}/{@code MemoryDataHelper} in
+     * fess-crawler), so building and re-initializing one per file would keep appending the same
+     * patterns to that session's pattern list on every call, in a map nothing clears mid-crawl.
+     *
+     * @param config the crawler configuration
+     * @return a filter to reuse for the whole crawl, or null if neither pattern is configured or
+     *         the component is unavailable (as in this plugin's own unit tests, whose container
+     *         does not wire it)
+     */
+    private UrlFilter buildUrlFilter(final CrawlerConfig config) {
+        if (StringUtils.isBlank(config.getIncludePattern()) && StringUtils.isBlank(config.getExcludePattern())) {
+            return null;
+        }
+        final UrlFilter filter;
+        try {
+            filter = ComponentUtil.getComponent(UrlFilter.class);
+        } catch (final ComponentNotFoundException e) {
+            logger.warn("include_pattern/exclude_pattern is configured, but no UrlFilter component is available; not filtering.", e);
+            return null;
+        }
+        if (StringUtils.isNotBlank(config.getIncludePattern())) {
+            filter.addInclude(config.getIncludePattern());
+        }
+        if (StringUtils.isNotBlank(config.getExcludePattern())) {
+            filter.addExclude(config.getExcludePattern());
+        }
+        filter.init(config.getSessionId());
+        return filter;
     }
 
     private void setFirstCrawl(final CrawlerConfig crawlerConfig) {
         final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = new ConcurrentHashMap<>();
         if (crawlerConfig.getInitialListId() == null && crawlerConfig.getInitialListName() == null
                 && crawlerConfig.getInitialDocLibPath() == null) {
-            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig, sharePointGroupCache));
+            crawlingQueue.offer(new SiteCrawl(client, crawlerConfig, sharePointGroupCache, urlFilter));
         } else {
             if (crawlerConfig.getInitialListId() != null || crawlerConfig.getInitialListName() != null) {
                 crawlingQueue.offer(new ListCrawl(client, crawlerConfig.getInitialListId(), crawlerConfig.getInitialListName(),
                         crawlerConfig.listItemNumPerPages, sharePointGroupCache, crawlerConfig.isSubPage(), crawlerConfig.isSkipRole(),
-                        crawlerConfig.getListContentIncludeFields(), crawlerConfig.getListContentExcludeFields()));
+                        crawlerConfig.getListContentIncludeFields(), crawlerConfig.getListContentExcludeFields(),
+                        crawlerConfig.isIgnoreError(), crawlerConfig.getExtractorName(), crawlerConfig.getSupportedMimeTypes(),
+                        crawlerConfig.getMaxContentLength(), urlFilter));
             }
             if (crawlerConfig.getInitialDocLibPath() != null) {
-                crawlingQueue.offer(
-                        new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), crawlerConfig.isSkipRole(), sharePointGroupCache));
+                crawlingQueue.offer(new FolderCrawl(client, crawlerConfig.getInitialDocLibPath(), crawlerConfig.isSkipRole(),
+                        sharePointGroupCache, crawlerConfig.isIgnoreError(), crawlerConfig.getExtractorName(),
+                        crawlerConfig.getSupportedMimeTypes(), crawlerConfig.getMaxContentLength(), urlFilter));
             }
         }
     }
@@ -285,6 +334,15 @@ public class SharePointCrawler implements Closeable {
         private boolean skipRole = false;
         private List<String> excludeList = new ArrayList<>();
         private List<String> excludeFolder = new ArrayList<>();
+        private boolean ignoreError = true;
+        private String proxyHost = null;
+        private int proxyPort = -1;
+        private String extractorName = FileCrawl.DEFAULT_EXTRACTOR_NAME;
+        private String[] supportedMimeTypes = FileCrawl.DEFAULT_SUPPORTED_MIMETYPES;
+        private long maxContentLength = FileCrawl.DEFAULT_MAX_CONTENT_LENGTH;
+        private String includePattern = null;
+        private String excludePattern = null;
+        private String sessionId = null;
 
         /**
          * Returns the SharePoint server URL.
@@ -683,6 +741,178 @@ public class SharePointCrawler implements Closeable {
          */
         public void setSkipRole(final boolean skipRole) {
             this.skipRole = skipRole;
+        }
+
+        /**
+         * Returns whether a file's content extraction failure is logged instead of failing its
+         * crawl target.
+         *
+         * @return true if such a failure is logged instead of thrown
+         */
+        public boolean isIgnoreError() {
+            return ignoreError;
+        }
+
+        /**
+         * Sets whether a file's content extraction failure is logged instead of failing its crawl
+         * target.
+         *
+         * @param ignoreError true to log such a failure instead of throwing
+         */
+        public void setIgnoreError(final boolean ignoreError) {
+            this.ignoreError = ignoreError;
+        }
+
+        /**
+         * Returns the HTTP proxy host to route requests through.
+         *
+         * @return the proxy host, or null when no proxy is configured
+         */
+        public String getProxyHost() {
+            return proxyHost;
+        }
+
+        /**
+         * Sets the HTTP proxy host to route requests through.
+         *
+         * @param proxyHost the proxy host
+         */
+        public void setProxyHost(final String proxyHost) {
+            this.proxyHost = proxyHost;
+        }
+
+        /**
+         * Returns the HTTP proxy port to route requests through.
+         *
+         * @return the proxy port
+         */
+        public int getProxyPort() {
+            return proxyPort;
+        }
+
+        /**
+         * Sets the HTTP proxy port to route requests through.
+         *
+         * @param proxyPort the proxy port
+         */
+        public void setProxyPort(final int proxyPort) {
+            this.proxyPort = proxyPort;
+        }
+
+        /**
+         * Returns the name of the extractor component used to extract a file's content.
+         *
+         * @return the extractor component name
+         */
+        public String getExtractorName() {
+            return extractorName;
+        }
+
+        /**
+         * Sets the name of the extractor component used to extract a file's content.
+         *
+         * @param extractorName the extractor component name
+         */
+        public void setExtractorName(final String extractorName) {
+            this.extractorName = extractorName;
+        }
+
+        /**
+         * Returns the patterns a file's MIME type must match at least one of to be crawled.
+         *
+         * @return the MIME type patterns
+         */
+        public String[] getSupportedMimeTypes() {
+            return supportedMimeTypes;
+        }
+
+        /**
+         * Sets the patterns a file's MIME type must match at least one of to be crawled. A blank
+         * value is treated as unset rather than split into a single empty-string pattern, which
+         * would match nothing and silently skip every file.
+         *
+         * @param supportedMimeTypes comma-separated regular expressions
+         */
+        public void setSupportedMimeTypes(final String supportedMimeTypes) {
+            if (StringUtils.isBlank(supportedMimeTypes)) {
+                this.supportedMimeTypes = FileCrawl.DEFAULT_SUPPORTED_MIMETYPES;
+                return;
+            }
+            this.supportedMimeTypes = Arrays.stream(supportedMimeTypes.split(",")).map(String::trim).toArray(String[]::new);
+        }
+
+        /**
+         * Returns the maximum file size in bytes.
+         *
+         * @return the maximum size, or a negative number for no limit
+         */
+        public long getMaxContentLength() {
+            return maxContentLength;
+        }
+
+        /**
+         * Sets the maximum file size in bytes.
+         *
+         * @param maxContentLength the maximum size, or a negative number for no limit
+         */
+        public void setMaxContentLength(final long maxContentLength) {
+            this.maxContentLength = maxContentLength;
+        }
+
+        /**
+         * Returns the regular expression a crawled item's URL-ish value must match to be crawled.
+         *
+         * @return the include pattern, or null/blank if unset
+         */
+        public String getIncludePattern() {
+            return includePattern;
+        }
+
+        /**
+         * Sets the regular expression a crawled item's URL-ish value must match to be crawled.
+         *
+         * @param includePattern the include pattern
+         */
+        public void setIncludePattern(final String includePattern) {
+            this.includePattern = includePattern;
+        }
+
+        /**
+         * Returns the regular expression that excludes a crawled item from being crawled.
+         *
+         * @return the exclude pattern, or null/blank if unset
+         */
+        public String getExcludePattern() {
+            return excludePattern;
+        }
+
+        /**
+         * Sets the regular expression that excludes a crawled item from being crawled.
+         *
+         * @param excludePattern the exclude pattern
+         */
+        public void setExcludePattern(final String excludePattern) {
+            this.excludePattern = excludePattern;
+        }
+
+        /**
+         * Returns the crawling session ID {@link org.codelibs.fess.crawler.filter.UrlFilter} is
+         * initialized with.
+         *
+         * @return the session ID, or null/blank if this crawl has none
+         */
+        public String getSessionId() {
+            return sessionId;
+        }
+
+        /**
+         * Sets the crawling session ID {@link org.codelibs.fess.crawler.filter.UrlFilter} is
+         * initialized with.
+         *
+         * @param sessionId the session ID
+         */
+        public void setSessionId(final String sessionId) {
+            this.sessionId = sessionId;
         }
     }
 }

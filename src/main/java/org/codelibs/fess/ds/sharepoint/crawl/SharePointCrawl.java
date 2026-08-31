@@ -25,6 +25,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
+import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
@@ -162,6 +163,29 @@ public abstract class SharePointCrawl {
     protected String buildDigest(final String content) {
         final int maxLength = ComponentUtil.getFessConfig().getCrawlerDocumentFileMaxDigestLengthAsInteger();
         return StringUtils.abbreviate(content, maxLength);
+    }
+
+    /**
+     * Checks a crawled item's URL-ish value against a pre-built {@link UrlFilter}.
+     *
+     * <p>The filter is built once per crawl, in {@code SharePointCrawler}'s constructor via
+     * {@code ComponentUtil.getComponent(UrlFilter.class)} - the same component every other
+     * {@code fess-ds-*} plugin with this parameter uses - and threaded down to each crawl unit
+     * from there, rather than rebuilt on every call: {@link UrlFilter} is session-scoped and
+     * backed by an in-memory service keyed by session ID, so building and initializing a fresh one
+     * per file would keep accumulating patterns under whatever session key was used, in a map nothing
+     * ever clears mid-crawl.
+     *
+     * <p>A null filter (no patterns configured, or the component unavailable in a container that
+     * does not wire it - such as this plugin's own unit tests) means nothing is filtered.
+     *
+     * @param urlFilter the filter built for this crawl, or null
+     * @param value the URL-ish value to check - a server-relative path for a file, a list item's
+     *            {@code FileRef} for a list item
+     * @return true if the item should be crawled
+     */
+    protected boolean isUrlAllowed(final UrlFilter urlFilter, final String value) {
+        return urlFilter == null || StringUtils.isBlank(value) || urlFilter.match(value);
     }
 
     /**

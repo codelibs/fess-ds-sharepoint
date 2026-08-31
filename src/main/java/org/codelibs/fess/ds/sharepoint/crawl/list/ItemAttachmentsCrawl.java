@@ -63,6 +63,14 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
     private final Date modified;
     /** Access roles inherited from the parent list item */
     private final List<String> roles;
+    /** Whether an attachment's content extraction failure is logged instead of failing its crawl target */
+    private final boolean ignoreError;
+    /** The name of the extractor component used to extract an attachment's content */
+    private final String extractorName;
+    /** Regular expressions an attachment's MIME type must match at least one of to be crawled */
+    private final String[] supportedMimeTypes;
+    /** The maximum attachment size in bytes, or a negative number for no limit */
+    private final long maxContentLength;
 
     /**
      * Constructs a new ItemAttachmentsCrawl instance for crawling list item attachments.
@@ -74,9 +82,18 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
      * @param created creation date of the parent list item
      * @param modified last modification date of the parent list item
      * @param roles access roles inherited from the parent list item
+     * @param ignoreError whether an attachment's content extraction failure is logged instead of
+     *            failing its crawl target
+     * @param extractorName the name of the extractor component used to extract an attachment's
+     *            content
+     * @param supportedMimeTypes regular expressions an attachment's MIME type must match at least
+     *            one of to be crawled
+     * @param maxContentLength the maximum attachment size in bytes, or a negative number for no
+     *            limit
      */
     public ItemAttachmentsCrawl(final SharePointClient client, final String listId, final String listName, final String itemId,
-            final Date created, final Date modified, final List<String> roles) {
+            final Date created, final Date modified, final List<String> roles, final boolean ignoreError, final String extractorName,
+            final String[] supportedMimeTypes, final long maxContentLength) {
         super(client);
         this.itemId = itemId;
         this.listId = listId;
@@ -84,6 +101,10 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
         this.created = created;
         this.modified = modified;
         this.roles = roles;
+        this.ignoreError = ignoreError;
+        this.extractorName = extractorName;
+        this.supportedMimeTypes = supportedMimeTypes;
+        this.maxContentLength = maxContentLength;
         statsKey = new StatsKeyObject("item_attachment#" + listName + ":" + itemId);
     }
 
@@ -105,7 +126,8 @@ public class ItemAttachmentsCrawl extends SharePointCrawl {
         final GetListItemAttachmentsResponse response = client.api().list().getListItemAttachments().setId(listId, itemId).execute();
         response.getFiles().forEach(file -> {
             final FileCrawl fileCrawl = new FileCrawl(client, file.getFileName(), getWebLink(file.getFileName()),
-                    file.getServerRelativeUrl(), created, modified, roles, Collections.emptyMap(), listName);
+                    file.getServerRelativeUrl(), created, modified, roles, Collections.emptyMap(), listName, ignoreError, extractorName,
+                    supportedMimeTypes, maxContentLength);
             fileCrawl.addProperty("list_name", listName);
             fileCrawl.addProperty("list_id", listId);
             fileCrawl.addProperty("item_id", itemId);

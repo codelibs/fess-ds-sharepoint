@@ -24,6 +24,7 @@ import java.util.Set;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.SharePointCrawler;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResponse;
@@ -70,6 +71,8 @@ public class SiteCrawl extends SharePointCrawl {
     private final SharePointCrawler.CrawlerConfig config;
     /** Cache for SharePoint group information to optimize role lookups */
     private final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache;
+    /** The include_pattern/exclude_pattern filter built once for the whole crawl, or null */
+    private final UrlFilter urlFilter;
 
     /**
      * Constructs a new SiteCrawl instance for crawling a SharePoint site.
@@ -77,13 +80,16 @@ public class SiteCrawl extends SharePointCrawl {
      * @param client SharePoint client for API operations
      * @param config crawler configuration containing site settings and filters
      * @param sharePointGroupCache cache for SharePoint group information
+     * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
+     *            or null
      */
     public SiteCrawl(final SharePointClient client, final SharePointCrawler.CrawlerConfig config,
-            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final UrlFilter urlFilter) {
         super(client);
         this.config = config;
 
         this.sharePointGroupCache = sharePointGroupCache;
+        this.urlFilter = urlFilter;
         statsKey = new StatsKeyObject("site#" + config.getSiteName());
     }
 
@@ -119,7 +125,9 @@ public class SiteCrawl extends SharePointCrawl {
             foldersStart += PAGE_SIZE;
             folders.stream().filter(folder -> !isExcludeFolder(folder.getName())).forEach(folder -> {
                 targetFolderName.add(folder.getName());
-                crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache));
+                crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache,
+                        config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(),
+                        urlFilter));
             });
             if (folders.size() < PAGE_SIZE) {
                 break;
@@ -139,8 +147,11 @@ public class SiteCrawl extends SharePointCrawl {
                 .filter(list -> !isExcludeList(list.getEntityTypeName()))
                 .forEach(list -> crawlingQueue.offer(new ListCrawl(client, list.getId(), list.getListName(),
                         config.getListItemNumPerPages(), sharePointGroupCache, isSubPageList(list.getEntityTypeName()), config.isSkipRole(),
-                        config.getListContentIncludeFields(), config.getListContentExcludeFields())));
-        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + config.getSiteName() + "/Shared Documents", false, sharePointGroupCache));
+                        config.getListContentIncludeFields(), config.getListContentExcludeFields(), config.isIgnoreError(),
+                        config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(), urlFilter)));
+        crawlingQueue.offer(new FolderCrawl(client, "/sites/" + config.getSiteName() + "/Shared Documents", false, sharePointGroupCache,
+                config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(), config.getMaxContentLength(),
+                urlFilter));
         return null;
     }
 

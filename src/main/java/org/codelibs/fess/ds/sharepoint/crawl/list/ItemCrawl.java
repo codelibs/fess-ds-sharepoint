@@ -29,6 +29,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
+import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.PageType;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
@@ -78,6 +79,8 @@ public class ItemCrawl extends SharePointCrawl {
     private final List<String> includeFields;
     /** Fields to exclude from content extraction */
     private final List<String> excludeFields;
+    /** The include_pattern/exclude_pattern filter built once for the whole crawl, or null */
+    private final UrlFilter urlFilter;
 
     /**
      * Constructs a new ItemCrawl instance for crawling a specific list item.
@@ -94,10 +97,12 @@ public class ItemCrawl extends SharePointCrawl {
      * @param isSubPage flag indicating if this is a subpage item
      * @param includeFields list of field names to include in content extraction
      * @param excludeFields list of field name patterns to exclude from content extraction
+     * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
+     *            or null
      */
     public ItemCrawl(final SharePointClient client, final String listId, final String listName, final String itemId, final Date created,
             final Date modified, final List<String> roles, final boolean isSubPage, final List<String> includeFields,
-            final List<String> excludeFields) {
+            final List<String> excludeFields, final UrlFilter urlFilter) {
         super(client);
         this.listId = listId;
         this.listName = listName != null ? listName : StringUtil.EMPTY;
@@ -110,6 +115,7 @@ public class ItemCrawl extends SharePointCrawl {
         final List<String> exList = new ArrayList<>(excludeFields);
         exList.addAll(EXCLUDE_FIELDS);
         this.excludeFields = exList;
+        this.urlFilter = urlFilter;
         statsKey = new StatsKeyObject("item#" + listName + ":" + itemId);
     }
 
@@ -129,6 +135,17 @@ public class ItemCrawl extends SharePointCrawl {
         }
 
         final GetListItemValueResponse response = client.api().list().getListItemValue().setListId(listId).setItemId(itemId).execute();
+        // Checked here rather than before this request: at ListCrawl's enumeration point a list
+        // item carries no URL-ish value at all - only id, title, dates and an attachment flag -
+        // so getFileRef() is only available once this request has already been made. Every
+        // sibling with this parameter filters before its equivalent request; this plugin cannot,
+        // for this one crawl path, and that asymmetry is deliberate rather than an oversight.
+        if (!isUrlAllowed(urlFilter, response.getFileRef())) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("{} is not matched with include_pattern/exclude_pattern.", response.getFileRef());
+            }
+            return null;
+        }
         final String content = buildContent(response);
         final String webLink = getWebLink(response);
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
