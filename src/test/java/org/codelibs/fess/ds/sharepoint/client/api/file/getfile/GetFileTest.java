@@ -150,6 +150,41 @@ public class GetFileTest extends UnitDsTestCase {
         }
     }
 
+    /**
+     * Pins the wire form of a file name containing the two characters
+     * <a href="https://github.com/codelibs/fess-ds-sharepoint/issues/4">issue #4</a> is about.
+     *
+     * <p>{@code GetFileByServerRelativeUrl('...')} treats its argument as an <em>encoded</em>
+     * URL and decodes it once more itself, so a name holding a literal {@code %} arrives as a
+     * broken escape sequence and one holding a {@code #} loses everything after it.
+     * {@code GetFileByServerRelativePath(decodedUrl='...')} takes the decoded path instead, so
+     * the value only has to survive the one percent-decode every HTTP server does before the
+     * OData expression is parsed - which is exactly what {@code encodeRelativeUrl} produces.
+     *
+     * <p>This asserts the bytes on the wire rather than the endpoint name alone, because the
+     * endpoint is only half of the contract: pairing {@code decodedUrl} with a doubly-encoded
+     * value would name the right API and still resolve to the wrong file.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_execute_singleEncodesAPercentAndAHashForTheResourcePathEndpoint() throws Exception {
+        final String fileUrl = "/sites/test/docs/50% #1.docx";
+        final String expectedPath =
+                "/sites/test/_api/web/GetFileByServerRelativePath(decodedUrl='/sites/test/docs/50%25%20%231.docx')" + "/$value";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(expectedPath, 200, "text/plain", "file content");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                new GetFile(httpClient, server.getBaseUrl() + "sites/test", null).setServerRelativeUrl(fileUrl).execute().close();
+
+                assertEquals(1, server.getRecordedRequests().size());
+                assertEquals("a % must reach the server as %25 and a # as %23 - once each, not twice", expectedPath,
+                        server.getRecordedRequests().get(0).getPath());
+            }
+        }
+    }
+
     /** An OAuth double that never makes a real ACS call, so this stays a self-contained unit test. */
     private static OAuth recordingOAuth(final AtomicInteger refreshCount) {
         return new OAuth("id", "secret", "tenant", "realm") {

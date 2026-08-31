@@ -199,7 +199,41 @@ public class FolderCrawl extends SharePointCrawl {
         if (serverRelativeUrl == null) {
             return null;
         }
-        return client.getUrl() + serverRelativeUrl.substring(1).replace("DispForm", "AllItems") + "?id=" + filePath + "&parent="
-                + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
+        return client.getUrl() + serverRelativeUrl.substring(1).replace("DispForm", "AllItems") + "?id=" + escapeQueryValue(filePath)
+                + "&parent=" + URLEncoder.encode(parentUrl, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Escapes the characters that decide how a query string parses, and only those, in a value
+     * about to be placed in one.
+     *
+     * <p>SharePoint Server 2019 added {@code %} and {@code #} to the characters a file or folder
+     * name may hold, and Subscription Edition kept them; 2016 and 2013 both still reject them,
+     * and {@code &amp;} became legal one release earlier, in 2016. A {@code #} in this value
+     * starts a URL fragment, so a browser sends nothing from there on and the link resolves to
+     * the library rather than to the file; a {@code %} is read as the start of an escape sequence
+     * and decodes to a different character, or to nothing valid at all. {@code &amp;} and
+     * {@code +} are not what
+     * <a href="https://github.com/codelibs/fess-ds-sharepoint/issues/4">issue #4</a> reports but
+     * break the same value in the same expression the same way - {@code &amp;} ends the parameter
+     * and {@code +} arrives as a space - so they are escaped here too rather than left as the
+     * next report.
+     *
+     * <p>Everything else is left byte for byte, which is the point of not simply calling
+     * {@link URLEncoder#encode} the way the {@code parent} parameter beside this one does. This
+     * value is the file's indexed {@code url}, and Fess derives the document id from it: encoding
+     * a space, a slash or a non-ASCII character - none of which change how the query string parses
+     * - would change the link, and the identity, of every document already indexed from a
+     * document library. A name holding none of the four characters below keeps exactly the URL it
+     * has today; a name holding one of them has a link that does not work today.
+     *
+     * <p>{@code %} is escaped first, or the escapes introduced for the other three would be
+     * escaped again in turn.
+     *
+     * @param value the value to place in the query string
+     * @return the value with the query string's own metacharacters percent-encoded
+     */
+    private static String escapeQueryValue(final String value) {
+        return value.replace("%", "%25").replace("#", "%23").replace("&", "%26").replace("+", "%2B");
     }
 }
