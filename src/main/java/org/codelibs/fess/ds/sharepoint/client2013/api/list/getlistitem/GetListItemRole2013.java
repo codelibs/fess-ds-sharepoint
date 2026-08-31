@@ -93,19 +93,34 @@ public class GetListItemRole2013 extends GetListItemRole {
                     final Map<String, Object> memberResponseMap = memberDocHandler.getDataMap();
                     final String id = DocumentUtil.getValue(memberResponseMap, "Id", String.class);
                     final int principalType = DocumentUtil.getValue(memberResponseMap, "PrincipalType", Integer.class, 0);
-                    if (principalType == 1) {
+                    switch (principalType) {
+                    case 1: {
                         // User
                         final GetListItemRole2013Response.User user =
                                 new GetListItemRole2013Response.User(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class),
                                         DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
                         response.addUser(user);
-                    } else if (principalType == 8) {
-                        final GetListItemRole2013Response.SharePointGroup sharePointGroup =
-                                buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
+                        break;
+                    }
+                    case 4: {
+                        // Security Group. Nested members already handled this type; permissions
+                        // assigned straight to the item did not, so an item whose only permission
+                        // was an AD group was indexed with no role.
+                        final GetListItemRole2013Response.SecurityGroup securityGroup = new GetListItemRole2013Response.SecurityGroup(id,
+                                DocumentUtil.getValue(memberResponseMap, "Title", String.class),
+                                DocumentUtil.getValue(memberResponseMap, "LoginName", String.class));
+                        response.addSecurityGroup(securityGroup);
+                        break;
+                    }
+                    case 8: {
+                        final GetListItemRole2013Response.SharePointGroup sharePointGroup = new GetListItemRole2013Response.SharePointGroup(
+                                id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
+                        cacheAndFillSharePointGroup(principalId, sharePointGroup, id);
                         response.addSharePointGroup(sharePointGroup);
-                        if (sharePointGroupCache != null) {
-                            sharePointGroupCache.put(principalId, sharePointGroup);
-                        }
+                        break;
+                    }
+                    default:
+                        break;
                     }
                 });
         return response;
@@ -167,6 +182,52 @@ public class GetListItemRole2013 extends GetListItemRole {
     protected GetListItemRole2013Response.SharePointGroup buildSharePointGroup(final String id, final String title) {
         // SharePointGroup
         final GetListItemRole2013Response.SharePointGroup sharePointGroup = new GetListItemRole2013Response.SharePointGroup(id, title);
+        fillSharePointGroup(sharePointGroup, id);
+        return sharePointGroup;
+    }
+
+    /**
+     * Registers a still-empty SharePoint group in the cache and then reads its members into it.
+     *
+     * <p>The group has to reach the cache before the descent, because SharePoint lets groups
+     * contain each other and the cache is what cuts the cycle. It must not stay there if the
+     * descent fails: the cache is shared by the whole crawl, and the crawler retries a failed
+     * crawl with that same cache, so a half-read group left behind would be handed to the retry
+     * and to every later item the group protects, each of them silently indexed without any of
+     * this group's permissions. Removing the entry costs one rebuild; keeping it costs the roles.
+     *
+     * @param cacheKey the key this group is cached under
+     * @param sharePointGroup the group to register and populate
+     * @param id the ID of the SharePoint group, used to read its members
+     */
+    private void cacheAndFillSharePointGroup(final String cacheKey, final GetListItemRole2013Response.SharePointGroup sharePointGroup,
+            final String id) {
+        if (sharePointGroupCache != null) {
+            sharePointGroupCache.put(cacheKey, sharePointGroup);
+        }
+        try {
+            fillSharePointGroup(sharePointGroup, id);
+        } catch (final RuntimeException e) {
+            if (sharePointGroupCache != null) {
+                sharePointGroupCache.remove(cacheKey);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Fetches the members of a SharePoint group and adds them to it.
+     *
+     * <p>Split out from {@link #buildSharePointGroup(String, String)} so that a caller can put the
+     * still-empty group into {@code sharePointGroupCache} before descending into its members. A
+     * SharePoint group may contain another group that contains the first one again, and the cache
+     * is the only thing that stops that cycle, so an entry added after the descent is added too
+     * late to help.
+     *
+     * @param sharePointGroup the group to populate
+     * @param id the ID of the SharePoint group
+     */
+    private void fillSharePointGroup(final GetListItemRole2013Response.SharePointGroup sharePointGroup, final String id) {
         final HttpGet usersRequest = new HttpGet(buildUsersUrl(id));
         final XmlResponse usersResponse = doXmlRequest(usersRequest);
         final UsersDocHandler usersDocHandler = new UsersDocHandler();
@@ -195,18 +256,16 @@ public class GetListItemRole2013 extends GetListItemRole {
                 if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
                     sharePointGroup.addSharePointGroup(sharePointGroupCache.get(userId));
                 } else {
-                    final GetListItemRole2013Response.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
+                    final GetListItemRole2013Response.SharePointGroup userSharePointGroup =
+                            new GetListItemRole2013Response.SharePointGroup(userId, userTitle);
+                    cacheAndFillSharePointGroup(userId, userSharePointGroup, userId);
                     sharePointGroup.addSharePointGroup(userSharePointGroup);
-                    if (sharePointGroupCache != null) {
-                        sharePointGroupCache.put(userId, userSharePointGroup);
-                    }
                 }
                 break;
             default:
                 break;
             }
         });
-        return sharePointGroup;
     }
 
     private static class GetListItemRoleDocHandler extends DefaultHandler {

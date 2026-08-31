@@ -15,13 +15,20 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.codelibs.fess.util.ComponentUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class GetListItemRole2013Test extends UnitDsTestCase {
 
@@ -44,6 +51,68 @@ public class GetListItemRole2013Test extends UnitDsTestCase {
     public void tearDown(TestInfo testInfo) throws Exception {
         ComponentUtil.setFessConfig(null);
         super.tearDown(testInfo);
+    }
+
+    // === execute() tests ===
+
+    @Test
+    public void test_securityGroupAssignedDirectlyIsReturned() throws Exception {
+        // PrincipalType 4 is an AD security group. Assigned directly on the item it used to be
+        // dropped, so an item whose only permission was an AD group ended up with no role at all.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubRoleAssignment(server, "10");
+            server.onPathStatus(memberPath("10"), 200, XML, member("10", "DOMAIN\\Sales", 4, "DOMAIN\\Sales"));
+            server.start();
+
+            final GetListItemRole2013Response response = executeAgainst(server, new HashMap<>());
+
+            assertEquals("the directly assigned security group must be returned", 1, response.getSecurityGroups().size());
+            assertEquals("security group title", "DOMAIN\\Sales", response.getSecurityGroups().get(0).getTitle());
+        }
+    }
+
+    @Test
+    public void test_nestedGroupKeepsItsOwnTitle() throws Exception {
+        // A group nested inside another must be named after itself, not after its parent.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubRoleAssignment(server, "7");
+            server.onPathStatus(memberPath("7"), 200, XML, member("7", "Marketing", 8, ""));
+            server.onPathStatus(usersPath("7"), 200, XML, usersFeedOneEntry("8", "Engineering", 8, ""));
+            server.onPathStatus(usersPath("8"), 200, XML, usersFeedOneEntry("9", "Alice", 1, "i:0#.f|membership|alice@example.com"));
+            server.start();
+
+            final GetListItemRole2013Response.SharePointGroup parent = executeAgainst(server, new HashMap<>()).getSharePointGroups().get(0);
+
+            assertEquals("the outer group must keep its own title", "Marketing", parent.getTitle());
+            assertEquals("the outer group must hold exactly the nested group", 1, parent.getSharePointGroups().size());
+            final GetListItemRole2013Response.SharePointGroup nested = parent.getSharePointGroups().get(0);
+            assertEquals("the nested group must carry its own title", "Engineering", nested.getTitle());
+            assertEquals("the nested group's member must be read from the nested group", 1, nested.getUsers().size());
+        }
+    }
+
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_cyclicGroupMembershipTerminates() throws Exception {
+        // Group A contains group B, group B contains group A. This must return rather than
+        // recurse until the stack runs out. The crawl layer's own visited set does not catch
+        // this: GetListItemRole2013 blows its own stack inside this recursion before the crawl
+        // layer ever sees the object graph, so the cut has to happen in the group cache itself.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubRoleAssignment(server, "7");
+            server.onPathStatus(memberPath("7"), 200, XML, member("7", "A", 8, ""));
+            server.onPathStatus(usersPath("7"), 200, XML, usersFeedOneEntry("8", "B", 8, ""));
+            server.onPathStatus(usersPath("8"), 200, XML, usersFeedOneEntry("7", "A", 8, ""));
+            server.start();
+
+            final GetListItemRole2013Response.SharePointGroup groupA = executeAgainst(server, new HashMap<>()).getSharePointGroups().get(0);
+
+            assertEquals("the outer group must be A", "A", groupA.getTitle());
+            final GetListItemRole2013Response.SharePointGroup groupB = groupA.getSharePointGroups().get(0);
+            assertEquals("A must contain B", "B", groupB.getTitle());
+            assertSame("B must point back at the very same A rather than a fresh expansion of it", groupA,
+                    groupB.getSharePointGroups().get(0));
+        }
     }
 
     // === RoleDefinitionBindingsDocHandler tests ===
@@ -225,6 +294,80 @@ public class GetListItemRole2013Test extends UnitDsTestCase {
     }
 
     // === Helper methods ===
+
+    private static final String XML = "application/xml";
+
+    private static final String LIST_ID = "11111111-1111-1111-1111-111111111111";
+
+    private static final String ITEM_ID = "1";
+
+    private static String basePath() {
+        return "/sites/test/_api/Web/Lists(guid'" + LIST_ID + "')/";
+    }
+
+    private static String roleAssignmentsPath() {
+        return basePath() + "Items(" + ITEM_ID + ")/RoleAssignments";
+    }
+
+    private static String roleDefinitionBindingsPath(final String principalId) {
+        return basePath() + "Items(" + ITEM_ID + ")/RoleAssignments/GetByPrincipalId(" + principalId + ")/RoleDefinitionBindings";
+    }
+
+    private static String memberPath(final String principalId) {
+        return basePath() + "RoleAssignments/GetByPrincipalId(" + principalId + ")/Member";
+    }
+
+    private static String usersPath(final String groupId) {
+        return "/sites/test/_api/Web/SiteGroups/GetById(" + groupId + ")/Users";
+    }
+
+    /**
+     * Stubs one role assignment naming the given principal, plus a RoleDefinitionBindings
+     * response that keeps it out of the limited-access filter (RoleTypeKind 3, Contributor).
+     */
+    private static void stubRoleAssignment(final SharePointMockServer server, final String principalId) {
+        server.onPathStatus(roleAssignmentsPath(), 200, XML, roleAssignmentsFeed(principalId));
+        server.onPathStatus(roleDefinitionBindingsPath(principalId), 200, XML, roleTypeKindFeed(3));
+    }
+
+    private static String roleAssignmentsFeed(final String principalId) {
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                + "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\">"
+                + "<entry><content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">"
+                + "<d:PrincipalId>" + principalId + "</d:PrincipalId>" + "</m:properties></content></entry></feed>";
+    }
+
+    private static String roleTypeKindFeed(final int roleTypeKind) {
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                + "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\">"
+                + "<entry><content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">"
+                + "<d:RoleTypeKind>" + roleTypeKind + "</d:RoleTypeKind>" + "</m:properties></content></entry></feed>";
+    }
+
+    private static String member(final String id, final String title, final int principalType, final String loginName) {
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                + "<entry xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\">"
+                + "<content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">" + "<d:Id>" + id
+                + "</d:Id><d:Title>" + title + "</d:Title>" + "<d:PrincipalType>" + principalType + "</d:PrincipalType>" + "<d:LoginName>"
+                + loginName + "</d:LoginName>" + "</m:properties></content></entry>";
+    }
+
+    private static String usersFeedOneEntry(final String id, final String title, final int principalType, final String loginName) {
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+                + "<feed xmlns=\"http://www.w3.org/2005/Atom\" xmlns:d=\"http://schemas.microsoft.com/ado/2007/08/dataservices\">"
+                + "<entry><content><m:properties xmlns:m=\"http://schemas.microsoft.com/ado/2007/08/dataservices/metadata\">" + "<d:Id>"
+                + id + "</d:Id><d:Title>" + title + "</d:Title>" + "<d:PrincipalType>" + principalType + "</d:PrincipalType>"
+                + "<d:LoginName>" + loginName + "</d:LoginName>" + "</m:properties></content></entry></feed>";
+    }
+
+    private static GetListItemRole2013Response executeAgainst(final SharePointMockServer server,
+            final Map<String, GetListItemRole2013Response.SharePointGroup> cache) throws Exception {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+            return new GetListItemRole2013(httpClient, server.getBaseUrl() + "sites/test/", null).setId(LIST_ID, ITEM_ID)
+                    .setSharePointGroupCache(cache)
+                    .execute();
+        }
+    }
 
     private GetListItemRole2013.RoleDefinitionBindingsDocHandler parseRoleDefinitionBindingsXml(final int... roleTypeKinds) {
         final StringBuilder xml = new StringBuilder();
