@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xml:base="http://localhost/sites/test/_api/"
+      xmlns="http://www.w3.org/2005/Atom"
+      xmlns:d="http://schemas.microsoft.com/ado/2007/08/dataservices"
+      xmlns:m="http://schemas.microsoft.com/ado/2007/08/dataservices/metadata">
+  <entry>
+    <content type="application/xml">
+      <m:properties>
+        <d:Id m:type="Edm.Guid">11111111-1111-1111-1111-111111111111</d:Id>
+        <d:Title>Shared Documents</d:Title>
+        <d:EntityTypeName>Shared_x0020_Documents</d:EntityTypeName>
+        <d:BaseTemplate m:type="Edm.Int32">101</d:BaseTemplate>
+        <d:NoCrawl m:type="Edm.Boolean">false</d:NoCrawl>
+        <d:Hidden m:type="Edm.Boolean">false</d:Hidden>
+        <d:ItemCount m:type="Edm.Int32">3</d:ItemCount>
+      </m:properties>
+    </content>
+  </entry>
+  <entry>
+    <content type="application/xml">
+      <m:properties>
+        <d:Id m:type="Edm.Guid">22222222-2222-2222-2222-222222222222</d:Id>
+        <d:Title>Announcements</d:Title>
+        <d:EntityTypeName>AnnouncementsList</d:EntityTypeName>
+        <d:BaseTemplate m:type="Edm.Int32">104</d:BaseTemplate>
+        <d:NoCrawl m:type="Edm.Boolean">false</d:NoCrawl>
+        <d:Hidden m:type="Edm.Boolean">false</d:Hidden>
+        <d:ItemCount m:type="Edm.Int32">2</d:ItemCount>
+      </m:properties>
+    </content>
+  </entry>
+  <!--
+    Tripwire entry for GetLists2013's two masked defects (see GetLists2013.java:98-99).
+
+    - No <d:NoCrawl> element here at all, so GetLists2013 must fall back to its
+      default. GetLists2013.java:98 reads NoCrawl from the correct per-entry
+      map but defaults to TRUE, where the modern GetLists defaults to FALSE.
+      The two entries above always supply NoCrawl explicitly, so that wrong
+      default is never exercised.
+    - <d:Hidden> is true here, but GetLists2013.java:99 reads Hidden from the
+      wrong map (the outer dataMap instead of the per-entry value map), so it
+      always falls back to its own default of FALSE - silently wrong for this
+      entry once the outer bug below is fixed.
+
+    Today this entry changes nothing: GetLists2013 reads EntityTypeName from
+    that same wrong outer map, so entityTypeName is always null and every
+    entry - including this one - is skipped, keeping the count at 0 (see
+    GetLists2013Test#test_currentBehavior_returnsNoLists, which must keep
+    asserting 0). Once the EntityTypeName line is fixed to read from the
+    per-entry map, this entry starts being counted, and:
+      * if NoCrawl still defaults to TRUE, this entry (no NoCrawl element)
+        will be wrongly excluded from crawling;
+      * if Hidden still reads from the wrong map, this entry will report
+        isHidden()==false despite <d:Hidden>true</d:Hidden>.
+    Do not delete this entry when the EntityTypeName bug is fixed - it is
+    what makes those two remaining defects visible instead of coincidentally
+    passing.
+  -->
+  <entry>
+    <content type="application/xml">
+      <m:properties>
+        <d:Id m:type="Edm.Guid">44444444-4444-4444-4444-444444444444</d:Id>
+        <d:Title>Hidden No-NoCrawl List</d:Title>
+        <d:EntityTypeName>HiddenNoNoCrawlList</d:EntityTypeName>
+        <d:BaseTemplate m:type="Edm.Int32">100</d:BaseTemplate>
+        <d:Hidden m:type="Edm.Boolean">true</d:Hidden>
+        <d:ItemCount m:type="Edm.Int32">0</d:ItemCount>
+      </m:properties>
+    </content>
+  </entry>
+</feed>
