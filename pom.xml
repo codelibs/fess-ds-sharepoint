@@ -114,12 +114,6 @@
 			<version>${slf4j.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>${junit.version}</version>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
 			<groupId>org.dbflute.utflute</groupId>
 			<artifactId>utflute-lastaflute</artifactId>
 			<version>${utflute.version}</version>

@@ -19,7 +19,7 @@ import org.junit.jupiter.api.TestInfo;
 
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class SharePointApiTest extends UnitDsTestCase {
     @Override

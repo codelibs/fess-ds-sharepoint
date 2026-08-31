@@ -17,14 +17,9 @@ package org.codelibs.fess.ds.sharepoint.client.exception;
 
 import org.junit.jupiter.api.TestInfo;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class SharePointClientExceptionTest extends UnitDsTestCase {
 

@@ -19,7 +19,7 @@ import org.junit.jupiter.api.TestInfo;
 
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class SharePointDataStoreTest extends UnitDsTestCase {
     public SharePointDataStore dataStore;
@@ -48,5 +48,10 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
 
     @Test
     public void testCrawl() throws Exception {
+        // Intentionally empty. Exercising storeData() end to end needs a DataConfig,
+        // an IndexUpdateCallback and a DataStoreParams, which is more setup than
+        // this class currently carries. Kept so the class still reports a test
+        // rather than being silently empty; the crawl paths get their coverage
+        // alongside the fixes that touch them.
     }
 }
