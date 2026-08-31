@@ -518,17 +518,20 @@ tenant, which is what actually sends those, gets no cooperation from this backof
   list, folder and file it is configured to reach. `delete_old_docs` (see the Behaviour table
   above) only controls whether documents the current full crawl did not see again are deleted
   afterwards; that is post-hoc cleanup, not incremental fetching.
-- **`%` and `#` in file/folder names** are supported on the default (non-`2013`) code path, which
-  uses the `...ByServerRelativePath(decodedUrl=...)` endpoints SharePoint introduced specifically so
-  a percent-encoded `%`/`#` round-trips correctly. **They are not reliable when `sp.version=2013`
-  is pointed at a 2019/Subscription Edition server**, because the 2013 client instead uses the older
-  `...ByServerRelativeUrl(...)` endpoints; this plugin's own tests and mock server treat that as a
-  distinct, escaping-sensitive wire form, though no test here exercises it against a real SharePoint
-  2013 server. **Unverified, external to this repository:** on an actual SharePoint 2013 or 2016
-  farm the question may not arise at all, since those platforms are commonly reported not to accept
-  `%` or `#` in file/folder names in the first place - but neither this codebase nor the inventory
-  it was checked against can confirm that; treat it as something to confirm against your own farm,
-  not as established here.
+- **`%` and `#` in file/folder names** are supported on the default (non-`2013`) code path. Only
+  SharePoint Server 2019 and Subscription Edition accept those two characters in a name at all
+  ([2019 release notes](https://learn.microsoft.com/en-us/sharepoint/what-s-new/new-and-improved-features-in-sharepoint-server-2019));
+  2016 [explicitly still rejects them](https://learn.microsoft.com/en-us/sharepoint/what-s-new/new-and-improved-features-in-sharepoint-server-2016)
+  and so does 2013. The default code path addresses such a file through the
+  `...ByServerRelativePath(decodedUrl=...)` endpoints, which take the decoded path
+  ([Microsoft: ResourcePath API](https://learn.microsoft.com/en-us/sharepoint/dev/solution-guidance/supporting-and-in-file-and-folder-with-the-resourcepath-api)),
+  and the crawl escapes both characters in the link it indexes the file under.
+  **`sp.version=2013` cannot address such a file**: it uses the older
+  `...ByServerRelativeUrl(...)` endpoints, which read their argument as an already-encoded URL.
+  That is a deliberate limit rather than a gap - a SharePoint 2013 farm cannot hold such a name in
+  the first place - so it only matters if `sp.version=2013` is pointed at a 2019 or Subscription
+  Edition server, which is not a configuration to use. None of this is exercised against a real
+  farm; it is verified against this plugin's mock server and the documentation cited above.
 - **IIS Extended Protection `tokenChecking=Require` cannot be supported.** Neither Apache HttpClient
   4.5 nor 5.x implements channel binding, which Extended Protection at `Require` depends on. IIS
   defaults this setting to `None`, so most farms are unaffected, and there is no workaround for a

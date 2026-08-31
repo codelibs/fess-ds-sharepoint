@@ -110,6 +110,19 @@ public class FileCrawl extends SharePointCrawl {
     }
 
     /**
+     * Returns the link this file is indexed under, i.e. the value that ends up in the document's
+     * {@code url} field and that a search result links to. It is built by whichever crawl queued
+     * this file - see {@code FolderCrawl#getWebLink} and {@code ItemAttachmentsCrawl#getWebLink} -
+     * and is a browsable SharePoint page address, not the REST path the content is downloaded
+     * from.
+     *
+     * @return the web URL, or null if the queueing crawl could not build one
+     */
+    public String getWebUrl() {
+        return webUrl;
+    }
+
+    /**
      * Adds an additional property to be included in the crawled data.
      *
      * @param key the property key

@@ -15,6 +15,8 @@
  */
 package org.codelibs.fess.ds.sharepoint.crawl.doclib;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -120,6 +122,68 @@ public class FolderCrawlTest extends UnitDsTestCase {
                 // The folder lookup, the (empty) subfolder page and the file page - no getListItem,
                 // getListItemValue, getListItemRole or getForms request for the excluded file.
                 assertEquals("an excluded file must not cost its four follow-up requests", 3, server.getRecordedRequests().size());
+            }
+        }
+    }
+
+    /**
+     * A file whose name contains the two characters
+     * <a href="https://github.com/codelibs/fess-ds-sharepoint/issues/4">issue #4</a> is about must
+     * still be indexed under a link that leads back to it.
+     *
+     * <p>The link is a query string, and the file's path is one of its parameter values. Against
+     * the unfixed code that value is interpolated raw, so a {@code #} in a file name starts a URL
+     * fragment: a browser never sends anything from there on, which drops the rest of the file
+     * name and the whole {@code parent} parameter with it, and the search result opens the
+     * library instead of the file. A {@code %} is read as the start of an escape sequence: a name
+     * holding {@code %20} would reach SharePoint as one holding a space, and a {@code %} followed
+     * by anything that is not two hex digits is not a valid escape at all. The {@code &amp;} and
+     * the {@code +} are in the name for the same reason: they are not what the issue reports, but
+     * they break the same value the same way.
+     *
+     * <p>The {@code %} also has to be escaped before the other three, or the {@code %23} produced
+     * for the {@code #} would be escaped a second time in turn. That is why the expected value
+     * below pins {@code %231} rather than {@code %25231}.
+     *
+     * <p>Only the characters that decide how a query string parses are escaped, so the link of
+     * every file whose name holds none of them - which is nearly all of them - keeps the exact
+     * bytes it has today. That is why the space below is expected to survive unescaped: it is
+     * carried by the browser, not interpreted by it, and escaping it would change the indexed URL,
+     * and therefore the document id, of every file already indexed with a space in its name.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aFileNameHoldingQueryStringMetacharactersIsIndexedUnderAWorkingLink() throws Exception {
+        final String listId = "33333333-3333-3333-3333-333333333333";
+        final String fileName = "50% #1 R&D+notes.docx";
+        final String fileUrl = FOLDER_URL + "/" + fileName;
+        final String encodedFileUrl = FOLDER_URL + "/50%25%20%231%20R%26D%2Bnotes.docx";
+        final String formsApi = "/sites/test/_api/Web/Lists(guid'" + listId + "')/Forms";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPath(FOLDER_API, "application/json", "fixtures/modern/doclib_folder.json");
+            server.onPathStatus(FOLDER_API + "/Folders", 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(FOLDER_API + "/Files", 200, "application/json",
+                    "{\"value\": [{\"Name\": \"" + fileName + "\", \"ServerRelativeUrl\": \"" + fileUrl + "\"}]}");
+            server.onPathStatus("/sites/test/_api/Web/GetFolderByServerRelativePath(decodedurl='" + encodedFileUrl + "')/ListItemAllFields",
+                    200, "application/json", "{\"Id\":\"201\",\"odata.editLink\":\"Web/Lists(guid'" + listId + "')/Items(201)\"}");
+            server.onPathStatus("/sites/test/_api/Web/Lists(guid'" + listId + "')/Items(201)/FieldValuesAsText", 200, "application/json",
+                    "{}");
+            server.onPathStatus(formsApi, 200, "application/json",
+                    "{\"value\":[{\"Id\":\"f1\",\"ServerRelativeUrl\":\"/sites/test/Lists/Docs/DispForm.aspx\",\"FormType\":4}]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite("test").build()) {
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new FolderCrawl(client, FOLDER_URL, true, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), true,
+                        FileCrawl.DEFAULT_EXTRACTOR_NAME, FileCrawl.DEFAULT_SUPPORTED_MIMETYPES, FileCrawl.DEFAULT_MAX_CONTENT_LENGTH, null)
+                                .doCrawl(null, crawlingQueue);
+
+                assertEquals("the file must be queued for crawling", 1, crawlingQueue.size());
+                final FileCrawl fileCrawl = (FileCrawl) crawlingQueue.poll();
+                final String expected = client.getUrl() + "sites/test/Lists/Docs/AllItems.aspx?id=" + FOLDER_URL
+                        + "/50%25 %231 R%26D%2Bnotes.docx" + "&parent=" + URLEncoder.encode(FOLDER_URL, StandardCharsets.UTF_8);
+                assertEquals("every query string metacharacter must be escaped once, and nothing else about the link may change", expected,
+                        fileCrawl.getWebUrl());
             }
         }
     }

@@ -98,6 +98,12 @@ public class SharePointApiTest extends UnitDsTestCase {
         assertEquals("file%26name.txt", sharePointApi.encodeRelativeUrl("file&name.txt"));
         assertEquals("file%3Dname.txt", sharePointApi.encodeRelativeUrl("file=name.txt"));
         assertEquals("file%2Bname.txt", sharePointApi.encodeRelativeUrl("file+name.txt"));
+        // The other half of what issue #4 reports, and the one this method must not encode twice:
+        // every caller places the result in a decodedUrl='...' literal, which the server reads as
+        // the already-decoded path, so a single %25 is what makes a literal % arrive as itself.
+        assertEquals("a literal percent must be encoded exactly once", "file%25name.txt", sharePointApi.encodeRelativeUrl("file%name.txt"));
+        assertEquals("a value that already looks encoded is still just a name", "file%2520name.txt",
+                sharePointApi.encodeRelativeUrl("file%20name.txt"));
     }
 
     @Test
