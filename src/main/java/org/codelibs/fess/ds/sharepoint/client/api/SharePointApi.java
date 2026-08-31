@@ -21,6 +21,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -30,6 +31,7 @@ import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.Header;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -39,7 +41,9 @@ import org.apache.logging.log4j.Logger;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.core.stream.StreamUtil;
 import org.codelibs.fess.crawler.Constants;
+import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointResponseFormatException;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 import org.xml.sax.helpers.DefaultHandler;
@@ -66,6 +70,20 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
             .compile("(?:\\{|%7[bB])?" + "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?:\\}|%7[dD])?");
 
     /**
+     * The response header SharePoint uses to report how loaded the server is, from 0 (idle) up
+     * to 10 (very busy).
+     */
+    protected static final String HEALTH_SCORE_HEADER = "X-SharePointHealthScore";
+
+    /**
+     * The health score at and below which a server is not considered busy. A score above this
+     * triggers a voluntary wait before this call returns, scaled by how far past the threshold
+     * the score is - the same backoff shape used for a 503, since both mean the same thing: the
+     * server is telling this crawl to slow down.
+     */
+    protected static final int HEALTH_SCORE_BUSY_THRESHOLD = 8;
+
+    /**
      * HTTP client used for making requests to SharePoint.
      */
     protected final CloseableHttpClient client;
@@ -81,16 +99,40 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     protected final OAuth oAuth;
 
     /**
-     * Constructs a new SharePointApi instance.
+     * The wait applied when SharePoint reports itself busy via {@link #HEALTH_SCORE_HEADER}.
+     *
+     * <p>Every subclass reaches this through this base class's field rather than a shared static,
+     * so a test can hand one subclass instance a backoff with a recording, non-sleeping sleeper
+     * without affecting any other instance.
+     */
+    protected final SharePointBackoff backoff;
+
+    /**
+     * Constructs a new SharePointApi instance, backing off on a busy server with
+     * {@link SharePointBackoff#defaults()}.
      *
      * @param client the HTTP client for making requests
      * @param siteUrl the base URL of the SharePoint site
      * @param oAuth the OAuth authentication handler, may be null
      */
     protected SharePointApi(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
+        this(client, siteUrl, oAuth, SharePointBackoff.defaults());
+    }
+
+    /**
+     * Constructs a new SharePointApi instance with an explicit backoff, so a test can replace the
+     * wait applied when SharePoint reports itself busy with one that does not actually sleep.
+     *
+     * @param client the HTTP client for making requests
+     * @param siteUrl the base URL of the SharePoint site
+     * @param oAuth the OAuth authentication handler, may be null
+     * @param backoff the wait applied when SharePoint reports itself busy
+     */
+    protected SharePointApi(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth, final SharePointBackoff backoff) {
         this.client = client;
         this.siteUrl = siteUrl;
         this.oAuth = oAuth;
+        this.backoff = backoff;
     }
 
     /**
@@ -109,11 +151,57 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
      * @throws SharePointClientException if there is a client-side error
      */
     protected JsonResponse doJsonRequest(final HttpRequestBase httpRequest) {
+        // Deliberately left as the bare media type, not an explicit odata=verbose/minimalmetadata
+        // parameter: every JSON parser in this plugin (GetLists, GetFoldersResponse,
+        // GetFilesResponse, GetFormsResponse, GetListItemAttachmentsResponse, GetListItemRole,
+        // GetListItems, GetDoclibListItem, ...) reads the JSON Light shape - jsonMap.get("value"),
+        // odata.nextLink, odata.editLink - which is what a bare "application/json" already yields
+        // on the SharePoint versions this plugin targets. odata=verbose would switch every one of
+        // those responses to the pre-JSON-Light {"d":{"results":[...]}} shape and break them all
+        // with a bare NullPointerException instead of the clear message requireJsonContentType
+        // below produces for the one case this header cannot itself prevent: a server with JSON
+        // Light OData disabled entirely, which ignores the requested metadata level and answers
+        // with Atom XML instead, 200 and all.
         httpRequest.addHeader("Accept", "application/json");
+        return doJsonRequest(httpRequest, oAuth != null);
+    }
+
+    /**
+     * Executes {@code httpRequest}, refreshing the OAuth access token and retrying exactly once
+     * if the first attempt comes back 401.
+     *
+     * <p>The build-time token this plugin acquires (see {@code SharePointClientBuilder#build})
+     * never gets read again, and {@code expires_in} is never checked, so once it lapses every
+     * remaining request in the crawl would otherwise fail with 401 - a long crawl outliving its
+     * own token's lifetime turns into a wall of identical, useless retries. Requesting a fresh
+     * token on the first 401 and replaying the same request once recovers from exactly that,
+     * without polling the token's expiry ahead of time.
+     *
+     * @param httpRequest the HTTP request to execute
+     * @param allowTokenRefresh whether a 401 here may still refresh and retry; false on the retry
+     *            itself, so this recurses at most once
+     * @return a JsonResponse containing the response body and metadata
+     * @throws SharePointServerException if the server returns an error response
+     * @throws SharePointClientException if there is a client-side error
+     */
+    private JsonResponse doJsonRequest(final HttpRequestBase httpRequest, final boolean allowTokenRefresh) {
         if (oAuth != null) {
             oAuth.apply(httpRequest);
         }
         try (CloseableHttpResponse httpResponse = client.execute(httpRequest)) {
+            awaitIfServerIsBusy(httpResponse);
+            if (allowTokenRefresh && httpResponse.getStatusLine().getStatusCode() == 401) {
+                EntityUtils.consumeQuietly(httpResponse.getEntity());
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Got 401 for {}; refreshing the access token and retrying once.", httpRequest.getURI());
+                }
+                oAuth.updateAccessToken(client);
+                httpRequest.removeHeaders("Authorization");
+                return doJsonRequest(httpRequest, false);
+            }
+            if (!isErrorResponse(httpResponse)) {
+                requireJsonContentType(httpResponse, httpRequest);
+            }
             final String body = EntityUtils.toString(httpResponse.getEntity());
             if (logger.isDebugEnabled()) {
                 logger.debug("API's ResponseBody. [url:{}] [body:{}]", httpRequest.getURI().toString(), body);
@@ -135,6 +223,10 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
             return new JsonResponse(body, bodyMap, httpResponse.getStatusLine().getStatusCode());
         } catch (final SharePointServerException e) {
             throw e;
+        } catch (final SharePointResponseFormatException e) {
+            // Not one of the two types SharePointCrawler#doCrawl's retry loop retries - see that
+            // exception's javadoc for why a Content-Type mismatch must not be retried at all.
+            throw e;
         } catch (final Exception e) {
             throw new SharePointClientException("Request failure. " + e.getMessage(), e);
         }
@@ -151,6 +243,7 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
     protected XmlResponse doXmlRequest(final HttpRequestBase httpRequest) {
         httpRequest.addHeader("Accept", "application/xml; charset=\"UTF-8\"");
         try (CloseableHttpResponse httpResponse = client.execute(httpRequest)) {
+            awaitIfServerIsBusy(httpResponse);
             final String body = EntityUtils.toString(httpResponse.getEntity());
             if (logger.isDebugEnabled()) {
                 logger.debug("API's ResponseBody. [url:{}] [body:{}]", httpRequest.getURI().toString(), body);
@@ -183,6 +276,76 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Waits before returning when {@code response} reports SharePoint is busy, via
+     * {@value #HEALTH_SCORE_HEADER}.
+     *
+     * <p>{@link #doJsonRequest} and {@link #doXmlRequest} both call this, but so does
+     * {@code GetFile}/{@code GetFile2013}'s own {@code execute()} - they call {@code client}
+     * directly instead of going through either of those two methods, so without their own call
+     * here every file download would silently skip this wait.
+     *
+     * <p>Called regardless of whether {@code response} turns out to be an error: a server can
+     * report itself busy on a response it still answers successfully, and the crawl benefits from
+     * slowing down either way.
+     *
+     * @param response the response to inspect
+     */
+    protected void awaitIfServerIsBusy(final CloseableHttpResponse response) {
+        final Header header = response.getFirstHeader(HEALTH_SCORE_HEADER);
+        if (header == null || StringUtil.isBlank(header.getValue())) {
+            return;
+        }
+        final int score;
+        try {
+            score = Integer.parseInt(header.getValue().trim());
+        } catch (final NumberFormatException e) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Non-numeric {}: {}", HEALTH_SCORE_HEADER, header.getValue(), e);
+            }
+            return;
+        }
+        if (score <= HEALTH_SCORE_BUSY_THRESHOLD) {
+            return;
+        }
+        // The first busy score (threshold + 1) uses attempt 0, the base delay step, not attempt 1
+        // (which would skip straight to the first doubling): subtracting 1 here is what makes
+        // that so - without it, the very first busy signal would already double the base delay.
+        final int attempt = score - HEALTH_SCORE_BUSY_THRESHOLD - 1;
+        if (logger.isDebugEnabled()) {
+            logger.debug("{} is {}; backing off.", HEALTH_SCORE_HEADER, score);
+        }
+        backoff.await(attempt);
+    }
+
+    /**
+     * Rejects a non-error response whose {@code Content-Type} does not look like JSON.
+     *
+     * <p>An on-premises server with JSON Light OData disabled answers a JSON request with Atom XML
+     * instead, 200 and all: {@code objectMapper.readValue} chokes on the leading {@code '<'} with
+     * {@code JsonParseException: Unexpected character}, a message that says nothing about what
+     * actually went wrong, wrapped in a {@code SharePointClientException} - one of the two types
+     * {@code SharePointCrawler#doCrawl} retries, so a deterministic configuration mismatch used to
+     * be retried to exhaustion before being reported this unhelpfully. Checking the declared
+     * {@code Content-Type} here catches it before the parser ever runs, with a message that
+     * names the actual cause.
+     *
+     * @param httpResponse the response to inspect; must not be an error response
+     * @param httpRequest the request that produced it, for the exception message
+     * @throws SharePointResponseFormatException if the response is not declared as JSON
+     */
+    private void requireJsonContentType(final CloseableHttpResponse httpResponse, final HttpRequestBase httpRequest) {
+        final Header contentType = httpResponse.getFirstHeader("Content-Type");
+        final String value = contentType == null ? null : contentType.getValue();
+        if (value != null && value.toLowerCase(Locale.ROOT).contains("json")) {
+            return;
+        }
+        throw new SharePointResponseFormatException("SharePoint responded with Content-Type '" + value + "' to a request sent with"
+                + " Accept: application/json, for " + httpRequest.getURI()
+                + ". This usually means JSON Light OData support is disabled on the server, which makes it answer with Atom XML"
+                + " instead of JSON. Enable JSON Light or check the endpoint's OData configuration.");
     }
 
     /**

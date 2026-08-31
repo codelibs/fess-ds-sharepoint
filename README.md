@@ -37,6 +37,37 @@ work a rejected item would otherwise cost:
 Both are treated as unset if left blank, and an invalid regular expression is treated as unset
 rather than rejecting every item.
 
+### User-Agent
+
+Every request from this data store carries the User-Agent `FessSharePointDataStore/1.0`. Two of
+SharePoint's built-in request classifiers matter here, and they are separate claims: a request
+that `SPSearchCrawlingRequestClassifier` recognizes as a search-engine crawler (by user-agent
+pattern) defaults to `ThrottleLevel.FirstStage`; this string is deliberately not one of those
+patterns, so it is not classified that way at all. Separately, an on-premises administrator who
+wants to exempt this crawl from throttling entirely can register this exact string with
+`SPHttpUserAgentAndMethodClassifier` at `ThrottleLevel = Never`.
+
+### Throttling and backoff
+
+This data store cooperates with two on-premises SharePoint throttling signals. Neither is
+currently configurable - there is no data-config parameter to disable or tune either one.
+
+- **A 503 response** is retried the same as any other error, up to `retry_limit`, but with an
+  increasing wait before each retry: 2 seconds, then 4, then 8, doubling up to a 30-second cap,
+  each randomized to 70-130% of that value. A crawl target that keeps returning 503 pays this wait
+  before every retry it actually gets, but not after its last one - a target `retry_limit`
+  ultimately gives up on is not delayed pointlessly first.
+- **Every response** - successful or not, including a page of a listing the crawl is about to
+  discard - is inspected for the `X-SharePointHealthScore` response header (0 idle to 10 very
+  busy). A score of 9 or above makes the crawl wait before doing anything else: score 9 waits the
+  same ~2 seconds as the first 503 retry above, score 10 waits ~4 seconds, and so on, doubling for
+  each point past 9. **This adds up across the whole crawl, with no aggregate cap**: a farm sitting
+  at health score 9 under sustained load adds roughly 2 seconds to *every single request* this data
+  store makes - including every page of every folder and list listing - which can turn a crawl that
+  would otherwise take hours into one that takes substantially longer. If a crawl unexpectedly
+  slows down by an order of magnitude, check the farm's health score during that window before
+  assuming something else is wrong.
+
 ### List Crawl
 
 ```

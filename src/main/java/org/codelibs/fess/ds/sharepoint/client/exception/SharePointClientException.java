@@ -29,9 +29,17 @@ public class SharePointClientException extends RuntimeException {
     private static final long serialVersionUID = 1L;
 
     /**
+     * The HTTP status code that produced this exception, or -1 if none is known - either because
+     * this exception did not originate from an HTTP response at all (a network failure, a parsing
+     * error) or because the constructor used did not carry one.
+     */
+    private final int statusCode;
+
+    /**
      * Constructs a new SharePointClientException with no detail message.
      */
     public SharePointClientException() {
+        this.statusCode = -1;
     }
 
     /**
@@ -41,6 +49,25 @@ public class SharePointClientException extends RuntimeException {
      */
     public SharePointClientException(final String message) {
         super(message);
+        this.statusCode = -1;
+    }
+
+    /**
+     * Constructs a new SharePointClientException for an HTTP error response, carrying its status
+     * code.
+     *
+     * <p>{@code GetFile}/{@code GetFile2013} report every HTTP error response this way (unlike the
+     * shared {@code SharePointApi#doJsonRequest}/{@code doXmlRequest} path, which reports one as a
+     * {@code SharePointServerException} instead) so {@code SharePointCrawler#doCrawl}'s retry loop
+     * can still recognize a 503 from a file download and back off before retrying it, the same way
+     * it already does for a 503 from any other API call.
+     *
+     * @param message the detail message explaining the cause of the exception
+     * @param statusCode the HTTP status code returned by the server
+     */
+    public SharePointClientException(final String message, final int statusCode) {
+        super(message);
+        this.statusCode = statusCode;
     }
 
     /**
@@ -51,6 +78,7 @@ public class SharePointClientException extends RuntimeException {
      */
     public SharePointClientException(final String message, final Throwable cause) {
         super(message, cause);
+        this.statusCode = -1;
     }
 
     /**
@@ -60,6 +88,7 @@ public class SharePointClientException extends RuntimeException {
      */
     public SharePointClientException(final Throwable cause) {
         super(cause);
+        this.statusCode = -1;
     }
 
     /**
@@ -73,5 +102,15 @@ public class SharePointClientException extends RuntimeException {
     public SharePointClientException(final String message, final Throwable cause, final boolean enableSuppression,
             final boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);
+        this.statusCode = -1;
+    }
+
+    /**
+     * Returns the HTTP status code that produced this exception.
+     *
+     * @return the HTTP status code, or -1 if none is known
+     */
+    public int getStatusCode() {
+        return statusCode;
     }
 }

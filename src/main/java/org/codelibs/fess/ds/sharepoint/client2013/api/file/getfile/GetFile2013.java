@@ -24,6 +24,7 @@ import org.apache.http.util.EntityUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFile;
+import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
@@ -48,6 +49,19 @@ public class GetFile2013 extends GetFile {
      */
     public GetFile2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth) {
         super(client, siteUrl, oAuth);
+    }
+
+    /**
+     * Constructs a new GetFile2013 API client with an explicit backoff, so a test can replace the
+     * wait applied when SharePoint reports itself busy with one that does not actually sleep.
+     *
+     * @param client the HTTP client to use for requests
+     * @param siteUrl the SharePoint 2013 site URL
+     * @param oAuth the OAuth authentication provider
+     * @param backoff the wait applied when SharePoint reports itself busy
+     */
+    public GetFile2013(final CloseableHttpClient client, final String siteUrl, final OAuth oAuth, final SharePointBackoff backoff) {
+        super(client, siteUrl, oAuth, backoff);
     }
 
     /**
@@ -80,10 +94,13 @@ public class GetFile2013 extends GetFile {
         CloseableHttpResponse httpResponse = null;
         try {
             httpResponse = client.execute(httpGet);
+            // See GetFile#execute for why this call is here rather than only in the shared path.
+            awaitIfServerIsBusy(httpResponse);
             if (isErrorResponse(httpResponse)) {
                 final int status = httpResponse.getStatusLine().getStatusCode();
                 final String body = EntityUtils.toString(httpResponse.getEntity());
-                throw new SharePointClientException("GetFile Request failure. status:" + status + " body:" + body);
+                // Carries the status code - see GetFile#execute for why.
+                throw new SharePointClientException("GetFile Request failure. status:" + status + " body:" + body, status);
             }
             final GetFile2013Response response = new GetFile2013Response(httpResponse);
             // Ownership passes to the response, which closes it; the finally below must not.

@@ -16,12 +16,29 @@
 package org.codelibs.fess.ds.sharepoint.client.api;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.TestInfo;
 
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpRequestBase;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointResponseFormatException;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
+import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
+import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class SharePointApiTest extends UnitDsTestCase {
     @Override
@@ -171,5 +188,213 @@ public class SharePointApiTest extends UnitDsTestCase {
         assertEquals(2, items.size());
         assertEquals("value1", items.get(0));
         assertEquals("value2", items.get(1));
+    }
+
+    /**
+     * doJsonRequest is the shared path nearly every API (other than GetFile/GetFile2013, which
+     * bypass it) goes through, so this is the one call site that has to see a busy-server wait for
+     * all of them at once.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doJsonRequest_backsOffWhenTheServerReportsItselfBusy() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/probe", 200, "application/json", "{}");
+            server.withHeader("X-SharePointHealthScore", "9");
+            server.start();
+
+            final List<Long> recordedSleeps = new ArrayList<>();
+            final SharePointBackoff backoff = new SharePointBackoff(2000L, 30000L, () -> 0.5d, recordedSleeps::add);
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final SharePointApi<SharePointApiResponse> sharePointApi =
+                        new SharePointApi<SharePointApiResponse>(httpClient, server.getBaseUrl(), null, backoff) {
+                            @Override
+                            public SharePointApiResponse execute() {
+                                doJsonRequest(new HttpGet(server.getBaseUrl() + "probe"));
+                                return null;
+                            }
+                        };
+
+                sharePointApi.execute();
+
+                assertEquals("a health score of 9 (attempt 0: 9 - threshold 8 - 1) must back off once", 1, recordedSleeps.size());
+                assertEquals("attempt 0 must be the unjittered-at-the-midpoint initial delay, not already doubled", 2000L,
+                        recordedSleeps.get(0).longValue());
+            }
+        }
+    }
+
+    /**
+     * A JSON-Light-disabled on-premises server answers a JSON request with Atom XML instead, 200
+     * and all. Against the unfixed code this response reaches objectMapper.readValue, which throws
+     * JsonParseException on the leading '&lt;', wrapped into a SharePointClientException with a
+     * message that says nothing about the actual cause.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doJsonRequest_rejectsAnAtomXmlResponseWithAClearMessage() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/probe", 200, "application/atom+xml", "<feed><entry>not json</entry></feed>");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final SharePointApi<SharePointApiResponse> sharePointApi =
+                        new SharePointApi<SharePointApiResponse>(httpClient, server.getBaseUrl(), null) {
+                            @Override
+                            public SharePointApiResponse execute() {
+                                doJsonRequest(new HttpGet(server.getBaseUrl() + "probe"));
+                                return null;
+                            }
+                        };
+
+                final SharePointResponseFormatException e = assertThrows(SharePointResponseFormatException.class, sharePointApi::execute,
+                        "an Atom XML response to a JSON request must be rejected, not parsed as JSON");
+
+                assertTrue("the message must name the actual Content-Type", e.getMessage().contains("application/atom+xml"));
+                assertTrue("the message must explain the likely cause", e.getMessage().contains("JSON Light"));
+            }
+        }
+    }
+
+    /**
+     * Pins the outgoing Accept header to the bare media type. Every JSON parser in this plugin
+     * (GetLists, GetFoldersResponse, GetFilesResponse, GetFormsResponse,
+     * GetListItemAttachmentsResponse, GetListItemRole, GetListItems, GetDoclibListItem, ...) reads
+     * the JSON Light shape ("value", "odata.nextLink", "odata.editLink"), which is what a bare
+     * "application/json" already yields on the SharePoint versions this plugin targets. An
+     * explicit "odata=verbose" would switch every one of those responses to the pre-JSON-Light
+     * {"d":{"results":[...]}} shape instead and break them all - a regression the mock server
+     * cannot catch on its own, since it ignores Accept and always serves JSON-Light-shaped
+     * fixtures regardless of what was requested. This test exists to catch that class of
+     * regression by pinning the header the server actually receives.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doJsonRequest_sendsTheBareJsonAcceptHeader() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/probe", 200, "application/json", "{}");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final SharePointApi<SharePointApiResponse> sharePointApi =
+                        new SharePointApi<SharePointApiResponse>(httpClient, server.getBaseUrl(), null) {
+                            @Override
+                            public SharePointApiResponse execute() {
+                                doJsonRequest(new HttpGet(server.getBaseUrl() + "probe"));
+                                return null;
+                            }
+                        };
+
+                sharePointApi.execute();
+
+                assertEquals(1, server.getRecordedRequests().size());
+                assertEquals(
+                        "the Accept header must stay the bare media type - an explicit metadata level such as"
+                                + " odata=verbose would change the response shape every JSON parser in this plugin expects",
+                        "application/json", server.getRecordedRequests().get(0).getHeader("Accept"));
+            }
+        }
+    }
+
+    /**
+     * SharePointResponseFormatException must not be mistaken for one of the two types
+     * SharePointCrawler#doCrawl's retry loop retries. instanceof cannot even be written between it
+     * and either sibling - they are unrelated concrete classes - which is itself evidence neither
+     * relationship exists; this instead confirms the actual superclass and non-assignability
+     * directly.
+     */
+    @Test
+    public void test_SharePointResponseFormatException_isNeitherServerNorClientException() {
+        assertEquals("must extend RuntimeException directly, not SharePointServerException or SharePointClientException",
+                RuntimeException.class, SharePointResponseFormatException.class.getSuperclass());
+        assertFalse("SharePointServerException must not be assignable from it",
+                SharePointServerException.class.isAssignableFrom(SharePointResponseFormatException.class));
+        assertFalse("SharePointClientException must not be assignable from it",
+                SharePointClientException.class.isAssignableFrom(SharePointResponseFormatException.class));
+    }
+
+    /** An OAuth double that never makes a real ACS call, so this stays a self-contained unit test. */
+    private static OAuth recordingOAuth(final AtomicInteger refreshCount) {
+        return new OAuth("id", "secret", "tenant", "realm") {
+            @Override
+            public void updateAccessToken(final CloseableHttpClient httpClient) {
+                refreshCount.incrementAndGet();
+            }
+
+            @Override
+            public void apply(final HttpRequestBase httpRequest) {
+                httpRequest.addHeader("Authorization", "Bearer token-" + refreshCount.get());
+            }
+        };
+    }
+
+    /**
+     * Against the unfixed code, doJsonRequest applies the token once, up front, and never checks
+     * the response status for 401 at all - the request is answered 401 and reported as a
+     * SharePointServerException, with no refresh and no retry.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doJsonRequest_refreshesTheTokenAndRetriesOnceOn401() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathOnce("/probe", 401, "application/json", "{}");
+            server.onPathStatus("/probe", 200, "application/json", "{}");
+            server.start();
+
+            final AtomicInteger refreshCount = new AtomicInteger();
+            final OAuth oAuth = recordingOAuth(refreshCount);
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final SharePointApi<SharePointApiResponse> sharePointApi =
+                        new SharePointApi<SharePointApiResponse>(httpClient, server.getBaseUrl(), oAuth) {
+                            @Override
+                            public SharePointApiResponse execute() {
+                                doJsonRequest(new HttpGet(server.getBaseUrl() + "probe"));
+                                return null;
+                            }
+                        };
+
+                sharePointApi.execute();
+
+                assertEquals("a 401 must refresh the token exactly once", 1, refreshCount.get());
+                assertEquals("a 401 must be retried exactly once", 2, server.getRecordedRequests().size());
+                assertEquals("the first attempt must carry the original token", "Bearer token-0",
+                        server.getRecordedRequests().get(0).getHeader("Authorization"));
+                assertEquals("the retry must carry the refreshed token, not the stale one", "Bearer token-1",
+                        server.getRecordedRequests().get(1).getHeader("Authorization"));
+            }
+        }
+    }
+
+    /**
+     * A second 401 - the refreshed token is also rejected - must not loop forever; it must be
+     * reported like any other 401.
+     */
+    @Test
+    @Timeout(value = 15, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_doJsonRequest_doesNotRetryASecond401() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/probe", 401, "application/json", "{}");
+            server.start();
+
+            final AtomicInteger refreshCount = new AtomicInteger();
+            final OAuth oAuth = recordingOAuth(refreshCount);
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final SharePointApi<SharePointApiResponse> sharePointApi =
+                        new SharePointApi<SharePointApiResponse>(httpClient, server.getBaseUrl(), oAuth) {
+                            @Override
+                            public SharePointApiResponse execute() {
+                                doJsonRequest(new HttpGet(server.getBaseUrl() + "probe"));
+                                return null;
+                            }
+                        };
+
+                assertThrows(SharePointServerException.class, sharePointApi::execute,
+                        "a 401 that survives the one retry must still be reported as an error");
+
+                assertEquals("a persistent 401 must refresh the token exactly once, not loop", 1, refreshCount.get());
+                assertEquals("a persistent 401 must be requested exactly twice: the original attempt plus one retry", 2,
+                        server.getRecordedRequests().size());
+            }
+        }
     }
 }

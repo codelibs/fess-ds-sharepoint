@@ -36,6 +36,7 @@ import org.codelibs.fess.crawler.filter.UrlFilter;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClientBuilder;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApi;
+import org.codelibs.fess.ds.sharepoint.client.backoff.SharePointBackoff;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.credential.NtlmCredential;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
@@ -71,6 +72,13 @@ public class SharePointCrawler implements Closeable {
     private final AtomicLong failureCount = new AtomicLong();
 
     private final UrlFilter urlFilter;
+
+    /**
+     * The wait applied before retrying a request SharePoint answered with 503, growing with each
+     * successive retry of the same crawl unit. Package-private so a test can replace it with one
+     * that records the delay instead of actually sleeping for it.
+     */
+    private SharePointBackoff backoff = SharePointBackoff.defaults();
 
     /**
      * Creates a new SharePointCrawler with the specified configuration.
@@ -111,10 +119,10 @@ public class SharePointCrawler implements Closeable {
     }
 
     private SharePointClient createClient(final CrawlerConfig config) {
-        final RequestConfig requestConfig =
-                RequestConfig.custom().setConnectTimeout(config.getConnectionTimeout()).setSocketTimeout(config.getSocketTimeout()).build();
-        final SharePointClientBuilder builder =
-                SharePointClient.builder().setUrl(config.getUrl()).setSite(config.getSiteName()).setRequestConfig(requestConfig);
+        final SharePointClientBuilder builder = SharePointClient.builder()
+                .setUrl(config.getUrl())
+                .setSite(config.getSiteName())
+                .setRequestConfig(buildRequestConfig(config));
         final String ntlmUser = config.getNtlmUser();
         if (StringUtils.isNotBlank(ntlmUser)) {
             final String ntlmPass = config.getNtlmPassword();
@@ -131,6 +139,31 @@ public class SharePointCrawler implements Closeable {
             builder.setProxyHost(config.getProxyHost()).setProxyPort(config.getProxyPort());
         }
         return builder.build();
+    }
+
+    /**
+     * Builds the request configuration a crawl's HTTP client uses: connect and socket timeouts as
+     * configured, plus a connection request timeout - the time a thread waits for a connection to
+     * become free in the pool - bound to the same value as the connect timeout.
+     *
+     * <p>Left unset, Apache HttpClient's default is an unbounded wait. A pooled connection can be
+     * held for a long time by a request the server is slow to answer, and every API call in this
+     * plugin shares one pool per crawl (see {@code SharePointClientBuilder#buildHttpClient}, which
+     * never calls {@code setMaxConnPerRoute}), so a thread waiting for one to free up had nothing
+     * bounding that wait at all - it could block for the life of the crawl.
+     *
+     * <p>Package-private so a test can build the exact {@link RequestConfig} production uses
+     * without constructing a whole {@link SharePointCrawler}.
+     *
+     * @param config the crawler configuration
+     * @return the request configuration for {@code config}
+     */
+    static RequestConfig buildRequestConfig(final CrawlerConfig config) {
+        return RequestConfig.custom()
+                .setConnectTimeout(config.getConnectionTimeout())
+                .setSocketTimeout(config.getSocketTimeout())
+                .setConnectionRequestTimeout(config.getConnectionTimeout())
+                .build();
     }
 
     /**
@@ -201,6 +234,26 @@ public class SharePointCrawler implements Closeable {
     }
 
     /**
+     * Replaces the wait applied before retrying a 503, for a test that needs the retry loop to
+     * exercise the backoff without actually waiting out its delay.
+     *
+     * @param backoff the backoff to use instead of the real, sleeping default
+     */
+    void setBackoff(final SharePointBackoff backoff) {
+        this.backoff = backoff;
+    }
+
+    /**
+     * Appends a crawl unit directly to the queue, for a test that needs {@link #doCrawl} to see a
+     * particular unit's behavior without it coming from real discovery (a folder or list listing).
+     *
+     * @param crawl the crawl unit to enqueue
+     */
+    void offerCrawlTargetForTest(final SharePointCrawl crawl) {
+        crawlingQueue.offer(crawl);
+    }
+
+    /**
      * Performs a crawl operation.
      *
      * @param dataConfig the data configuration
@@ -231,6 +284,13 @@ public class SharePointCrawler implements Closeable {
                     lastFailure = e;
                     if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Api server error: {}  [Retry:{}]", e.getMessage(), retryCount);
+                        // SharePoint's on-premises throttling signal: wait longer with each
+                        // successive retry of this same target rather than hammering a server that
+                        // just said it is overloaded. Only a genuine 503 waits - a 404 or 403
+                        // retrying anyway is not evidence of load, so it is not worth delaying.
+                        if (e.getStatusCode() == 503) {
+                            backoff.await(retryCount);
+                        }
                     } else {
                         logger.warn("Api server error: {}", e.getMessage(), e);
                     }
@@ -238,6 +298,13 @@ public class SharePointCrawler implements Closeable {
                     lastFailure = e;
                     if (retryCount + 1 <= config.getRetryLimit()) {
                         logger.warn("Error occured: {}  [Retry:{}]", e.getMessage(), retryCount);
+                        // GetFile/GetFile2013 report every HTTP error this way instead of as a
+                        // SharePointServerException, but still carry the status code (see
+                        // SharePointClientException(String, int)), so a 503 from a file download
+                        // backs off exactly like a 503 from any other API call.
+                        if (e.getStatusCode() == 503) {
+                            backoff.await(retryCount);
+                        }
                     } else {
                         logger.warn("Error occured. {}", e.getMessage(), e);
                     }

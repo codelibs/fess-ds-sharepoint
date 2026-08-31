@@ -102,6 +102,47 @@
 			<version>${fess.version}</version>
 			<scope>provided</scope>
 		</dependency>
+		<!-- Reached today only transitively through fess (provided, above): org.apache.http.*,
+		     org.apache.commons.io.*, org.apache.commons.lang3.* and com.fasterxml.jackson.databind.*
+		     are all used directly by this plugin's own source. Declared explicitly, at fess-parent's
+		     pinned versions, so a future change to fess's own dependencies does not silently change
+		     or remove a type this plugin compiles against. jakarta.validation-api reaches this
+		     plugin the same transitive way through fess, but also arrives compile-scoped through
+		     this plugin's own direct lastaflute dependency above (lastaflute -> hibernate-validator),
+		     so - unlike the other four - losing the fess-provided copy would not actually break
+		     the build; it is declared here anyway for the same explicitness. fess-parent has no
+		     version property for it, so the version is pinned to what that second, already-direct
+		     path resolves to today (3.0.2). -->
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
+			<version>${httpcomponents.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>${commons.io.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-lang3</artifactId>
+			<version>${commons.lang3.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>${jackson2.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>jakarta.validation</groupId>
+			<artifactId>jakarta.validation-api</artifactId>
+			<version>3.0.2</version>
+			<scope>provided</scope>
+		</dependency>
 		<dependency>
 			<groupId>org.opensearch</groupId>
 			<artifactId>opensearch</artifactId>

@@ -77,6 +77,9 @@ public class OAuth {
         this.clientSecret = clientSecret;
         this.tenant = tenant;
         this.realm = realm;
+        logger.warn("SharePoint OAuth authentication uses the Azure Access Control Service (ACS), which Microsoft has deprecated"
+                + " and is scheduled for retirement. Where the target environment supports it, migrate to a Microsoft Entra ID"
+                + " app registration (certificate or client-secret credentials) instead of ACS app-only authentication.");
     }
 
     /**

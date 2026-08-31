@@ -23,7 +23,6 @@ import org.apache.http.client.config.RequestConfig;
 import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.conn.DefaultProxyRoutePlanner;
 import org.codelibs.fess.ds.sharepoint.client.credential.SharePointCredential;
@@ -33,13 +32,26 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
  * Builder class for creating SharePointClient instances.
  */
 public class SharePointClientBuilder {
+
+    /**
+     * The User-Agent sent with every request, in place of Apache HttpClient's default
+     * ("Apache-HttpClient/4.5.14 (Java/21...)").
+     *
+     * <p>Deliberately avoids "crawler", "bot", "spider" or similar: SharePoint's built-in
+     * {@code SPSearchCrawlingRequestClassifier} matches those patterns in a request's User-Agent
+     * and defaults a request it matches to its "FirstStage" throttle level - not the throttling
+     * this whole change exists to cooperate with rather than trigger. Separately, an administrator
+     * can register this exact string with {@code SPHttpUserAgentAndMethodClassifier} at
+     * {@code ThrottleLevel.Never} to exempt it from throttling entirely - see the README.
+     */
+    public static final String USER_AGENT = "FessSharePointDataStore/1.0";
+
     private String url = null;
     private String siteName = null;
     private SharePointCredential credential = null;
     private OAuth oAuth = null;
     private RequestConfig requestConfig = null;
     private CloseableHttpClient httpClient = null;
-    private int retryCount = 0;
     private boolean verson2013 = false;
     private String proxyHost = null;
     private int proxyPort = -1;
@@ -117,17 +129,6 @@ public class SharePointClientBuilder {
     }
 
     /**
-     * Sets the number of retry attempts for failed requests.
-     *
-     * @param retryCount the retry count
-     * @return this builder instance
-     */
-    public SharePointClientBuilder setRetryCount(final int retryCount) {
-        this.retryCount = retryCount;
-        return this;
-    }
-
-    /**
      * Configures the builder to use SharePoint 2013 API.
      *
      * @return this builder instance
@@ -178,6 +179,7 @@ public class SharePointClientBuilder {
         }
 
         final HttpClientBuilder builder = HttpClientBuilder.create();
+        builder.setUserAgent(USER_AGENT);
         if (requestConfig != null) {
             builder.setDefaultRequestConfig(requestConfig);
         } else {
@@ -189,9 +191,6 @@ public class SharePointClientBuilder {
             final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
             credentialsProvider.setCredentials(AuthScope.ANY, credential.getCredential());
             builder.setDefaultCredentialsProvider(credentialsProvider);
-        }
-        if (retryCount > 0) {
-            builder.setRetryHandler(new DefaultHttpRequestRetryHandler(retryCount, true));
         }
         final HttpRoutePlanner routePlanner = buildRoutePlanner();
         if (routePlanner != null) {
