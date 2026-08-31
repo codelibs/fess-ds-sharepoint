@@ -28,6 +28,7 @@ import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemVa
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitems.GetListItems;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetList;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetLists;
+import org.codelibs.fess.ds.sharepoint.client.api.web.getwebs.GetWebs;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
 
 /**
@@ -89,6 +90,15 @@ public class SharePointApis {
      */
     public DocLibApis doclib() {
         return new DocLibApis();
+    }
+
+    /**
+     * Gets the web (site) API operations handler.
+     *
+     * @return WebApis instance for site metadata operations
+     */
+    public WebApis web() {
+        return new WebApis();
     }
 
     /**
@@ -241,6 +251,30 @@ public class SharePointApis {
          */
         public GetDoclibListItem getListItem() {
             return new GetDoclibListItem(client, siteUrl, oAuth);
+        }
+    }
+
+    /**
+     * API handler for SharePoint web (site) metadata operations.
+     * Provides access to a site's direct child sites.
+     */
+    public class WebApis {
+        /**
+         * Constructs a new WebApis instance.
+         * This constructor initializes the API handler for SharePoint web operations,
+         * providing access to a site's direct child sites.
+         */
+        public WebApis() {
+            // Default constructor for web API operations
+        }
+
+        /**
+         * Gets the API for retrieving a site's direct child sites.
+         *
+         * @return GetWebs instance for subsite operations
+         */
+        public GetWebs getWebs() {
+            return new GetWebs(client, siteUrl, oAuth);
         }
     }
 }

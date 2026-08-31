@@ -30,6 +30,7 @@ import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitem.GetListIt
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistitems.GetListItems2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetList2013;
 import org.codelibs.fess.ds.sharepoint.client2013.api.list.getlists.GetLists2013;
+import org.codelibs.fess.ds.sharepoint.client2013.api.web.getwebs.GetWebs2013;
 
 /**
  * SharePoint 2013 specific API gateway that extends SharePointApis.
@@ -81,6 +82,16 @@ public class SharePoint2013Apis extends SharePointApis {
     @Override
     public DocLibApis doclib() {
         return new DocLibApis();
+    }
+
+    /**
+     * Gets the SharePoint 2013 web (site) API operations handler.
+     *
+     * @return WebApis instance for SharePoint 2013 site metadata operations
+     */
+    @Override
+    public WebApis web() {
+        return new WebApis();
     }
 
     /**
@@ -248,6 +259,32 @@ public class SharePoint2013Apis extends SharePointApis {
         @Override
         public GetDoclibListItem2013 getListItem() {
             return new GetDoclibListItem2013(client, siteUrl, oAuth);
+        }
+    }
+
+    /**
+     * SharePoint 2013 specific API handler for web (site) metadata operations.
+     * Extends the base WebApis to provide SharePoint 2013 implementations
+     * that handle XML response parsing.
+     */
+    public class WebApis extends SharePointApis.WebApis {
+        /**
+         * Constructs a new SharePoint 2013 WebApis instance.
+         * This constructor initializes the API handler for SharePoint 2013 web operations,
+         * extending the base functionality to handle XML response parsing specific to SharePoint 2013.
+         */
+        public WebApis() {
+            super();
+        }
+
+        /**
+         * Gets the SharePoint 2013 API for retrieving a site's direct child sites.
+         *
+         * @return GetWebs2013 instance for SharePoint 2013 subsite operations
+         */
+        @Override
+        public GetWebs2013 getWebs() {
+            return new GetWebs2013(client, siteUrl, oAuth);
         }
     }
 }

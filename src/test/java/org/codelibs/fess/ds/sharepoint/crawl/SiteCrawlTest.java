@@ -16,16 +16,20 @@
 package org.codelibs.fess.ds.sharepoint.crawl;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.stream.Collectors;
 
 import org.codelibs.fess.ds.sharepoint.SharePointCrawler;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -71,7 +75,8 @@ public class SiteCrawlTest extends UnitDsTestCase {
             final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
             config.setSiteName(SITE_NAME);
             final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
-            new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null).doCrawl(null, crawlingQueue);
+            new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, ConcurrentHashMap.newKeySet())
+                    .doCrawl(null, crawlingQueue);
             return crawlingQueue.size();
         }
     }
@@ -176,7 +181,8 @@ public class SiteCrawlTest extends UnitDsTestCase {
                 config.setSiteName(SITE_NAME);
                 config.setSkipRole(true);
                 final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
-                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null).doCrawl(null, crawlingQueue);
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, ConcurrentHashMap.newKeySet())
+                        .doCrawl(null, crawlingQueue);
 
                 final List<SharePointCrawl> queued = new ArrayList<>(crawlingQueue);
                 assertEquals("only the fallback FolderCrawl for Shared Documents must be queued", 3, queued.size());
@@ -202,11 +208,273 @@ public class SiteCrawlTest extends UnitDsTestCase {
                 final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
                 config.setSitePath("/teams/eng");
                 final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
-                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null).doCrawl(null, crawlingQueue);
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, ConcurrentHashMap.newKeySet())
+                        .doCrawl(null, crawlingQueue);
 
                 assertEquals("just the Shared Documents fallback for the configured site path", 1, crawlingQueue.size());
                 assertEquals("the top-level folder listing must target the configured site path", 1,
                         server.getRecordedRequests().stream().filter(request -> teamsFolderApi.equals(request.getPath())).count());
+            }
+        }
+    }
+
+    private static final String WEBINFOS_API = "/sites/test/_api/web/webinfos";
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_subsitesAreNotCrawledByDefault() throws Exception {
+        try (SharePointMockServer server = siteServer("fixtures/modern/doclib_folders_short_page.json")) {
+            server.start();
+
+            final int queued = crawlAndCountQueued(server);
+
+            assertEquals("the fixture's two folders plus the Shared Documents fallback", 3, queued);
+            assertEquals("site.crawl_subsites defaults to false, so webinfos must never be requested", 0,
+                    server.getRecordedRequests().stream().filter(request -> WEBINFOS_API.equals(request.getPath())).count());
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_subsitesAreCrawledWhenEnabled() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(LISTS_API, 200, "application/json", "{\"value\":[]}");
+            server.onPathStatus(WEBINFOS_API, 200, "application/json",
+                    "{\"value\": [" + "{\"Id\":\"1\",\"Title\":\"Child A\",\"ServerRelativeUrl\":\"/sites/test/childA\"},"
+                            + "{\"Id\":\"2\",\"Title\":\"Child B\",\"ServerRelativeUrl\":\"/sites/test/childB\"}" + "]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                config.setCrawlSubsites(true);
+                final Set<String> visitedSitePaths = ConcurrentHashMap.newKeySet();
+                visitedSitePaths.add(client.getSitePath());
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, visitedSitePaths).doCrawl(null,
+                        crawlingQueue);
+
+                final List<SiteCrawl> childCrawls =
+                        crawlingQueue.stream().filter(SiteCrawl.class::isInstance).map(SiteCrawl.class::cast).collect(Collectors.toList());
+                assertEquals("one SiteCrawl must be queued per child site", 2, childCrawls.size());
+
+                final List<String> statsKeyIds =
+                        childCrawls.stream().map(crawl -> crawl.getStatsKey().getId()).collect(Collectors.toList());
+                assertTrue("child A's stats key must identify the child, not the parent", statsKeyIds.contains("site#/sites/test/childA/"));
+                assertTrue("child B's stats key must identify the child, not the parent", statsKeyIds.contains("site#/sites/test/childB/"));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_subsiteRecursionStopsAtMaxDepth() throws Exception {
+        final String childPath = "/sites/test/childA/";
+        final String childFolderApi = "/sites/test/childA/_api/web/GetFolderByServerRelativePath(decodedUrl='/sites/test/childA/')/Folders";
+        final String childListsApi = "/sites/test/childA/_api/lists";
+        final String childWebinfosApi = "/sites/test/childA/_api/web/webinfos";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(LISTS_API, 200, "application/json", "{\"value\":[]}");
+            server.onPathStatus(WEBINFOS_API, 200, "application/json",
+                    "{\"value\": [{\"Id\":\"1\",\"Title\":\"Child A\",\"ServerRelativeUrl\":\"" + childPath + "\"}]}");
+            server.onPathStatus(childFolderApi, 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(childListsApi, 200, "application/json", "{\"value\":[]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                config.setCrawlSubsites(true);
+                config.setMaxDepth(1);
+                final Set<String> visitedSitePaths = ConcurrentHashMap.newKeySet();
+                visitedSitePaths.add(client.getSitePath());
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, visitedSitePaths).doCrawl(null,
+                        crawlingQueue);
+
+                final List<SiteCrawl> childCrawls =
+                        crawlingQueue.stream().filter(SiteCrawl.class::isInstance).map(SiteCrawl.class::cast).collect(Collectors.toList());
+                assertEquals("the root's direct child must still be queued at depth 1", 1, childCrawls.size());
+
+                // depth 1 with max_depth=1 must not recurse into this child's own children.
+                final Queue<SharePointCrawl> grandchildQueue = new ConcurrentLinkedQueue<>();
+                childCrawls.get(0).doCrawl(null, grandchildQueue);
+
+                assertTrue("grandchildren must be untouched at the depth bound",
+                        grandchildQueue.stream().noneMatch(SiteCrawl.class::isInstance));
+                assertEquals("the child's own webinfos must never be requested at the depth bound", 0,
+                        server.getRecordedRequests().stream().filter(request -> childWebinfosApi.equals(request.getPath())).count());
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aSubsiteThatReturns403IsSkipped() throws Exception {
+        final String childPath = "/sites/test/childA/";
+        final String childFolderApi = "/sites/test/childA/_api/web/GetFolderByServerRelativePath(decodedUrl='/sites/test/childA/')/Folders";
+        final String childListsApi = "/sites/test/childA/_api/lists";
+        final String childWebinfosApi = "/sites/test/childA/_api/web/webinfos";
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(LISTS_API, 200, "application/json", "{\"value\":[]}");
+            server.onPathStatus(WEBINFOS_API, 200, "application/json",
+                    "{\"value\": [{\"Id\":\"1\",\"Title\":\"Child A\",\"ServerRelativeUrl\":\"" + childPath + "\"}]}");
+            server.onPathStatus(childFolderApi, 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(childListsApi, 200, "application/json", "{\"value\":[]}");
+            // The crawl account can read the child site's own folders/lists but cannot enumerate
+            // its webinfos - a plausible split of permissions, and exactly the case this handling
+            // exists for: webinfos is not security-trimmed, so a site the crawl account cannot
+            // fully see is expected, not a sign anything is misconfigured.
+            server.onPathStatus(childWebinfosApi, 403, "application/json", "{\"error\":{\"message\":{\"value\":\"Access denied\"}}}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                config.setCrawlSubsites(true);
+                final Set<String> visitedSitePaths = ConcurrentHashMap.newKeySet();
+                visitedSitePaths.add(client.getSitePath());
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, visitedSitePaths).doCrawl(null,
+                        crawlingQueue);
+
+                final List<SiteCrawl> childCrawls =
+                        crawlingQueue.stream().filter(SiteCrawl.class::isInstance).map(SiteCrawl.class::cast).collect(Collectors.toList());
+                assertEquals("the child site must still be queued from the root's own, successful webinfos call", 1, childCrawls.size());
+
+                final Queue<SharePointCrawl> grandchildQueue = new ConcurrentLinkedQueue<>();
+                // Not throwing here is what keeps SharePointCrawler#doCrawl's retry loop from ever
+                // seeing this as a failed crawl unit - that loop only counts a target as failed
+                // when an exception escapes every retry attempt, and this must never even reach it.
+                assertDoesNotThrow(() -> childCrawls.get(0).doCrawl(null, grandchildQueue),
+                        "a 403 listing a subsite's own children must not fail its crawl");
+
+                assertTrue("no grandchild can be discovered when webinfos itself 403s",
+                        grandchildQueue.stream().noneMatch(SiteCrawl.class::isInstance));
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aSubsiteAlreadyVisitedIsNotCrawledTwice() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(LISTS_API, 200, "application/json", "{\"value\":[]}");
+            // The site lists itself as its own child - a malformed but real-world-possible
+            // webinfos response. Without the visited set seeded with the root's own path, this
+            // would queue a SiteCrawl for the exact same site over and over.
+            server.onPathStatus(WEBINFOS_API, 200, "application/json",
+                    "{\"value\": [{\"Id\":\"1\",\"Title\":\"test\",\"ServerRelativeUrl\":\"/sites/test\"}]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                config.setCrawlSubsites(true);
+                final Set<String> visitedSitePaths = ConcurrentHashMap.newKeySet();
+                visitedSitePaths.add(client.getSitePath());
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, visitedSitePaths).doCrawl(null,
+                        crawlingQueue);
+
+                final long siteCrawlsQueued = crawlingQueue.stream().filter(SiteCrawl.class::isInstance).count();
+                assertEquals("a site listing itself as its own child must not be queued again", 0, siteCrawlsQueued);
+            }
+        }
+    }
+
+    /**
+     * The child paths come from the server and are only normalized for slashes, so a farm that
+     * reports something that is not a child at all - a bare name resolving to a site at the server
+     * root, the whole root site collection, another site collection, or a path with {@code ..}
+     * segments the server would resolve - must not steer the crawl outside the site this data
+     * config was pointed at.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_aSubsiteOutsideTheParentSiteIsRejected() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 200, "application/json", "{\"value\": []}");
+            server.onPathStatus(LISTS_API, 200, "application/json", "{\"value\":[]}");
+            server.onPathStatus(WEBINFOS_API, 200, "application/json",
+                    "{\"value\": [" + "{\"Id\":\"1\",\"Title\":\"Bare name\",\"ServerRelativeUrl\":\"sub\"},"
+                            + "{\"Id\":\"2\",\"Title\":\"Root collection\",\"ServerRelativeUrl\":\"/\"},"
+                            + "{\"Id\":\"3\",\"Title\":\"Another collection\",\"ServerRelativeUrl\":\"/sites/other\"},"
+                            + "{\"Id\":\"4\",\"Title\":\"Sibling by prefix\",\"ServerRelativeUrl\":\"/sites/testing\"},"
+                            + "{\"Id\":\"5\",\"Title\":\"Dot segments\",\"ServerRelativeUrl\":\"/sites/test/../..\"},"
+                            + "{\"Id\":\"6\",\"Title\":\"Real child\",\"ServerRelativeUrl\":\"/sites/test/childA\"}" + "]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                config.setCrawlSubsites(true);
+                final Set<String> visitedSitePaths = ConcurrentHashMap.newKeySet();
+                visitedSitePaths.add(client.getSitePath());
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, visitedSitePaths).doCrawl(null,
+                        crawlingQueue);
+
+                final List<String> statsKeyIds = crawlingQueue.stream()
+                        .filter(SiteCrawl.class::isInstance)
+                        .map(crawl -> crawl.getStatsKey().getId())
+                        .collect(Collectors.toList());
+                assertEquals("only the child that really lies below the parent site may be queued", List.of("site#/sites/test/childA/"),
+                        statsKeyIds);
+            }
+        }
+    }
+
+    /**
+     * The other half of the subsite 403 skip: the root site is the one the operator configured, so
+     * a 403 there is a misconfiguration - a wrong {@code site.path}, or an account with no access
+     * to the site it was pointed at - and must stay a crawl failure so it is reported and the
+     * stale-document cleanup is suppressed rather than the whole site vanishing from the index.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_a403OnTheRootSiteIsStillAFailure() throws Exception {
+        assertSiteCrawlPropagates(403, 0);
+    }
+
+    /**
+     * And only a 403 is skipped, never a 401: one set of credentials serves every site in a crawl,
+     * so a request that was not authenticated at all is a crawl-wide problem every remaining
+     * target will hit too, not this subsite's permission boundary.
+     */
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_a401OnASubsiteIsStillAFailure() throws Exception {
+        assertSiteCrawlPropagates(401, 1);
+    }
+
+    /**
+     * Fails a site's own first listing with {@code status} and asserts the exception escapes
+     * {@code doCrawl} - which is what makes {@code SharePointCrawler}'s retry loop count the
+     * target as failed.
+     *
+     * @param status the HTTP status the site's own folder listing answers with
+     * @param depth how many subsite hops from the root this crawl is; 0 is the root itself
+     * @throws Exception if the mock server cannot be started or stopped
+     */
+    private void assertSiteCrawlPropagates(final int status, final int depth) throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, status, "application/json", "{\"error\":{\"message\":{\"value\":\"Denied\"}}}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                final SiteCrawl crawl = new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, depth,
+                        ConcurrentHashMap.newKeySet());
+
+                final SharePointServerException e = assertThrows(SharePointServerException.class, () -> crawl.doCrawl(null, crawlingQueue));
+                assertEquals("the status must reach the crawler's retry loop unchanged", status, e.getStatusCode());
             }
         }
     }

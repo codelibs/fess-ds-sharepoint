@@ -169,4 +169,72 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
             assertNotNull("a blank retry_limit must fall back to the default instead of throwing", crawler);
         }
     }
+
+    @Test
+    public void test_createCrawler_crawlSubsitesDefaultsToFalse() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertFalse("an unset site.crawl_subsites must default to false, issuing no webinfos request at all",
+                    crawler.getCrawlerConfig().isCrawlSubsites());
+        }
+    }
+
+    @Test
+    public void test_createCrawler_crawlSubsitesReachesConfig() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("site.crawl_subsites", "true");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertTrue("site.crawl_subsites=true must reach the crawler config", crawler.getCrawlerConfig().isCrawlSubsites());
+        }
+    }
+
+    @Test
+    public void test_createCrawler_maxDepthReachesConfig() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("site.max_depth", "3");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("site.max_depth must reach the crawler config", 3, crawler.getCrawlerConfig().getMaxDepth());
+        }
+    }
+
+    @Test
+    public void test_createCrawler_blankMaxDepthFallsBackInsteadOfFailingTheJob() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        // Trivially produced by the admin UI: the field left empty rather than removed.
+        // Integer.parseInt called directly on this throws NumberFormatException, and createCrawler
+        // runs outside storeData's try block, so an uncaught one here fails the whole data-config
+        // job rather than one crawl target. Asserted against the actual default (not just
+        // non-null) so a refactor of the guarded parseInt helper that stops falling back would be
+        // caught here.
+        paramMap.put("site.max_depth", "");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("a blank site.max_depth must fall back to the default instead of throwing", 10,
+                    crawler.getCrawlerConfig().getMaxDepth());
+        }
+    }
+
+    @Test
+    public void test_createCrawler_malformedMaxDepthFallsBackInsteadOfFailingTheJob() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("site.max_depth", "not-a-number");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("a malformed site.max_depth must fall back to the default instead of throwing", 10,
+                    crawler.getCrawlerConfig().getMaxDepth());
+        }
+    }
 }

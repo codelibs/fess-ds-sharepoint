@@ -1,0 +1,51 @@
+/*
+ * Copyright 2012-2025 CodeLibs Project and the Others.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+ * either express or implied. See the License for the specific language
+ * governing permissions and limitations under the License.
+ */
+package org.codelibs.fess.ds.sharepoint.client2013.api.web.getwebs;
+
+import java.util.List;
+
+import org.codelibs.fess.ds.sharepoint.client.api.web.getwebs.GetWebsResponse;
+
+/**
+ * SharePoint 2013 specific response class for the get subsites API operation.
+ * This class extends GetWebsResponse to provide SharePoint 2013 compatibility
+ * while maintaining the same interface as the base response class.
+ *
+ * @see GetWebsResponse
+ * @see GetWebs2013
+ */
+public class GetWebs2013Response extends GetWebsResponse {
+
+    /**
+     * Constructs a new GetWebs2013Response with the provided list of child sites.
+     *
+     * @param subSites list of SubSite objects parsed from the SharePoint 2013 response
+     */
+    public GetWebs2013Response(final List<SubSite> subSites) {
+        super(subSites);
+    }
+
+    /**
+     * Gets the child sites retrieved from SharePoint 2013.
+     *
+     * @return list of SubSite objects
+     */
+    @Override
+    public List<SubSite> getSubSites() {
+        return subSites;
+    }
+
+}

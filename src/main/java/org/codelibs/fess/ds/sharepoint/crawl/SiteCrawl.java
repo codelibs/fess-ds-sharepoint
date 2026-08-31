@@ -32,6 +32,8 @@ import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolder.GetFolderResp
 import org.codelibs.fess.ds.sharepoint.client.api.doclib.getfolders.GetFoldersResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistitem.GetListItemRoleResponse;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListsResponse;
+import org.codelibs.fess.ds.sharepoint.client.api.web.getwebs.GetWebsResponse;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.crawl.list.ListCrawl;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
@@ -85,6 +87,15 @@ public class SiteCrawl extends SharePointCrawl {
     private final Map<String, String> formsCache;
     /** The include_pattern/exclude_pattern filter built once for the whole crawl, or null */
     private final UrlFilter urlFilter;
+    /** How many subsite hops this crawl is from the root site; the root site itself is depth 0. */
+    private final int depth;
+    /**
+     * Every site path already queued for a crawl anywhere in this crawl's recursion tree,
+     * normalized, shared across the whole tree the same way {@link #formsCache} is. Seeded with
+     * the root site's own path when the tree is built, so a subsite that lists an ancestor (or
+     * itself) as a child cannot be queued a second time.
+     */
+    private final Set<String> visitedSitePaths;
 
     /**
      * Constructs a new SiteCrawl instance for crawling a SharePoint site.
@@ -95,17 +106,22 @@ public class SiteCrawl extends SharePointCrawl {
      * @param formsCache cache of each list's DISPLAY_FORM server-relative URL, keyed by listId
      * @param urlFilter the include_pattern/exclude_pattern filter built once for the whole crawl,
      *            or null
+     * @param depth how many subsite hops this crawl is from the root site; the root is 0
+     * @param visitedSitePaths every site path already queued in this crawl's recursion tree,
+     *            shared across the whole tree
      */
     public SiteCrawl(final SharePointClient client, final SharePointCrawler.CrawlerConfig config,
             final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final Map<String, String> formsCache,
-            final UrlFilter urlFilter) {
+            final UrlFilter urlFilter, final int depth, final Set<String> visitedSitePaths) {
         super(client);
         this.config = config;
 
         this.sharePointGroupCache = sharePointGroupCache;
         this.formsCache = formsCache;
         this.urlFilter = urlFilter;
-        statsKey = new StatsKeyObject("site#" + describeSite(config));
+        this.depth = depth;
+        this.visitedSitePaths = visitedSitePaths;
+        statsKey = new StatsKeyObject("site#" + describeSite(client, config));
     }
 
     /**
@@ -114,11 +130,23 @@ public class SiteCrawl extends SharePointCrawl {
      * <p>{@code site.name} is optional once {@code site.path} is set, so it can legitimately be
      * absent; the server-relative path identifies the site just as well and is never blank.
      *
+     * <p>{@code config} is shared by every {@link SiteCrawl} in a recursion tree, so it always
+     * names the <em>root</em> site - {@code config.getSiteName()}/{@code getSiteRelativePath()}
+     * cannot tell a subsite's crawl from the root's. {@code client.getSitePath()} can: it equals
+     * {@code config.getSiteRelativePath()} only for the root's own client, so a subsite - built by
+     * {@link SharePointClient#forSitePath} on a different path - falls through to its own path
+     * instead of reporting the root's name.
+     *
+     * @param client the client this crawl uses, whose site path identifies which site this is
      * @param config the crawler configuration
-     * @return the configured site name, or the server-relative site path when no name is set
+     * @return the configured site name for the root site, or the site's own server-relative path
+     *         for a subsite (or for the root when no name is set)
      */
-    private static String describeSite(final SharePointCrawler.CrawlerConfig config) {
-        return StringUtils.isNotBlank(config.getSiteName()) ? config.getSiteName() : config.getSiteRelativePath();
+    private static String describeSite(final SharePointClient client, final SharePointCrawler.CrawlerConfig config) {
+        if (client.getSitePath().equals(config.getSiteRelativePath()) && StringUtils.isNotBlank(config.getSiteName())) {
+            return config.getSiteName();
+        }
+        return client.getSitePath();
     }
 
     /**
@@ -126,14 +154,60 @@ public class SiteCrawl extends SharePointCrawl {
      * Discovers folders and lists within the site and queues specific
      * crawl tasks for detailed processing.
      *
+     * <p>A 403 anywhere in a <em>discovered subsite's</em> own discovery is logged and skipped
+     * instead of being allowed to escape. {@code _api/web/webinfos} is not security-trimmed - it
+     * names every child site whether or not the crawl account can read it - so on a farm with a
+     * permission-partitioned subsite this 403 is the expected answer, not evidence that anything
+     * is misconfigured. Letting it escape would send it through
+     * {@code SharePointCrawler#doCrawl}'s retry loop, which retries it {@code retry_limit} times
+     * and then increments the crawl's failure count, and a non-zero failure count makes
+     * {@code SharePointDataStore#store} suppress the stale-document cleanup for the entire data
+     * config - so a single unreadable subsite would keep every deleted document in the index on
+     * every subsequent run. Skipping here happens before the first retry is spent.
+     *
+     * <p>Two deliberate limits on what this swallows:
+     * <ul>
+     * <li><b>Only a discovered subsite ({@code depth > 0}).</b> A 403 on the root site the
+     * operator configured is a misconfiguration - a wrong {@code site.path}, or an account
+     * without access to the site it was pointed at - and stays a crawl failure, so the operator
+     * sees it and the stale-document cleanup is suppressed rather than the whole site being
+     * silently dropped from the index.</li>
+     * <li><b>Only 403, not 401.</b> A 403 means the request <em>was</em> authenticated and this
+     * account simply may not read this web, which is exactly the per-site partition
+     * {@code webinfos} exposes. A 401 means the request was not authenticated at all, and since
+     * one set of credentials serves every site in the crawl, that is a crawl-wide problem - an
+     * expired Kerberos ticket, a rejected password, an OAuth token that could not be refreshed -
+     * which every remaining target will hit too. It must stay a failure so it is retried, counted
+     * and reported instead of being reported as a per-site permission boundary.</li>
+     * </ul>
+     *
      * @param dataConfig data source configuration
      * @param crawlingQueue queue for additional crawl tasks (folders and lists)
      * @return null (this crawler only queues other tasks, doesn't create documents directly)
      */
     @Override
     public Map<String, Object> doCrawl(final DataConfig dataConfig, final Queue<SharePointCrawl> crawlingQueue) {
+        try {
+            return discover(crawlingQueue);
+        } catch (final SharePointServerException e) {
+            if (depth > 0 && e.getStatusCode() == 403) {
+                logger.warn("Skipping subsite {}: the crawl account cannot read it (403).", client.getSitePath());
+                return null;
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Discovers this site's folders, lists and - when enabled - subsites, queueing a crawl unit
+     * for each.
+     *
+     * @param crawlingQueue queue for additional crawl tasks (folders and lists)
+     * @return null (this crawler only queues other tasks, doesn't create documents directly)
+     */
+    private Map<String, Object> discover(final Queue<SharePointCrawl> crawlingQueue) {
         if (logger.isInfoEnabled()) {
-            logger.info("[Crawling Site] [site:{}]", describeSite(config));
+            logger.info("[Crawling Site] [site:{}]", describeSite(client, config));
         }
         final Set<String> targetFolderName = new HashSet<>();
         final String siteFolderUrl = client.getSitePath();
@@ -164,7 +238,7 @@ public class SiteCrawl extends SharePointCrawl {
                 // Truncating here is not counted as a crawl failure, so the stale-document
                 // cleanup still runs and documents past the bound can be removed from the index.
                 logger.warn("Stopped listing the top-level folders of site {} after {} pages; the listing may be truncated.",
-                        config.getSiteName(), MAX_PAGES);
+                        describeSite(client, config), MAX_PAGES);
             }
         }
         final GetListsResponse getListsResponse = client.api().list().getLists().execute();
@@ -187,7 +261,85 @@ public class SiteCrawl extends SharePointCrawl {
                     sharePointGroupCache, formsCache, config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(),
                     config.getMaxContentLength(), urlFilter));
         }
+        // Disabled by default (config.isCrawlSubsites() == false): with it unset, doCrawl above
+        // is the entire method and issues exactly the same requests it always has - including
+        // never requesting webinfos at all.
+        if (config.isCrawlSubsites() && depth < config.getMaxDepth()) {
+            crawlSubsites(crawlingQueue);
+        }
         return null;
+    }
+
+    /**
+     * Discovers this site's direct child sites via {@code _api/web/webinfos} and queues a
+     * {@link SiteCrawl} for each one not already visited elsewhere in this crawl's recursion tree.
+     *
+     * <p>{@code webinfos} is not security-trimmed: it names every child site regardless of
+     * whether the crawl account can read it. A 403 on the listing itself - this site's own
+     * children cannot be enumerated - is logged and skipped here; a 403 on a listed child, which
+     * is the far more common shape of the same permission boundary, arrives later when that
+     * child's own {@link SiteCrawl} runs and is skipped there (see
+     * {@link #doCrawl(DataConfig, Queue)}). Neither increments the crawl's failure count:
+     * counting either would suppress the stale-document cleanup for the entire data config (see
+     * {@code SharePointDataStore#store}) over something that is expected, not evidence that
+     * anything went wrong.
+     *
+     * <p>A child is queued only if its server-relative path really lies beneath this site's own.
+     * The path comes from the server, and {@link SharePointClient#normalizeSitePath} only fixes
+     * up slashes, so without this check a farm answering {@code "sub"}, {@code "/"} or
+     * {@code "../.."} would steer the crawl to a site collection this data config was never
+     * pointed at. The configured host cannot be changed either way - the site URL is always built
+     * by prefixing the configured {@code url} - so this bounds the recursion to what its own
+     * contract promises, the site's direct child sites.
+     *
+     * @param crawlingQueue the queue to add a {@link SiteCrawl} for each newly discovered child to
+     */
+    private void crawlSubsites(final Queue<SharePointCrawl> crawlingQueue) {
+        final GetWebsResponse getWebsResponse;
+        try {
+            getWebsResponse = client.api().web().getWebs().execute();
+        } catch (final SharePointServerException e) {
+            if (e.getStatusCode() == 403) {
+                logger.warn("Skipping the subsites of {}: the crawl account cannot list them (403).", describeSite(client, config));
+                return;
+            }
+            throw e;
+        }
+        final String parentPath = client.getSitePath();
+        getWebsResponse.getSubSites().forEach(subSite -> {
+            final String childPath = SharePointClient.normalizeSitePath(subSite.getServerRelativeUrl(), config.getSiteName());
+            if (!isUnderSite(parentPath, childPath)) {
+                logger.warn("Skipping subsite {} reported by {}: it does not lie below the site it was discovered from.", childPath,
+                        parentPath);
+                return;
+            }
+            if (!visitedSitePaths.add(childPath)) {
+                // Already queued elsewhere in this recursion tree - as an ancestor, a sibling
+                // already discovered through another path, or (seeded up front) the root itself.
+                return;
+            }
+            crawlingQueue.offer(new SiteCrawl(client.forSitePath(childPath), config, sharePointGroupCache, formsCache, urlFilter, depth + 1,
+                    visitedSitePaths));
+        });
+    }
+
+    /**
+     * Whether a discovered child's normalized site path really lies below the site it was
+     * discovered from.
+     *
+     * <p>Both paths are {@link SharePointClient#normalizeSitePath normalized} to start and end
+     * with a slash, so a plain prefix test is a whole-segment test: {@code /sites/test/} is a
+     * prefix of {@code /sites/test/sub/} but not of {@code /sites/testing/}. A path equal to the
+     * parent's is rejected as well - it is the same site, not a child of it. A path containing a
+     * {@code ..} segment is rejected outright: it is sent on the wire with the dot segments
+     * intact for the server to resolve, so a prefix test alone would not tell where it lands.
+     *
+     * @param parentPath the normalized site path of the site that reported the child
+     * @param childPath the normalized site path reported for the child
+     * @return true if {@code childPath} is strictly below {@code parentPath}
+     */
+    private static boolean isUnderSite(final String parentPath, final String childPath) {
+        return childPath.length() > parentPath.length() && childPath.startsWith(parentPath) && !childPath.contains("/../");
     }
 
     /**

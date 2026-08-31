@@ -71,6 +71,45 @@ mapped does it fall through to the component named here. `fess-crawler-lasta`'s
 `text/html` and `text/plain`, so for essentially any real file this parameter changes nothing. To
 change which extractor handles a mapped MIME type, change that mapping, not this parameter.
 
+### site.crawl_subsites / site.max_depth
+
+`site.crawl_subsites` (default `false`) makes a full site crawl - one where neither
+`site.list_name` nor `site.doclib_path` is set - recurse into the site's subsites, discovered via
+`_api/web/webinfos`. **Leaving it unset keeps the crawl issuing exactly the same requests it always
+has, including never requesting `webinfos` at all.**
+
+A subsite's documents land in the same data config as the root site's, under their own
+server-relative paths - there is nothing in the index that marks a document as having come from a
+subsite rather than the root.
+
+`site.max_depth` (default `10`) bounds how many subsite hops below the root site are crawled once
+`site.crawl_subsites=true`. The root site itself is depth 0, so `site.max_depth=1` crawls the
+root's direct children and no further. Setting it below `1` while `site.crawl_subsites=true` turns
+the feature back off - no subsite is crawled at all - and is logged as a warning when the crawl
+starts.
+
+Only a subsite whose server-relative path lies below the site it was discovered from is crawled. A
+farm that reports a child outside that path - a different site collection, the root site
+collection, or a path with `..` segments - has that child skipped with a warning.
+
+Turning this on **multiplies the crawl's total time** by roughly the number of subsites discovered
+(bounded by `site.max_depth`): each one gets its own full top-level folder listing, list listing,
+and (if not at the depth bound) its own `webinfos` call, on top of everything the root site's crawl
+already does.
+
+`webinfos` is **not security-trimmed** - it returns every subsite regardless of whether the crawl
+account can read it. A subsite the account cannot read answers the first request of its own crawl
+with a 403; that is logged as a warning and the subsite is skipped, without retrying it and without
+counting it as a crawl failure, because counting it would suppress this data config's
+stale-document cleanup entirely. The same applies to a 403 on the `webinfos` listing itself, which
+means only that this site's children cannot be enumerated.
+
+Two limits on that, both deliberate. A 403 on the **root site** named by `site.name`/`site.path` is
+still a crawl failure - that is a misconfiguration to fix, not a permission boundary to skip.
+And only a 403 is skipped, never a **401**: the same credentials serve every site in the crawl, so
+a 401 is an authentication problem affecting the whole crawl (an expired Kerberos ticket, a rejected
+password, an OAuth token that could not be refreshed) rather than a per-site permission boundary.
+
 ### User-Agent
 
 **Upgrade warning:** the User-Agent changed from Apache HttpClient's default
@@ -123,6 +162,8 @@ site.name={SiteName of crawling target}
 site.path={Server-relative managed path of the site, e.g. /teams/eng or / for the root site collection. Optional: when set, site.name is no longer required. Leaving it unset keeps the existing /sites/{site.name} behavior exactly.}
 site.list_name={ListName of crawling target}
 ## (Option parameter)
+site.crawl_subsites={true or false. Recurse into the site's subsites. Only applies to a full site crawl (site.list_name/site.doclib_path unset). Default is false. See "site.crawl_subsites / site.max_depth" above.}
+site.max_depth={How many subsite hops below the root site site.crawl_subsites may recurse. The root is depth 0. Default is 10.}
 list.item.content.include_fields={FieldName to include to content.}
 list.item.content.exclude_fields={FieldName to exclude to content.}
 ignore_error={true or false. Log a content extraction failure instead of failing the crawl target. Default is false. See "ignore_error" above.}
