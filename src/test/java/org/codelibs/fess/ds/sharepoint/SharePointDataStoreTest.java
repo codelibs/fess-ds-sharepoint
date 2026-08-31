@@ -95,6 +95,72 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
         assertEquals("no document can reach the index when the crawl never starts", 0, callback.documents.size());
     }
 
+    /**
+     * {@code auth.ntlm.domain} and {@code auth.ntlm.workstation} must reach the crawler config.
+     * Before they existed the credential was built with both hardcoded to null, so an operator had
+     * to write {@code DOMAIN\\user} into {@code auth.ntlm.user} and the README never said so.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_createCrawler_ntlmDomainAndWorkstationReachTheConfig() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("auth.ntlm.user", "fess");
+        paramMap.put("auth.ntlm.password", "password");
+        paramMap.put("auth.ntlm.domain", "example.com");
+        paramMap.put("auth.ntlm.workstation", "CRAWLER01");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertEquals("auth.ntlm.domain must reach the crawler config", "example.com", crawler.getCrawlerConfig().getNtlmDomain());
+            assertEquals("auth.ntlm.workstation must reach the crawler config", "CRAWLER01",
+                    crawler.getCrawlerConfig().getNtlmWorkstation());
+        }
+    }
+
+    /**
+     * A data config that has never set them must build exactly the credential it always has: both
+     * null, which is what the call site hardcoded before these parameters existed.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_createCrawler_unsetNtlmDomainAndWorkstationStayNull() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("auth.ntlm.user", "EXAMPLE\\fess");
+        paramMap.put("auth.ntlm.password", "password");
+
+        try (SharePointCrawler crawler = dataStore.createCrawler(paramMap)) {
+            assertNull("an unset auth.ntlm.domain must stay null", crawler.getCrawlerConfig().getNtlmDomain());
+            assertNull("an unset auth.ntlm.workstation must stay null", crawler.getCrawlerConfig().getNtlmWorkstation());
+        }
+    }
+
+    /**
+     * Two authentication methods at once must fail the job outright rather than be discovered as
+     * unexplained 401s during the crawl. {@code createCrawler} runs outside {@link
+     * org.codelibs.fess.ds.sharepoint.SharePointDataStore#storeData}'s try block, so this
+     * propagates.
+     */
+    @Test
+    @Timeout(value = 60, unit = TimeUnit.SECONDS, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_createCrawler_rejectsTwoAuthenticationMethods() {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", "http://localhost/");
+        paramMap.put("site.name", "test");
+        paramMap.put("auth.ntlm.user", "fess");
+        paramMap.put("auth.kerberos.principal", "fess@EXAMPLE.COM");
+        paramMap.put("auth.kerberos.password", "password");
+
+        // Thrown by validate(), which runs before createClient - so no JAAS login is attempted and
+        // this needs no KDC.
+        final ValidationException e = assertThrows(ValidationException.class, () -> dataStore.createCrawler(paramMap),
+                "NTLM and Kerberos together must fail the job");
+        assertTrue("the message must name both parameters",
+                e.getMessage().contains("auth.ntlm.user") && e.getMessage().contains("auth.kerberos.principal"));
+    }
+
     @Test
     public void test_createCrawler_blankMaxContentLengthFallsBackInsteadOfFailingTheJob() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();

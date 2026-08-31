@@ -78,6 +78,38 @@ public class NtlmCredentialTest extends UnitDsTestCase {
         assertEquals("user2", ntCred2.getUserName());
     }
 
+    /**
+     * The third and fourth constructor arguments are workstation and domain, in that order, which
+     * is the order {@link NTCredentials} itself takes them in. Swapping them compiles, passes any
+     * test that only checks the username, and fails only against a real domain controller.
+     */
+    @Test
+    public void test_getCredential_workstationAndDomainLandInTheRightPositions() {
+        final NTCredentials credentials =
+                (NTCredentials) new NtlmCredential("fess", "password", "CRAWLER01", "example.com").getCredential();
+
+        // NTCredentials uppercases both.
+        assertEquals("the fourth argument is the domain", "EXAMPLE.COM", credentials.getDomain());
+        assertEquals("the third argument is the workstation", "CRAWLER01", credentials.getWorkstation());
+        assertEquals("and the user name is left alone", "fess", credentials.getUserName());
+    }
+
+    /**
+     * What every installation that has never set {@code auth.ntlm.domain} or
+     * {@code auth.ntlm.workstation} gets, which must be exactly what it got before those
+     * parameters existed.
+     */
+    @Test
+    public void test_getCredential_nullDomainAndWorkstationAreTheUnchangedDefault() {
+        final NTCredentials credentials = (NTCredentials) new NtlmCredential("EXAMPLE\\fess", "password", null, null).getCredential();
+
+        assertNull("no domain is sent", credentials.getDomain());
+        assertNull("no workstation is sent", credentials.getWorkstation());
+        // NTCredentials does not split this; the whole string goes out as the NTLM user name,
+        // exactly as it always has.
+        assertEquals("a DOMAIN\\user username is passed through unchanged", "EXAMPLE\\fess", credentials.getUserName());
+    }
+
     @Test
     public void test_implementsSharePointCredential() {
         final NtlmCredential ntlmCredential = new NtlmCredential("user", "password", "hostname", "domain");

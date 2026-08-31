@@ -58,6 +58,10 @@ public class SharePointMockServer implements AutoCloseable {
 
     private Server server;
 
+    private volatile String challenge;
+
+    private volatile Authorizer authorizer;
+
     /**
      * Registers a fixture loaded from the classpath, served with HTTP 200.
      *
@@ -128,6 +132,40 @@ public class SharePointMockServer implements AutoCloseable {
     public SharePointMockServer onPathOnce(final String path, final int status, final String contentType, final String body) {
         onceStubs.computeIfAbsent(path, key -> new ConcurrentLinkedQueue<>())
                 .add(new StubResponse(status, withUtf8Charset(contentType), body));
+        return this;
+    }
+
+    /**
+     * Decides whether a request's {@code Authorization} header is good enough to be served.
+     *
+     * <p>Kept as an interface rather than a fixed credential check because the only user of it -
+     * {@code KerberosAuthenticationTest} - has to run a real GSS-API acceptor, which belongs in
+     * that test rather than here.
+     */
+    @FunctionalInterface
+    public interface Authorizer {
+        /**
+         * @param authorization the raw {@code Authorization} header, or null if the request
+         *            carried none
+         * @return the {@code WWW-Authenticate} value to send back with the accepted response, or
+         *         an empty string to send none; {@code null} to reject the request with a 401 and
+         *         the standing challenge
+         */
+        String authorize(String authorization);
+    }
+
+    /**
+     * Makes the server demand authentication: every request the authorizer rejects is answered
+     * with 401 and the given {@code WWW-Authenticate} challenge, ahead of every stub, and the
+     * stubs answer only once it accepts.
+     *
+     * @param challenge the {@code WWW-Authenticate} value sent with a 401, e.g. {@code Negotiate}
+     * @param authorizer decides whether a request's {@code Authorization} header is accepted
+     * @return this instance for chaining
+     */
+    public SharePointMockServer requireAuthorization(final String challenge, final Authorizer authorizer) {
+        this.challenge = challenge;
+        this.authorizer = authorizer;
         return this;
     }
 
@@ -327,6 +365,21 @@ public class SharePointMockServer implements AutoCloseable {
             }
 
             globalHeaders.forEach((name, value) -> response.getHeaders().put(name, value));
+
+            final Authorizer currentAuthorizer = authorizer;
+            if (currentAuthorizer != null) {
+                final String accepted = currentAuthorizer.authorize(headers.get("authorization"));
+                if (accepted == null) {
+                    response.setStatus(401);
+                    response.getHeaders().put("WWW-Authenticate", challenge);
+                    response.getHeaders().put("Content-Type", "text/plain; charset=UTF-8");
+                    Content.Sink.write(response, true, "Unauthorized", callback);
+                    return true;
+                }
+                if (!accepted.isEmpty()) {
+                    response.getHeaders().put("WWW-Authenticate", accepted);
+                }
+            }
 
             final Queue<StubResponse> once = onceStubs.get(path);
             StubResponse stub = once == null ? null : once.poll();

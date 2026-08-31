@@ -194,6 +194,79 @@ signals an on-premises farm sends. A `429 Too Many Requests` is retried like any
 no wait at all, and a `Retry-After` header on any response is ignored - so a SharePoint Online
 tenant, which is what actually sends those, gets no cooperation from this backoff.
 
+### Authentication
+
+Three authentication methods are available, and **exactly one may be configured**. Setting more
+than one of `auth.kerberos.principal`, `auth.ntlm.user` and `auth.oauth.client_id` fails the data
+config job with a validation error before any request is made. That is deliberate: only one
+credential is registered with the HTTP client, and the scope it is registered under matches a
+`Negotiate` challenge as readily as an `NTLM` one, so the combination would otherwise produce 401s
+that nothing in the log explains.
+
+#### NTLM
+
+```
+auth.ntlm.user={Name of SharePoint User}
+auth.ntlm.password={Password}
+auth.ntlm.domain={Windows domain. Optional; unset by default.}
+auth.ntlm.workstation={Workstation name sent in the NTLM negotiation. Optional; unset by default.}
+```
+
+`auth.ntlm.domain` and `auth.ntlm.workstation` are new and both default to unset, which builds
+exactly the credential this data store has always built. Writing the domain into the username as
+`DOMAIN\user` keeps working unchanged - Apache HttpClient passes that string through as the user
+name without splitting it, so whether it is accepted is up to the server. Setting
+`auth.ntlm.domain` sends the domain as its own NTLM field instead, which is what a server that
+rejects the combined form wants.
+
+#### Kerberos (SPNEGO)
+
+**Supported envelope: a single crawler JVM, a single `krb5.conf` per Fess instance, keytab or
+password, no delegation, no channel binding, and mutually exclusive with NTLM and OAuth.** Anything
+outside that is not supported.
+
+```
+auth.kerberos.principal={Client principal, written as user@REALM. Setting it is what enables Kerberos.}
+auth.kerberos.keytab={Path to a keytab holding a key for the principal. Mutually exclusive with auth.kerberos.password.}
+auth.kerberos.password={The principal's password. Used only when no keytab is set.}
+auth.kerberos.strip_port={true or false. Strip the port from the service principal name. Default is true.}
+auth.kerberos.use_canonical_hostname={true or false. Resolve the target host to its canonical name for the service principal name. Default is false.}
+auth.kerberos.krb5_conf={Path to a krb5.conf. Applied only when java.security.krb5.conf is not already set.}
+auth.kerberos.debug={true or false. Krb5LoginModule debug output. Default is false.}
+```
+
+- **`krb5.conf` belongs in `jvm.crawler.options`**, as
+  `-Djava.security.krb5.conf=/path/to/krb5.conf`. Data-store crawling runs in the crawler **child
+  process**, so setting it anywhere that only affects the webapp has no effect, and a webapp
+  restart does not pick a change up - the crawler job has to run again. `auth.kerberos.krb5_conf`
+  is a convenience for the case where nothing has set the property: it **never overwrites an
+  already-set value**, because the property is JVM-global and one crawler JVM runs every data
+  config of a crawl job. When it declines to overwrite, it logs a warning naming both paths.
+- **Put `udp_preference_limit = 1` in `krb5.conf`'s `[libdefaults]`.** Without it the JDK tries
+  UDP first, and when the KDC does not answer - it is unreachable, a firewall is dropping UDP 88,
+  or the reply exceeds the datagram size - it retries three times at thirty seconds each *before*
+  falling back to TCP. A crawl that looks hung for a minute and a half per authentication, with
+  nothing in the log, is usually this.
+- **Always write the principal as `user@REALM`.** `default_realm` is JVM-global and several
+  SharePoint farms in different realms have to share one `krb5.conf`, so a bare `user` resolves
+  against whichever realm that file happens to name.
+- **`auth.kerberos.use_canonical_hostname` defaults to `false`**, deliberately unlike Apache
+  HttpClient's own default. With it on, the target host is put through reverse DNS before the
+  service principal name is built, which under alternate access mappings or behind a load balancer
+  produces a name no SPN is registered for - and the resulting failure says nothing about DNS. Turn
+  it on only if the SPN really is registered against the canonical name.
+- **IIS Extended Protection set to `tokenChecking=Require` cannot work.** Neither Apache HttpClient
+  4.5 nor 5.x supports channel binding. IIS defaults this to `None`, so it is usually not hit, and
+  there is no workaround when it is.
+- **The ticket is obtained once, when the crawl's HTTP client is built, and is never renewed.** A
+  crawl that runs longer than the ticket lifetime starts failing to authenticate partway through.
+- **`auth.kerberos.password` is stored and displayed in clear text**, exactly as
+  `auth.ntlm.password` already is. Fess has no masking mechanism for data-store handler parameters;
+  the data config edit screen renders them as a plain text area. Prefer `auth.kerberos.keytab`,
+  and give the keytab file restrictive permissions.
+- `auth.kerberos.debug=true` makes `Krb5LoginModule` write to the crawler process's standard
+  output, not to the Fess log.
+
 ### List Crawl
 
 ```
@@ -205,6 +278,15 @@ site.name={SiteName of crawling target}
 site.path={Server-relative managed path of the site, e.g. /teams/eng or / for the root site collection. Optional: when set, site.name is no longer required. Leaving it unset keeps the existing /sites/{site.name} behavior exactly.}
 site.list_name={ListName of crawling target}
 ## (Option parameter)
+auth.ntlm.domain={Windows domain for NTLM. Optional; unset by default. See "Authentication" above.}
+auth.ntlm.workstation={Workstation name sent in the NTLM negotiation. Optional; unset by default.}
+auth.kerberos.principal={Kerberos client principal, written as user@REALM. Setting it enables Kerberos and excludes auth.ntlm.* and auth.oauth.*. See "Authentication" above.}
+auth.kerberos.keytab={Path to a keytab holding a key for the principal.}
+auth.kerberos.password={The principal's password. Used only when no keytab is set. Stored and displayed in clear text.}
+auth.kerberos.strip_port={true or false. Default is true.}
+auth.kerberos.use_canonical_hostname={true or false. Default is false.}
+auth.kerberos.krb5_conf={Path to a krb5.conf. Applied only when java.security.krb5.conf is not already set.}
+auth.kerberos.debug={true or false. Krb5LoginModule debug output. Default is false.}
 site.crawl_subsites={true or false. Recurse into the site's subsites. Only applies to a full site crawl (site.list_name/site.doclib_path unset). Default is false. See "site.crawl_subsites / site.max_depth" above.}
 site.max_depth={How many subsite hops below the root site site.crawl_subsites may recurse. The root is depth 0. Default is 10.}
 number_of_threads={How many crawl targets are worked on at once. Default is 1 (no thread pool at all), capped at twice the processor count. See "number_of_threads" above.}
@@ -250,6 +332,15 @@ site.name={SiteName of crawling target}
 site.path={Server-relative managed path of the site, e.g. /teams/eng or / for the root site collection. Optional: when set, site.name is no longer required. Leaving it unset keeps the existing /sites/{site.name} behavior exactly.}
 site.doclib_path={DocumentLibrary path. Ex) /Shared Documents}
 ## (Option parameter)
+auth.ntlm.domain={Windows domain for NTLM. Optional; unset by default. See "Authentication" above.}
+auth.ntlm.workstation={Workstation name sent in the NTLM negotiation. Optional; unset by default.}
+auth.kerberos.principal={Kerberos client principal, written as user@REALM. Setting it enables Kerberos and excludes auth.ntlm.* and auth.oauth.*. See "Authentication" above.}
+auth.kerberos.keytab={Path to a keytab holding a key for the principal.}
+auth.kerberos.password={The principal's password. Used only when no keytab is set. Stored and displayed in clear text.}
+auth.kerberos.strip_port={true or false. Default is true.}
+auth.kerberos.use_canonical_hostname={true or false. Default is false.}
+auth.kerberos.krb5_conf={Path to a krb5.conf. Applied only when java.security.krb5.conf is not already set.}
+auth.kerberos.debug={true or false. Krb5LoginModule debug output. Default is false.}
 number_of_threads={How many crawl targets are worked on at once. Default is 1 (no thread pool at all), capped at twice the processor count. See "number_of_threads" above.}
 ignore_error={true or false. Log a content extraction failure instead of failing the crawl target. Default is false. See "ignore_error" above.}
 default_permissions={Comma-separated permissions merged into every document's role list, e.g. {role}guest.}

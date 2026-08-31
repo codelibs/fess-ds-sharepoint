@@ -172,6 +172,47 @@ public class SharePointDataStore extends AbstractDataStore {
     protected static final String NUMBER_OF_THREADS = "number_of_threads";
 
     /**
+     * The NTLM domain, which before this parameter existed could only be expressed by writing it
+     * into the user name as <code>DOMAIN&#92;user</code> - a string Apache HttpClient passes through
+     * unsplit, so whether it works at all is up to the server.
+     */
+    protected static final String NTLM_DOMAIN_PARAM = "auth.ntlm.domain";
+
+    /** The NTLM workstation name. Left unset the credential is built exactly as before. */
+    protected static final String NTLM_WORKSTATION_PARAM = "auth.ntlm.workstation";
+
+    /** The Kerberos client principal. Setting it is what enables Kerberos authentication. */
+    protected static final String KERBEROS_PRINCIPAL_PARAM = "auth.kerberos.principal";
+
+    /** Path to a keytab holding a key for {@link #KERBEROS_PRINCIPAL_PARAM}. */
+    protected static final String KERBEROS_KEYTAB_PARAM = "auth.kerberos.keytab";
+
+    /**
+     * The Kerberos principal's password, used when no keytab is configured. Stored and displayed in
+     * clear text, exactly as {@code auth.ntlm.password} already is: Fess has no masking mechanism
+     * for data-store handler parameters.
+     */
+    protected static final String KERBEROS_PASSWORD_PARAM = "auth.kerberos.password";
+
+    /** Whether the port is stripped from the service principal name. Defaults to {@code true}. */
+    protected static final String KERBEROS_STRIP_PORT_PARAM = "auth.kerberos.strip_port";
+
+    /**
+     * Whether the target host is resolved to its canonical name for the service principal name.
+     * Defaults to {@code false}, deliberately unlike Apache HttpClient's own default.
+     */
+    protected static final String KERBEROS_USE_CANONICAL_HOSTNAME_PARAM = "auth.kerberos.use_canonical_hostname";
+
+    /**
+     * Path to a krb5.conf. Applied only when {@code java.security.krb5.conf} is not already set:
+     * the property is JVM-global and one crawler JVM runs every data config of a crawl job.
+     */
+    protected static final String KERBEROS_KRB5_CONF_PARAM = "auth.kerberos.krb5_conf";
+
+    /** Whether {@code Krb5LoginModule} writes its debug output to standard output. */
+    protected static final String KERBEROS_DEBUG_PARAM = "auth.kerberos.debug";
+
+    /**
      * Carries the failure count from {@link #storeData} back to {@link #store}.
      *
      * <p>It cannot be a plain field: one data store instance is registered per handler name and
@@ -400,6 +441,22 @@ public class SharePointDataStore extends AbstractDataStore {
         if (paramMap.containsKey("auth.ntlm.user")) {
             config.setNtlmUser(paramMap.getAsString("auth.ntlm.user"));
             config.setNtlmPassword(paramMap.getAsString("auth.ntlm.password"));
+            // Both absent from paramMap read back as null, which is what the credential was
+            // hardcoded to before these parameters existed.
+            config.setNtlmDomain(paramMap.getAsString(NTLM_DOMAIN_PARAM));
+            config.setNtlmWorkstation(paramMap.getAsString(NTLM_WORKSTATION_PARAM));
+        }
+        if (paramMap.containsKey(KERBEROS_PRINCIPAL_PARAM)) {
+            config.setKerberosPrincipal(paramMap.getAsString(KERBEROS_PRINCIPAL_PARAM));
+            config.setKerberosKeytab(paramMap.getAsString(KERBEROS_KEYTAB_PARAM));
+            config.setKerberosPassword(paramMap.getAsString(KERBEROS_PASSWORD_PARAM));
+            config.setKerberosKrb5Conf(paramMap.getAsString(KERBEROS_KRB5_CONF_PARAM));
+            config.setKerberosStripPort(
+                    parseBoolean(paramMap.getAsString(KERBEROS_STRIP_PORT_PARAM), config.isKerberosStripPort(), KERBEROS_STRIP_PORT_PARAM));
+            config.setKerberosUseCanonicalHostname(parseBoolean(paramMap.getAsString(KERBEROS_USE_CANONICAL_HOSTNAME_PARAM),
+                    config.isKerberosUseCanonicalHostname(), KERBEROS_USE_CANONICAL_HOSTNAME_PARAM));
+            config.setKerberosDebug(
+                    parseBoolean(paramMap.getAsString(KERBEROS_DEBUG_PARAM), config.isKerberosDebug(), KERBEROS_DEBUG_PARAM));
         }
         if (paramMap.containsKey("auth.oauth.client_id")) {
             config.setOauthClientId(paramMap.getAsString("auth.oauth.client_id"));
@@ -537,5 +594,34 @@ public class SharePointDataStore extends AbstractDataStore {
             logger.warn("Invalid {}: \"{}\". Using the default ({}).", paramName, value, defaultValue, e);
             return defaultValue;
         }
+    }
+
+    /**
+     * Parses a boolean parameter whose default is not necessarily {@code false}.
+     *
+     * <p>{@code Boolean.parseBoolean} maps a blank or absent value - and anything that is not
+     * {@code "true"} - to {@code false}, which would silently flip a parameter documented as
+     * defaulting to {@code true} the moment the admin UI leaves its field empty. A value that is
+     * neither {@code true} nor {@code false} falls back to the default with a warning rather than
+     * being read as {@code false}.
+     *
+     * @param value the raw parameter value, possibly blank or malformed
+     * @param defaultValue the value to use when {@code value} is blank or unrecognised
+     * @param paramName the parameter name, for the warning logged on an unrecognised value
+     * @return the parsed value, or {@code defaultValue}
+     */
+    private boolean parseBoolean(final String value, final boolean defaultValue, final String paramName) {
+        if (StringUtils.isBlank(value)) {
+            return defaultValue;
+        }
+        final String trimmed = value.trim();
+        if (Constants.TRUE.equalsIgnoreCase(trimmed)) {
+            return true;
+        }
+        if (Constants.FALSE.equalsIgnoreCase(trimmed)) {
+            return false;
+        }
+        logger.warn("Invalid {}: \"{}\". Using the default ({}).", paramName, value, defaultValue);
+        return defaultValue;
     }
 }

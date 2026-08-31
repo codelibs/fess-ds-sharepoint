@@ -15,11 +15,14 @@
  */
 package org.codelibs.fess.ds.sharepoint.client;
 
+import java.util.List;
+
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpHost;
-import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.AuthSchemeProvider;
 import org.apache.http.client.CredentialsProvider;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.config.Lookup;
 import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.impl.client.BasicCredentialsProvider;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -222,23 +225,92 @@ public class SharePointClientBuilder {
             // being narrowed to one connection.
             builder.setMaxConnPerRoute(maxConnections).setMaxConnTotal(maxConnections);
         }
-        if (requestConfig != null) {
-            builder.setDefaultRequestConfig(requestConfig);
-        } else {
-            final RequestConfig config = RequestConfig.custom().setSocketTimeout(30000).setConnectTimeout(30000).build();
-            builder.setDefaultRequestConfig(config);
-        }
+        builder.setDefaultRequestConfig(buildEffectiveRequestConfig());
 
-        if (credential != null) {
-            final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
-            credentialsProvider.setCredentials(AuthScope.ANY, credential.getCredential());
+        final CredentialsProvider credentialsProvider = buildCredentialsProvider();
+        if (credentialsProvider != null) {
             builder.setDefaultCredentialsProvider(credentialsProvider);
+        }
+        final Lookup<AuthSchemeProvider> authSchemeRegistry = buildAuthSchemeRegistry();
+        if (authSchemeRegistry != null) {
+            builder.setDefaultAuthSchemeRegistry(authSchemeRegistry);
         }
         final HttpRoutePlanner routePlanner = buildRoutePlanner();
         if (routePlanner != null) {
             builder.setRoutePlanner(routePlanner);
         }
         return builder.build();
+    }
+
+    /**
+     * Builds the credentials provider the HTTP client is built with.
+     *
+     * <p>The credential decides its own {@link org.apache.http.auth.AuthScope}. Every credential
+     * except {@code KerberosCredential} inherits {@code AuthScope.ANY} from
+     * {@link SharePointCredential#getAuthScope()}, which is what this connector has always
+     * registered them under - NTLM credentials answering a {@code Basic} or {@code Digest}
+     * challenge included.
+     *
+     * <p>Package-private so a test can inspect what a credential is registered under without
+     * reaching into the built client, the same way {@link #buildRoutePlanner()} is exposed.
+     *
+     * @return the provider, or {@code null} when no credential is configured
+     */
+    protected CredentialsProvider buildCredentialsProvider() {
+        if (credential == null) {
+            return null;
+        }
+        final CredentialsProvider credentialsProvider = new BasicCredentialsProvider();
+        credentialsProvider.setCredentials(credential.getAuthScope(), credential.getCredential());
+        return credentialsProvider;
+    }
+
+    /**
+     * The authentication scheme registry the HTTP client is built with, or {@code null} to leave
+     * Apache HttpClient's own default registry in place.
+     *
+     * <p>{@code null} is the answer for every credential that does not override
+     * {@link SharePointCredential#getAuthSchemeRegistry()}, which today is all of them except
+     * {@code KerberosCredential}. That matters more than it looks:
+     * {@code HttpClientBuilder#setDefaultAuthSchemeRegistry} <b>replaces</b> the default registry
+     * outright, so a credential handed the wrong one loses every scheme that registry does not
+     * name. A default that returned anything but {@code null} would give an NTLM or unauthenticated
+     * crawl a registry built for Kerberos.
+     *
+     * <p>Package-private so a test can pin exactly that.
+     *
+     * @return the registry to install, or {@code null} to keep Apache HttpClient's default
+     */
+    protected Lookup<AuthSchemeProvider> buildAuthSchemeRegistry() {
+        if (credential == null) {
+            return null;
+        }
+        return credential.getAuthSchemeRegistry();
+    }
+
+    /**
+     * Builds the request configuration the HTTP client is built with: the one set with
+     * {@link #setRequestConfig}, or this connector's own 30-second defaults, plus the credential's
+     * preferred authentication schemes when it asks for any.
+     *
+     * <p>A credential that returns no preferred schemes - which is every credential except
+     * {@code KerberosCredential} - leaves the request configuration exactly as it was.
+     *
+     * <p>Package-private so a test can assert what the client is actually built with.
+     *
+     * @return the request configuration
+     */
+    protected RequestConfig buildEffectiveRequestConfig() {
+        final RequestConfig config =
+                requestConfig != null ? requestConfig : RequestConfig.custom().setSocketTimeout(30000).setConnectTimeout(30000).build();
+        if (credential == null) {
+            return config;
+        }
+        final List<String> preferredAuthSchemes = credential.getPreferredAuthSchemes();
+        if (preferredAuthSchemes == null) {
+            return config;
+        }
+        return RequestConfig.copy(config).setTargetPreferredAuthSchemes(preferredAuthSchemes).build();
     }
 
     /**
