@@ -20,10 +20,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
+import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.codelibs.fess.util.ComponentUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Timeout.ThreadMode;
 
 public class GetListItemRoleTest extends UnitDsTestCase {
     private GetListItemRole getListItemRole;
@@ -172,7 +178,200 @@ public class GetListItemRoleTest extends UnitDsTestCase {
         assertFalse(getListItemRole.isLimitedAccessOnly(roleAssignment));
     }
 
+    // === Group expansion tests ===
+
+    @Test
+    public void test_nestedGroupKeepsItsOwnTitle() throws Exception {
+        // A group nested inside another must be named after itself, not after its parent.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubSingleGroupAssignment(server, "7", "Marketing");
+            // Registered per path rather than per page, so this test says nothing about paging
+            // and fails only if the nested group is misnamed.
+            server.onPathStatus(usersPath("7"), 200, JSON,
+                    "{\"value\":[{\"Id\":\"8\",\"Title\":\"Engineering\",\"LoginName\":\"\",\"PrincipalType\":8}]}");
+            server.onPathStatus(usersPath("8"), 200, JSON,
+                    "{\"value\":[{\"Id\":\"9\",\"Title\":\"Alice\",\"LoginName\":\"i:0#.f|membership|alice@example.com\","
+                            + "\"PrincipalType\":1}]}");
+            server.start();
+
+            final GetListItemRoleResponse.SharePointGroup parent = executeAgainst(server).getSharePointGroups().get(0);
+
+            assertEquals("the outer group must keep its own title", "Marketing", parent.getTitle());
+            assertEquals("the outer group must hold exactly the nested group", 1, parent.getSharePointGroups().size());
+            final GetListItemRoleResponse.SharePointGroup nested = parent.getSharePointGroups().get(0);
+            assertEquals("the nested group must carry its own title", "Engineering", nested.getTitle());
+            assertEquals("the nested group's member must be read from the nested group", 1, nested.getUsers().size());
+        }
+    }
+
+    @Test
+    @Timeout(value = 30, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_cyclicGroupMembershipTerminates() throws Exception {
+        // Group A contains group B, group B contains group A. This must return rather than
+        // recurse until the stack runs out.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubSingleGroupAssignment(server, "7", "A");
+            // Registered per path rather than per page, so this test says nothing about paging
+            // and fails only if the cycle is not cut.
+            server.onPathStatus(usersPath("7"), 200, JSON,
+                    "{\"value\":[{\"Id\":\"8\",\"Title\":\"B\",\"LoginName\":\"\",\"PrincipalType\":8}]}");
+            server.onPathStatus(usersPath("8"), 200, JSON,
+                    "{\"value\":[{\"Id\":\"7\",\"Title\":\"A\",\"LoginName\":\"\",\"PrincipalType\":8}]}");
+            server.start();
+
+            final GetListItemRoleResponse.SharePointGroup groupA = executeAgainst(server).getSharePointGroups().get(0);
+
+            assertEquals("the outer group must be A", "A", groupA.getTitle());
+            final GetListItemRoleResponse.SharePointGroup groupB = groupA.getSharePointGroups().get(0);
+            assertEquals("A must contain B", "B", groupB.getTitle());
+            assertSame("B must point back at the very same A rather than a fresh expansion of it", groupA,
+                    groupB.getSharePointGroups().get(0));
+        }
+    }
+
+    @Test
+    public void test_groupMembersAreReadPageByPage() throws Exception {
+        // A group with more members than one server page must yield all of them. The members
+        // used to be fetched with a single unpaged request.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubSingleGroupAssignment(server, "7", "Big");
+            // The first page answers any query, so an unpaged request gets it too and the
+            // assertion below reports the members that were lost rather than a missing stub.
+            server.onPathStatus(usersPath("7"), 200, JSON, userPage(0, PAGE_SIZE));
+            server.onPathQuery(usersPath("7"), "%24skip=200&%24top=200", JSON, userPage(PAGE_SIZE, 1));
+            server.start();
+
+            final GetListItemRoleResponse.SharePointGroup group = executeAgainst(server).getSharePointGroups().get(0);
+
+            assertEquals("every member of both pages must be read", PAGE_SIZE + 1, group.getUsers().size());
+            assertTrue("the members request must carry paging parameters", server.getRecordedRequests()
+                    .stream()
+                    .anyMatch(request -> usersPath("7").equals(request.getPath()) && "%24skip=200&%24top=200".equals(request.getQuery())));
+        }
+    }
+
+    @Test
+    public void test_aFailedMemberFetchLeavesNothingCached() throws Exception {
+        // The members endpoint fails once and then works. The crawler retries a failed crawl
+        // with the same group cache, so the failed attempt must not leave the half-built group
+        // behind - the retry would be handed an empty group and index the item with none of
+        // that group's permissions.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubSingleGroupAssignment(server, "7", "Marketing");
+            server.onPathOnce(usersPath("7"), 500, JSON, "{\"error\":{\"message\":\"transient\"}}");
+            server.onPathStatus(usersPath("7"), 200, JSON, aliceMember("9"));
+            server.start();
+
+            final Map<String, GetListItemRoleResponse.SharePointGroup> cache = new HashMap<>();
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                assertMemberFetchFails(httpClient, server, cache);
+
+                final GetListItemRoleResponse.SharePointGroup group =
+                        executeWithCache(httpClient, server, cache).getSharePointGroups().get(0);
+                assertEquals("the retry must read the group's members instead of reusing a failed attempt", 1, group.getUsers().size());
+            }
+        }
+    }
+
+    @Test
+    public void test_aFailedNestedMemberFetchLeavesNothingCached() throws Exception {
+        // Same thing one level down: the nested group is cached under its own key before its
+        // members are read, so a failure there must clear that key too.
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            stubSingleGroupAssignment(server, "7", "A");
+            server.onPathStatus(usersPath("7"), 200, JSON,
+                    "{\"value\":[{\"Id\":\"8\",\"Title\":\"B\",\"LoginName\":\"\",\"PrincipalType\":8}]}");
+            server.onPathOnce(usersPath("8"), 500, JSON, "{\"error\":{\"message\":\"transient\"}}");
+            server.onPathStatus(usersPath("8"), 200, JSON, aliceMember("9"));
+            server.start();
+
+            final Map<String, GetListItemRoleResponse.SharePointGroup> cache = new HashMap<>();
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                assertMemberFetchFails(httpClient, server, cache);
+
+                final GetListItemRoleResponse.SharePointGroup outer =
+                        executeWithCache(httpClient, server, cache).getSharePointGroups().get(0);
+                assertEquals("the retry must rebuild the outer group and reattach the nested one", 1, outer.getSharePointGroups().size());
+                assertEquals("the retry must read the nested group's members too", 1, outer.getSharePointGroups().get(0).getUsers().size());
+            }
+        }
+    }
+
     // === Helper methods ===
+
+    private static final String JSON = "application/json";
+
+    private static final int PAGE_SIZE = 200;
+
+    private static final String MEMBER_PAGING_QUERY = "%24skip=0&%24top=200";
+
+    private static final String LIST_ID = "11111111-1111-1111-1111-111111111111";
+
+    private static final String ITEM_PATH = "/sites/test/_api/Web/Lists(guid'" + LIST_ID + "')/Items(1)";
+
+    private static String usersPath(final String groupId) {
+        return "/sites/test/_api/Web/SiteGroups/GetById(" + groupId + ")/Users";
+    }
+
+    /**
+     * Stubs one role assignment naming a SharePoint group, plus the empty second page that ends
+     * the role assignment loop.
+     */
+    private static void stubSingleGroupAssignment(final SharePointMockServer server, final String principalId, final String title) {
+        server.onPathQuery(ITEM_PATH + "/RoleAssignments", MEMBER_PAGING_QUERY + "&%24expand=RoleDefinitionBindings", JSON,
+                "{\"value\":[{\"PrincipalId\":" + principalId + ",\"RoleDefinitionBindings\":[{\"RoleTypeKind\":3}]}]}");
+        server.onPathQuery(ITEM_PATH + "/RoleAssignments", "%24skip=200&%24top=200&%24expand=RoleDefinitionBindings", JSON,
+                "{\"value\":[]}");
+        server.onPathStatus(ITEM_PATH + "/RoleAssignments/GetByPrincipalId(" + principalId + ")/Member", 200, JSON,
+                "{\"Id\":\"" + principalId + "\",\"Title\":\"" + title + "\",\"LoginName\":\"\",\"PrincipalType\":8}");
+    }
+
+    private static String userPage(final int firstId, final int count) {
+        final StringBuilder buf = new StringBuilder("{\"value\":[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) {
+                buf.append(',');
+            }
+            final int id = firstId + i;
+            buf.append("{\"Id\":\"")
+                    .append(id)
+                    .append("\",\"Title\":\"User ")
+                    .append(id)
+                    .append("\",\"LoginName\":\"i:0#.f|membership|u")
+                    .append(id)
+                    .append("@example.com\",\"PrincipalType\":1}");
+        }
+        return buf.append("]}").toString();
+    }
+
+    private static GetListItemRoleResponse executeAgainst(final SharePointMockServer server) throws Exception {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+            return executeWithCache(httpClient, server, new HashMap<>());
+        }
+    }
+
+    private static GetListItemRoleResponse executeWithCache(final CloseableHttpClient httpClient, final SharePointMockServer server,
+            final Map<String, GetListItemRoleResponse.SharePointGroup> cache) {
+        return new GetListItemRole(httpClient, server.getBaseUrl() + "sites/test", null).setId(LIST_ID, "1")
+                .setSharePointGroupCache(cache)
+                .execute();
+    }
+
+    /** Runs one attempt that is expected to hit the queued server error, standing in for a crawl the crawler will retry. */
+    private void assertMemberFetchFails(final CloseableHttpClient httpClient, final SharePointMockServer server,
+            final Map<String, GetListItemRoleResponse.SharePointGroup> cache) {
+        try {
+            executeWithCache(httpClient, server, cache);
+            fail("the attempt that hits the failing members endpoint must propagate the error");
+        } catch (final SharePointServerException e) {
+            // expected: this is what SharePointCrawler catches and retries
+        }
+    }
+
+    private static String aliceMember(final String id) {
+        return "{\"value\":[{\"Id\":\"" + id + "\",\"Title\":\"Alice\",\"LoginName\":\"i:0#.f|membership|alice@example.com\","
+                + "\"PrincipalType\":1}]}";
+    }
 
     private Map<String, Object> createRoleAssignment(final int... roleTypeKinds) {
         final Map<String, Object> roleAssignment = new HashMap<>();

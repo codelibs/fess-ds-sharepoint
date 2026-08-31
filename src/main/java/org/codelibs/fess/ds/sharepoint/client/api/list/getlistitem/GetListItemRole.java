@@ -39,6 +39,12 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     private static final String PAGING_PARAM = "%24skip={{start}}&%24top={{num}}";
     private static final int PAGE_SISE = 200;
 
+    /**
+     * Upper bound on the number of member pages fetched for one SharePoint group. A server that
+     * ignores the paging parameters would otherwise keep returning the same full page forever.
+     */
+    private static final int MAX_MEMBER_PAGES = 100;
+
     private String listId = null;
     private String itemId = null;
     private Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache = null;
@@ -151,12 +157,10 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                         response.addSecurityGroup(securityGroup);
                         break;
                     case 8:
-                        final GetListItemRoleResponse.SharePointGroup sharePointGroup =
-                                buildSharePointGroup(id, DocumentUtil.getValue(memberResponseMap, "Title", String.class));
+                        final GetListItemRoleResponse.SharePointGroup sharePointGroup = new GetListItemRoleResponse.SharePointGroup(id,
+                                DocumentUtil.getValue(memberResponseMap, "Title", String.class));
+                        cacheAndFillSharePointGroup(principalId, sharePointGroup, id);
                         response.addSharePointGroup(sharePointGroup);
-                        if (sharePointGroupCache != null) {
-                            sharePointGroupCache.put(principalId, sharePointGroup);
-                        }
                         break;
                     default:
                         break;
@@ -237,6 +241,10 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     /**
      * Builds a SharePointGroup object with its nested users and groups.
      *
+     * <p>This class now creates the group and calls {@link #fillSharePointGroup} itself so that
+     * the group reaches the cache before its members are read. The method is kept because the
+     * SharePoint 2013 API overrides it and calls it in place of that split.
+     *
      * @param id the ID of the SharePoint group
      * @param title the title of the SharePoint group
      * @return a fully populated SharePointGroup object
@@ -244,32 +252,80 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
     protected GetListItemRoleResponse.SharePointGroup buildSharePointGroup(final String id, final String title) {
         // SharePointGroup
         final GetListItemRoleResponse.SharePointGroup sharePointGroup = new GetListItemRoleResponse.SharePointGroup(id, title);
-        final List<Map<String, Object>> usersList = new ArrayList<>();
+        fillSharePointGroup(sharePointGroup, id);
+        return sharePointGroup;
+    }
 
-        /* TODO need paging?
+    /**
+     * Registers a still-empty SharePoint group in the cache and then reads its members into it.
+     *
+     * <p>The group has to reach the cache before the descent, because SharePoint lets groups
+     * contain each other and the cache is what cuts the cycle. It must not stay there if the
+     * descent fails: the cache is shared by the whole crawl, and the crawler retries a failed
+     * crawl with that same cache, so a half-read group left behind would be handed to the retry
+     * and to every later item the group protects, each of them silently indexed without any of
+     * this group's permissions. Removing the entry costs one rebuild; keeping it costs the roles.
+     *
+     * @param cacheKey the key this group is cached under
+     * @param sharePointGroup the group to register and populate
+     * @param id the ID of the SharePoint group, used to read its members
+     */
+    private void cacheAndFillSharePointGroup(final String cacheKey, final GetListItemRoleResponse.SharePointGroup sharePointGroup,
+            final String id) {
+        if (sharePointGroupCache != null) {
+            sharePointGroupCache.put(cacheKey, sharePointGroup);
+        }
+        try {
+            fillSharePointGroup(sharePointGroup, id);
+        } catch (final RuntimeException e) {
+            if (sharePointGroupCache != null) {
+                sharePointGroupCache.remove(cacheKey);
+            }
+            throw e;
+        }
+    }
+
+    /**
+     * Fetches the members of a SharePoint group and adds them to it.
+     *
+     * <p>Split out from {@link #buildSharePointGroup(String, String)} so that a caller can put the
+     * still-empty group into {@code sharePointGroupCache} before descending into its members. A
+     * SharePoint group may contain another group that contains the first one again, and the cache
+     * is the only thing that stops that cycle, so an entry added after the descent is added too
+     * late to help.
+     *
+     * @param sharePointGroup the group to populate
+     * @param id the ID of the SharePoint group
+     */
+    private void fillSharePointGroup(final GetListItemRoleResponse.SharePointGroup sharePointGroup, final String id) {
+        final List<Map<String, Object>> usersList = new ArrayList<>();
         int start = 0;
-        while(true) {
-            final HttpGet usersRequest = new HttpGet(buildUsersUrl(id) + getPagingParam(start, PAGE_SISE));
+        boolean completed = false;
+        for (int page = 0; page < MAX_MEMBER_PAGES; page++) {
+            final String buildUsersUrl = buildUsersUrl(id) + "?" + getPagingParam(start, PAGE_SISE);
+            if (logger.isDebugEnabled()) {
+                logger.debug("buildUsersUrl: {}", buildUsersUrl);
+            }
+            final HttpGet usersRequest = new HttpGet(buildUsersUrl);
             final JsonResponse usersResponse = doJsonRequest(usersRequest);
             final Map<String, Object> usersResponseMap = usersResponse.getBodyAsMap();
-            List<Map<String, Object>> users = (List) usersResponseMap.get("value");
-            if (users.size() == 0) {
+            @SuppressWarnings("unchecked")
+            final List<Map<String, Object>> users = (List<Map<String, Object>>) usersResponseMap.get("value");
+            if (users == null || users.isEmpty()) {
+                completed = true;
                 break;
             }
             usersList.addAll(users);
+            if (users.size() < PAGE_SISE) {
+                completed = true;
+                break;
+            }
             start += PAGE_SISE;
         }
-         */
-        final String buildUsersUrl = buildUsersUrl(id);
-        if (logger.isDebugEnabled()) {
-            logger.debug("buildUsersUrl: {}", buildUsersUrl);
+        if (!completed) {
+            logger.warn("Stopped reading the members of SharePoint group {} after {} pages. Some members are not indexed.", id,
+                    MAX_MEMBER_PAGES);
         }
-        final HttpGet usersRequest = new HttpGet(buildUsersUrl);
-        final JsonResponse usersResponse = doJsonRequest(usersRequest);
-        final Map<String, Object> usersResponseMap = usersResponse.getBodyAsMap();
-        @SuppressWarnings("unchecked")
-        final List<Map<String, Object>> users = (List<Map<String, Object>>) usersResponseMap.get("value");
-        usersList.addAll(users);
         usersList.forEach(user -> {
             final String userId = DocumentUtil.getValue(user, "Id", String.class);
             final String userTitle = DocumentUtil.getValue(user, "Title", String.class);
@@ -292,17 +348,15 @@ public class GetListItemRole extends SharePointApi<GetListItemRoleResponse> {
                 if (sharePointGroupCache != null && sharePointGroupCache.containsKey(userId)) {
                     sharePointGroup.addSharePointGroup(sharePointGroupCache.get(userId));
                 } else {
-                    final GetListItemRoleResponse.SharePointGroup userSharePointGroup = buildSharePointGroup(userId, title);
+                    final GetListItemRoleResponse.SharePointGroup userSharePointGroup =
+                            new GetListItemRoleResponse.SharePointGroup(userId, userTitle);
+                    cacheAndFillSharePointGroup(userId, userSharePointGroup, userId);
                     sharePointGroup.addSharePointGroup(userSharePointGroup);
-                    if (sharePointGroupCache != null) {
-                        sharePointGroupCache.put(userId, userSharePointGroup);
-                    }
                 }
                 break;
             default:
                 break;
             }
         });
-        return sharePointGroup;
     }
 }

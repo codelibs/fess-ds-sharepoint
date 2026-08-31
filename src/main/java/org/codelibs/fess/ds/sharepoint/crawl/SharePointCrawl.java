@@ -16,6 +16,7 @@
 package org.codelibs.fess.ds.sharepoint.crawl;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -76,101 +77,78 @@ public abstract class SharePointCrawl {
         }
         final GetListItemRoleResponse getListItemRoleResponse =
                 client.api().list().getListItemRole().setId(listId, itemId).setSharePointGroupCache(sharePointGroupCache).execute();
-        final SystemHelper systemHelper = ComponentUtil.getSystemHelper();
-        final Set<String> roles = new HashSet<>();
-        // AD
-        getListItemRoleResponse.getUsers()
-                .stream()
-                .filter(user -> !user.isAzureAccount())
-                .map(GetListItemRoleResponse.User::getAccount)
-                .filter(title -> title.contains("\\"))
-                .map(systemHelper::getSearchRoleByUser)
-                .forEach(roles::add);
-        getListItemRoleResponse.getSecurityGroups()
-                .stream()
-                .map(GetListItemRoleResponse.SecurityGroup::getTitle)
-                .filter(title -> title.contains("\\"))
-                .map(systemHelper::getSearchRoleByGroup)
-                .forEach(roles::add);
-        // AzureAD
-        getListItemRoleResponse.getUsers()
-                .stream()
-                .filter(GetListItemRoleResponse.User::isAzureAccount)
-                .map(GetListItemRoleResponse.User::getAccount)
-                .map(systemHelper::getSearchRoleByUser)
-                .forEach(roles::add);
-        getListItemRoleResponse.getUsers()
-                .stream()
-                .filter(GetListItemRoleResponse.User::isAzureAccount)
-                .map(GetListItemRoleResponse.User::getAdAccountFromAzureAccount)
-                .map(systemHelper::getSearchRoleByUser)
-                .forEach(roles::add);
-        getListItemRoleResponse.getSecurityGroups()
-                .stream()
-                .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
-                .map(GetListItemRoleResponse.SecurityGroup::getAzureAccount)
-                .map(systemHelper::getSearchRoleByGroup)
-                .forEach(roles::add);
-        getListItemRoleResponse.getSecurityGroups()
-                .stream()
-                .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
-                .map(GetListItemRoleResponse.SecurityGroup::getTitle)
-                .map(systemHelper::getSearchRoleByGroup)
-                .forEach(roles::add);
+        final Set<String> roles =
+                new HashSet<>(collectRoles(getListItemRoleResponse.getUsers(), getListItemRoleResponse.getSecurityGroups()));
         getListItemRoleResponse.getSharePointGroups()
                 .stream()
-                .flatMap(group -> getSharePointGroupTitles(group, sharePointGroupCache).stream())
+                .flatMap(group -> getSharePointGroupTitles(group, sharePointGroupCache, new HashSet<>()).stream())
                 .forEach(roles::add);
         return roles.stream().collect(Collectors.toUnmodifiableList());
     }
 
-    private Set<String> getSharePointGroupTitles(final GetListItemRoleResponse.SharePointGroup sharePointGroup,
-            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache) {
+    /**
+     * Maps the principals of one permission scope to Fess role strings.
+     *
+     * <p>Both the item scope and the SharePoint group scope funnel through here. They used to
+     * carry two copies of this mapping, and the copies had drifted: the item scope stripped only
+     * the 7-character on-premises prefix from an Azure login name and left "membership|" on the
+     * front, so the same user got a different role depending on how the permission reached them.
+     *
+     * @param users the users of this scope
+     * @param securityGroups the security groups of this scope
+     * @return the role strings for this scope
+     */
+    private Set<String> collectRoles(final List<GetListItemRoleResponse.User> users,
+            final List<GetListItemRoleResponse.SecurityGroup> securityGroups) {
         final SystemHelper systemHelper = ComponentUtil.getSystemHelper();
-        final Set<String> titles = new HashSet<>();
+        final Set<String> roles = new HashSet<>();
         // AD
-        sharePointGroup.getUsers()
-                .stream()
+        users.stream()
                 .filter(user -> !user.isAzureAccount())
                 .map(GetListItemRoleResponse.User::getAccount)
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByUser)
-                .forEach(titles::add);
-        sharePointGroup.getSecurityGroups()
-                .stream()
+                .forEach(roles::add);
+        securityGroups.stream()
                 .map(GetListItemRoleResponse.SecurityGroup::getTitle)
                 .filter(title -> title.contains("\\"))
                 .map(systemHelper::getSearchRoleByGroup)
-                .forEach(titles::add);
+                .forEach(roles::add);
         // AzureAD
-        sharePointGroup.getUsers()
-                .stream()
+        users.stream()
                 .filter(GetListItemRoleResponse.User::isAzureAccount)
                 .map(GetListItemRoleResponse.User::getAzureAccount)
                 .map(systemHelper::getSearchRoleByUser)
-                .forEach(titles::add);
-        sharePointGroup.getUsers()
-                .stream()
+                .forEach(roles::add);
+        users.stream()
                 .filter(GetListItemRoleResponse.User::isAzureAccount)
                 .map(GetListItemRoleResponse.User::getAdAccountFromAzureAccount)
                 .map(systemHelper::getSearchRoleByUser)
-                .forEach(titles::add);
-        sharePointGroup.getSecurityGroups()
-                .stream()
+                .forEach(roles::add);
+        securityGroups.stream()
                 .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
                 .map(GetListItemRoleResponse.SecurityGroup::getAzureAccount)
                 .map(systemHelper::getSearchRoleByGroup)
-                .forEach(titles::add);
-        sharePointGroup.getSecurityGroups()
-                .stream()
+                .forEach(roles::add);
+        securityGroups.stream()
                 .filter(GetListItemRoleResponse.SecurityGroup::isAzureAccount)
                 .map(GetListItemRoleResponse.SecurityGroup::getTitle)
                 .map(systemHelper::getSearchRoleByGroup)
-                .forEach(titles::add);
+                .forEach(roles::add);
+        return roles;
+    }
 
+    private Set<String> getSharePointGroupTitles(final GetListItemRoleResponse.SharePointGroup sharePointGroup,
+            final Map<String, GetListItemRoleResponse.SharePointGroup> sharePointGroupCache, final Set<String> visitedGroupIds) {
+        if (sharePointGroup.getId() != null && !visitedGroupIds.add(sharePointGroup.getId())) {
+            // Already expanded on this path. SharePoint lets groups contain each other, so
+            // without this the recursion never terminates.
+            return Collections.emptySet();
+        }
+        final Set<String> titles = new HashSet<>(collectRoles(sharePointGroup.getUsers(), sharePointGroup.getSecurityGroups()));
         sharePointGroup.getSharePointGroups()
                 .stream()
-                .flatMap(group -> getSharePointGroupTitles(group, sharePointGroupCache).stream())
+                .flatMap(group -> getSharePointGroupTitles(group, sharePointGroupCache, visitedGroupIds).stream())
                 .forEach(titles::add);
         return titles;
     }
