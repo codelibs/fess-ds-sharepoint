@@ -15,6 +15,9 @@
  */
 package org.codelibs.fess.ds.sharepoint.client;
 
+import java.io.Closeable;
+import java.io.IOException;
+
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.SharePointApis;
 import org.codelibs.fess.ds.sharepoint.client.helper.SharePointHelper;
@@ -23,11 +26,18 @@ import org.codelibs.fess.ds.sharepoint.client2013.api.SharePoint2013Apis;
 
 /**
  * Client for communicating with SharePoint REST API.
+ *
+ * <p>The client owns the {@link CloseableHttpClient} it was built with, including one handed to
+ * {@link SharePointClientBuilder#setHttpClient}, and releases its connection pool in
+ * {@link #close()}.
  */
-public class SharePointClient {
+public class SharePointClient implements Closeable {
     private final String url;
     private final String siteUrl;
     private final String siteName;
+
+    /** Kept so the connection pool can be released; the APIs below hold their own reference. */
+    private final CloseableHttpClient httpClient;
 
     private SharePointApis sharePointApis;
     private final SharePointHelper sharePointHelper;
@@ -46,6 +56,7 @@ public class SharePointClient {
         this.siteUrl = buildSiteUrl(url, siteName);
         this.url = url;
         this.siteName = siteName;
+        this.httpClient = httpClient;
         this.sharePointHelper = new SharePointHelper(this, verson2013);
         if (verson2013) {
             this.sharePointApis = new SharePoint2013Apis(httpClient, siteUrl, oAuth);
@@ -97,6 +108,19 @@ public class SharePointClient {
      */
     public String getSiteUrl() {
         return siteUrl;
+    }
+
+    /**
+     * Releases the underlying HTTP client and its connection pool.
+     *
+     * <p>The client is unusable afterwards: the API objects it hands out all share that one
+     * {@link CloseableHttpClient}.
+     *
+     * @throws IOException if the HTTP client fails to close
+     */
+    @Override
+    public void close() throws IOException {
+        httpClient.close();
     }
 
     /**

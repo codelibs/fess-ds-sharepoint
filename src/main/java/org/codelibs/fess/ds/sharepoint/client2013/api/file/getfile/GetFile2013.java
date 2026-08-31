@@ -15,10 +15,14 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.file.getfile;
 
+import java.io.IOException;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.fess.ds.sharepoint.client.api.file.getfile.GetFile;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
@@ -29,6 +33,9 @@ import org.codelibs.fess.ds.sharepoint.client.oauth.OAuth;
  * compatibility, using the appropriate REST API endpoints for that version.
  */
 public class GetFile2013 extends GetFile {
+    /** Logger for this class. */
+    private static final Logger logger = LogManager.getLogger(GetFile2013.class);
+
     /** The server-relative URL of the file to download (SharePoint 2013 specific). */
     private String serverRelativeUrl = null;
 
@@ -70,15 +77,32 @@ public class GetFile2013 extends GetFile {
 
         final HttpGet httpGet = new HttpGet(buildUrl());
         httpGet.addHeader("Accept", "application/json");
+        CloseableHttpResponse httpResponse = null;
         try {
-            final CloseableHttpResponse httpResponse = client.execute(httpGet);
+            httpResponse = client.execute(httpGet);
             if (isErrorResponse(httpResponse)) {
-                throw new SharePointClientException("GetFile Request failure. status:" + httpResponse.getStatusLine().getStatusCode()
-                        + " body:" + EntityUtils.toString(httpResponse.getEntity()));
+                final int status = httpResponse.getStatusLine().getStatusCode();
+                final String body = EntityUtils.toString(httpResponse.getEntity());
+                throw new SharePointClientException("GetFile Request failure. status:" + status + " body:" + body);
             }
-            return new GetFile2013Response(httpResponse);
+            final GetFile2013Response response = new GetFile2013Response(httpResponse);
+            // Ownership passes to the response, which closes it; the finally below must not.
+            httpResponse = null;
+            return response;
+        } catch (final SharePointClientException e) {
+            // Already carries the status code and the response body. Letting the catch below wrap
+            // it a second time would bury both.
+            throw e;
         } catch (final Exception e) {
             throw new SharePointClientException("Request failure.", e);
+        } finally {
+            if (httpResponse != null) {
+                try {
+                    httpResponse.close();
+                } catch (final IOException e) {
+                    logger.warn("Failed to close the response.", e);
+                }
+            }
         }
     }
 

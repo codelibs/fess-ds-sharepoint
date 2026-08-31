@@ -15,6 +15,8 @@
  */
 package org.codelibs.fess.ds.sharepoint;
 
+import java.io.Closeable;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -22,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.client.config.RequestConfig;
@@ -52,7 +55,7 @@ import jakarta.validation.ValidationException;
 /**
  * Crawler for crawling SharePoint sites.
  */
-public class SharePointCrawler {
+public class SharePointCrawler implements Closeable {
     private static final Logger logger = LogManager.getLogger(SharePointCrawler.class);
 
     private final SharePointClient client;
@@ -60,6 +63,8 @@ public class SharePointCrawler {
     private final ConcurrentLinkedQueue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
 
     private final CrawlerConfig config;
+
+    private final AtomicLong failureCount = new AtomicLong();
 
     /**
      * Creates a new SharePointCrawler with the specified configuration.
@@ -161,6 +166,7 @@ public class SharePointCrawler {
             final StatsKeyObject statsKey = crawl.getStatsKey();
             crawlerStatsHelper.begin(statsKey);
             int retryCount = 0;
+            boolean succeeded = false;
             while (retryCount <= config.getRetryLimit()) {
                 try {
                     final Map<String, Object> dataMap = crawl.doCrawl(dataConfig, crawlingQueue);
@@ -168,6 +174,7 @@ public class SharePointCrawler {
                     if (dataMap != null) {
                         return new Pair<>(dataMap, statsKey);
                     }
+                    succeeded = true;
                     break;
                 } catch (final SharePointServerException e) {
                     if (retryCount + 1 <= config.getRetryLimit()) {
@@ -188,9 +195,42 @@ public class SharePointCrawler {
                 retryCount++;
                 crawlerStatsHelper.record(statsKey, StatsAction.EXCEPTION.name().toLowerCase(Locale.ENGLISH) + "@" + retryCount);
             }
+            if (!succeeded) {
+                // Giving up here loses every document this unit would have produced, and the
+                // caller cannot tell: the loop above just moves on to the next queue entry and
+                // ends the unit with the same done() a success ends with. Count it so the caller
+                // can decline to delete the documents this crawl failed to refresh.
+                failureCount.incrementAndGet();
+                logger.warn("Gave up on {} after {} attempt(s).", statsKey.getId(), retryCount);
+            }
             crawlerStatsHelper.done(statsKey);
         }
         return null;
+    }
+
+    /**
+     * Returns how many crawl units were given up on after exhausting their retries.
+     *
+     * <p>Counts only the units the retry loop in {@link #doCrawl} abandoned, which are the ones
+     * that produce no document and let the crawl continue to the next queue entry. A unit that
+     * fails with an exception the retry loop does not retry is not counted here, because that
+     * exception leaves {@link #doCrawl} before this counter is reached - the caller counts that
+     * one where it catches it, so the two together cover every lost unit.
+     *
+     * @return the number of crawl units that were given up on
+     */
+    public long getFailureCount() {
+        return failureCount.get();
+    }
+
+    /**
+     * Releases the HTTP connection pool held by the underlying SharePoint client.
+     *
+     * @throws IOException if the client fails to close
+     */
+    @Override
+    public void close() throws IOException {
+        client.close();
     }
 
     /**

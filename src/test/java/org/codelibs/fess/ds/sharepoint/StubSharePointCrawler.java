@@ -31,9 +31,24 @@ class StubSharePointCrawler extends SharePointCrawler {
 
     private final List<Map<String, Object>> pending;
 
+    private final List<RuntimeException> pendingFailures = new ArrayList<>();
+
     StubSharePointCrawler(final List<Map<String, Object>> results) {
         super(stubConfig());
         this.pending = new ArrayList<>(results);
+    }
+
+    /**
+     * Queues one exception to be thrown by the next {@link #doCrawl} call, ahead of the canned
+     * results, so a test can replay the way a real crawl loses a target to an exception rather
+     * than to exhausted retries.
+     *
+     * @param failure the exception to throw once
+     * @return this instance for chaining
+     */
+    StubSharePointCrawler failingOnceWith(final RuntimeException failure) {
+        pendingFailures.add(failure);
+        return this;
     }
 
     private static CrawlerConfig stubConfig() {
@@ -45,11 +60,14 @@ class StubSharePointCrawler extends SharePointCrawler {
 
     @Override
     public boolean hasCrawlTarget() {
-        return !pending.isEmpty();
+        return !pendingFailures.isEmpty() || !pending.isEmpty();
     }
 
     @Override
     public Pair<Map<String, Object>, StatsKeyObject> doCrawl(final DataConfig dataConfig) {
+        if (!pendingFailures.isEmpty()) {
+            throw pendingFailures.remove(0);
+        }
         if (pending.isEmpty()) {
             return null;
         }

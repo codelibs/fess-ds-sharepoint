@@ -1,0 +1,22 @@
+{
+  "value": [
+    {
+      "UniqueId": "00000000-0000-0000-0000-000000000000",
+      "Name": "sub000",
+      "Exists": true,
+      "ServerRelativeUrl": "/sites/test/docs/sub000",
+      "TimeCreated": "2026-01-01T00:00:00Z",
+      "TimeLastModified": "2026-01-02T00:00:00Z",
+      "ItemCount": 0
+    },
+    {
+      "UniqueId": "00000001-0000-0000-0000-000000000000",
+      "Name": "sub001",
+      "Exists": true,
+      "ServerRelativeUrl": "/sites/test/docs/sub001",
+      "TimeCreated": "2026-01-01T00:00:00Z",
+      "TimeLastModified": "2026-01-02T00:00:00Z",
+      "ItemCount": 0
+    }
+  ]
+}
