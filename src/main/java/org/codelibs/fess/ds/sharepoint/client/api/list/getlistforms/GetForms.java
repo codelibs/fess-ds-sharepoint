@@ -15,6 +15,9 @@
  */
 package org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.logging.log4j.LogManager;
@@ -82,7 +85,8 @@ public class GetForms extends SharePointApi<GetFormsResponse> {
             }
             httpGet = new HttpGet(buildUrl);
         } else {
-            final String buildUrl = siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName);
+            final String buildUrl = siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}",
+                    URLEncoder.encode(escapeODataLiteral(listName), StandardCharsets.UTF_8).replace("+", "%20"));
             if (logger.isDebugEnabled()) {
                 logger.debug("buildUrl: {}", buildUrl);
             }

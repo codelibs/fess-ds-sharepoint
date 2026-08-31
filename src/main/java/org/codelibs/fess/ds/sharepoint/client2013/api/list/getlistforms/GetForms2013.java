@@ -15,6 +15,9 @@
  */
 package org.codelibs.fess.ds.sharepoint.client2013.api.list.getlistforms;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlistforms.GetForms;
@@ -64,7 +67,8 @@ public class GetForms2013 extends GetForms {
         if (listId != null) {
             httpGet = new HttpGet(siteUrl + "/" + API_PATH.replace("{{id}}", listId));
         } else {
-            httpGet = new HttpGet(siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}", listName));
+            httpGet = new HttpGet(siteUrl + "/" + GETBYTITLE_API_PATH.replace("{{list_name}}",
+                    URLEncoder.encode(escapeODataLiteral(listName), StandardCharsets.UTF_8).replace("+", "%20")));
         }
         final XmlResponse xmlResponse = doXmlRequest(httpGet);
         return GetForms2013Response.build(xmlResponse);
