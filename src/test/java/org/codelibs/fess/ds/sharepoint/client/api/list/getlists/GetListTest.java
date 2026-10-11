@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
 
@@ -99,5 +101,71 @@ public class GetListTest extends UnitDsTestCase {
 
         assertThrows(ValidationException.class, getList::execute,
                 "a listId that is not a GUID must be rejected instead of reaching the request");
+    }
+
+    private static final String LIST_API = "/sites/test/_api/web/lists/GetByTitle('Tasks')";
+
+    private RuntimeException getListByName(final SharePointMockServer server) throws Exception {
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+            return assertThrows(RuntimeException.class,
+                    () -> new GetList(httpClient, server.getBaseUrl() + "sites/test/", null).setListName("Tasks").execute());
+        }
+    }
+
+    /**
+     * A 200 whose JSON is not a list used to end as a bare "Title is null.", which names neither
+     * the list nor what to check.
+     */
+    @Test
+    public void test_execute_aResponseThatIsNotAListNamesTheListAndTheMissingField() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(LIST_API, 200, JSON, "{\"unexpected\":true}");
+            server.start();
+
+            final String message = getListByName(server).getMessage();
+
+            assertTrue(message, message.contains("Tasks"));
+            assertTrue(message, message.contains("Title"));
+            assertTrue(message, message.contains("url"));
+        }
+    }
+
+    /** A 200 carrying an OData error object is an error, not a list without a title. */
+    @Test
+    public void test_execute_anErrorObjectInA200IsReportedAsAServerError() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(LIST_API, 200, JSON, "{\"error\":{\"code\":\"-2147024809\",\"message\":{\"value\":\"bad list\"}}}");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final SharePointServerException e = assertThrows(SharePointServerException.class,
+                        () -> new GetList(httpClient, server.getBaseUrl() + "sites/test/", null).setListName("Tasks").execute());
+
+                assertTrue(e.getMessage(), e.getMessage().contains("-2147024809"));
+            }
+        }
+    }
+
+    @Test
+    public void test_execute_anAuthenticationFailureReportsTheStatus() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(LIST_API, 401, "text/plain", "Unauthorized");
+            server.start();
+
+            final String message = getListByName(server).getMessage();
+
+            assertTrue(message, message.contains("401"));
+        }
+    }
+
+    @Test
+    public void test_execute_aConnectionFailureReportsTheCause() throws Exception {
+        final SharePointClientException e;
+        try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+            e = assertThrows(SharePointClientException.class,
+                    () -> new GetList(httpClient, "http://127.0.0.1:1/sites/test/", null).setListName("Tasks").execute());
+        }
+        assertTrue(e.getMessage(), e.getMessage().contains("127.0.0.1:1"));
+        assertTrue(e.getMessage(), e.getMessage().contains("Connection refused"));
     }
 }

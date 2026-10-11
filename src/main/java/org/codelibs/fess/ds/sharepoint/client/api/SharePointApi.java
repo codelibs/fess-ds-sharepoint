@@ -216,7 +216,9 @@ public abstract class SharePointApi<T extends SharePointApiResponse> {
 
             @SuppressWarnings("unchecked")
             final Map<String, Object> bodyMap = objectMapper.readValue(body, Map.class);
-            if (body.contains("odata.error")) {
+            // "odata.error" is the JSON Light spelling; a bare "error" is what the older verbose format
+            // and some proxies send. Either one in a 200 is an error, not a document without fields.
+            if (body.contains("odata.error") || bodyMap.containsKey("error")) {
                 throw new SharePointServerException(
                         "Api returned error. " + " url:" + httpRequest.getURI().toString() + " body:" + bodyMap.toString(),
                         httpResponse.getStatusLine().getStatusCode());

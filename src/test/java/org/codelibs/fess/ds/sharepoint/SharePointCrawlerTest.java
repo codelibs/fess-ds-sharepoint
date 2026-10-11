@@ -123,6 +123,31 @@ public class SharePointCrawlerTest extends UnitDsTestCase {
                 "a malformed site.list_id must fail crawler construction, not just a later request");
     }
 
+    /**
+     * A data config without {@code url} must fail with the validation message, not with a
+     * NullPointerException from {@code CrawlerConfig#setUrl}, which used to run before
+     * {@code validate} could see the missing value.
+     */
+    @Test
+    public void test_construction_reportsAMissingUrlAsARequiredParameter() {
+        final CrawlerConfig config = new CrawlerConfig();
+        config.setUrl(null);
+        config.setSiteName("test");
+
+        final ValidationException e = assertThrows(ValidationException.class, () -> new SharePointCrawler(config));
+        assertEquals("url param is required.", e.getMessage());
+    }
+
+    @Test
+    public void test_construction_reportsABlankUrlAsARequiredParameter() {
+        final CrawlerConfig config = new CrawlerConfig();
+        config.setUrl("  ");
+        config.setSiteName("test");
+
+        final ValidationException e = assertThrows(ValidationException.class, () -> new SharePointCrawler(config));
+        assertEquals("url param is required.", e.getMessage());
+    }
+
     @Test
     public void test_construction_acceptsAWellFormedSiteListId() {
         final CrawlerConfig config = baseConfig();
