@@ -95,28 +95,45 @@ public class GetList extends SharePointApi<GetListResponse> {
         }
         final HttpGet httpGet = new HttpGet(buildUrl);
         final JsonResponse jsonResponse = doJsonRequest(httpGet);
-        return buildResponse(jsonResponse);
+        return buildResponse(jsonResponse, buildUrl);
     }
 
-    private GetListResponse buildResponse(final JsonResponse jsonResponse) {
+    private GetListResponse buildResponse(final JsonResponse jsonResponse, final String requestUrl) {
         final Map<String, Object> jsonMap = jsonResponse.getBodyAsMap();
 
         final String title = DocumentUtil.getValue(jsonMap, "Title", String.class);
         if (title == null) {
-            throw new SharePointClientException("Title is null.");
+            throw missingField("Title", requestUrl);
         }
         final String id = DocumentUtil.getValue(jsonMap, "Id", String.class);
         if (id == null) {
-            throw new SharePointClientException("Id is null.");
+            throw missingField("Id", requestUrl);
         }
         final String entityTypeName = DocumentUtil.getValue(jsonMap, "EntityTypeName", String.class);
         if (entityTypeName == null) {
-            throw new SharePointClientException("entityTypeName is null.");
+            throw missingField("EntityTypeName", requestUrl);
         }
         final boolean noCrawl = DocumentUtil.getValue(jsonMap, "NoCrawl", Boolean.class, Boolean.FALSE);
         final boolean hidden = DocumentUtil.getValue(jsonMap, "Hidden", Boolean.class, Boolean.FALSE);
         final GetListsResponse.SharePointList sharePointList =
                 new GetListsResponse.SharePointList(id, title, noCrawl, hidden, entityTypeName);
         return new GetListResponse(sharePointList);
+    }
+
+    /**
+     * Builds the exception for a response that does not describe a list.
+     *
+     * <p>A 200 response without a title is not a list at all - typically the url points at
+     * something other than a SharePoint site, or a proxy answered in its place - so the message
+     * names the list and the request instead of only the missing field.
+     *
+     * @param field the field the response lacks
+     * @param requestUrl the URL that was requested
+     * @return the exception to throw
+     */
+    protected SharePointClientException missingField(final String field, final String requestUrl) {
+        return new SharePointClientException("[GetList] The response for list '" + (StringUtils.isNotBlank(listId) ? listId : listName)
+                + "' has no " + field + ", so it is not a SharePoint list. Check the url, site.name and site.list_name/site.list_id"
+                + " parameters. Requested: " + requestUrl);
     }
 }

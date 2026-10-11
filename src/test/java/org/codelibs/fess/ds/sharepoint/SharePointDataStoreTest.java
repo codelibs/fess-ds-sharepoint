@@ -96,6 +96,22 @@ public class SharePointDataStoreTest extends UnitDsTestCase {
     }
 
     /**
+     * Without {@code url} the job used to fail with a NullPointerException on {@code "url"}, because
+     * {@code CrawlerConfig#setUrl} dereferenced the value before the crawler's own validation, whose
+     * "url param is required." message was therefore never reachable.
+     */
+    @Test
+    public void test_storeData_reportsAMissingUrlAsARequiredParameter() {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("site.name", "test");
+        final CapturingIndexUpdateCallback callback = new CapturingIndexUpdateCallback();
+
+        final ValidationException e = assertThrows(ValidationException.class,
+                () -> dataStore.storeData(null, callback, paramMap, new HashMap<>(), new HashMap<>()));
+        assertEquals("url param is required.", e.getMessage());
+    }
+
+    /**
      * {@code auth.ntlm.domain} and {@code auth.ntlm.workstation} must reach the crawler config.
      * Before they existed the credential was built with both hardcoded to null, so an operator had
      * to write {@code DOMAIN\\user} into {@code auth.ntlm.user} and the README never said so.

@@ -82,25 +82,25 @@ public class GetList2013 extends GetList {
 
         final HttpGet httpGet = new HttpGet(siteUrl + "/" + apiPath);
         final XmlResponse xmlResponse = doXmlRequest(httpGet);
-        return buildResponse(xmlResponse);
+        return buildResponse(xmlResponse, httpGet.getURI().toString());
     }
 
-    private GetListResponse buildResponse(final XmlResponse xmlResponse) {
+    private GetListResponse buildResponse(final XmlResponse xmlResponse, final String requestUrl) {
         final GetListDocHandler handler = new GetListDocHandler();
         xmlResponse.parseXml(handler);
         final Map<String, Object> dataMap = handler.getDataMap();
 
         final String title = DocumentUtil.getValue(dataMap, "Title", String.class);
         if (title == null) {
-            throw new SharePointClientException("Title is null.");
+            throw missingField("Title", requestUrl);
         }
         final String id = DocumentUtil.getValue(dataMap, "Id", String.class);
         if (id == null) {
-            throw new SharePointClientException("Id is null.");
+            throw missingField("Id", requestUrl);
         }
         final String entityTypeName = DocumentUtil.getValue(dataMap, "EntityTypeName", String.class);
         if (entityTypeName == null) {
-            throw new SharePointClientException("entityTypeName is null.");
+            throw missingField("EntityTypeName", requestUrl);
         }
         final boolean noCrawl = DocumentUtil.getValue(dataMap, "NoCrawl", Boolean.class, Boolean.FALSE);
         final boolean hidden = DocumentUtil.getValue(dataMap, "Hidden", Boolean.class, Boolean.FALSE);

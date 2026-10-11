@@ -21,6 +21,7 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.client.api.list.getlists.GetListResponse;
+import org.codelibs.fess.ds.sharepoint.client.exception.SharePointClientException;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
 
@@ -77,5 +78,23 @@ public class GetList2013Test extends UnitDsTestCase {
 
         assertThrows(ValidationException.class, getList::execute,
                 "a listId that is not a GUID must be rejected instead of reaching the request");
+    }
+
+    /** A 200 whose XML is not a list used to end as a bare "Title is null." */
+    @Test
+    public void test_execute_aResponseThatIsNotAListNamesTheListAndTheMissingField() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus("/sites/test/_api/web/lists/GetByTitle('Tasks')", 200, XML, "<feed><title>not a list</title></feed>");
+            server.start();
+
+            try (CloseableHttpClient httpClient = HttpClientBuilder.create().build()) {
+                final SharePointClientException e = assertThrows(SharePointClientException.class,
+                        () -> new GetList2013(httpClient, server.getBaseUrl() + "sites/test/", null).setListName("Tasks").execute());
+
+                assertTrue(e.getMessage(), e.getMessage().contains("Tasks"));
+                assertTrue(e.getMessage(), e.getMessage().contains("Title"));
+                assertTrue(e.getMessage(), e.getMessage().contains("url"));
+            }
+        }
     }
 }

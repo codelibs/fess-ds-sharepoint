@@ -1190,10 +1190,17 @@ public class SharePointCrawler implements Closeable {
         /**
          * Sets the SharePoint server URL.
          *
+         * <p>A missing or blank URL is kept as {@code null} so that {@code SharePointCrawler#validate}
+         * can reject it with its "url param is required." message.
+         *
          * @param url the URL
          */
         public void setUrl(final String url) {
-            this.url = url.endsWith("/") ? url : url + "/";
+            if (StringUtils.isBlank(url)) {
+                this.url = null;
+            } else {
+                this.url = url.endsWith("/") ? url : url + "/";
+            }
         }
 
         /**
