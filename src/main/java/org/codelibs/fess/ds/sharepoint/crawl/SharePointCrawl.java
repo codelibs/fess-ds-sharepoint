@@ -184,6 +184,13 @@ public abstract class SharePointCrawl {
     /**
      * Fetches the server-relative URL of a list's DISPLAY_FORM directly, with no caching.
      *
+     * <p>SharePoint reports the URL decoded, so a list or library whose name holds a space comes
+     * back with the space in it. The callers append it to the site URL as a web link, which Fess
+     * indexes as the document {@code url} and later redirects a click to; the redirect turns a
+     * raw space into {@code +}, which a path reads as a literal plus sign, and the server answers
+     * 404. The space is written as {@code %20} here; nothing else is touched, so a name without a
+     * space keeps exactly the URL, and therefore the document id, it has today.
+     *
      * @param listId the list's GUID, or null
      * @return the DISPLAY_FORM's server-relative URL, or null if the list has no such form
      */
@@ -198,6 +205,7 @@ public abstract class SharePointCrawl {
                 .filter(form -> form.getType() == PageType.DISPLAY_FORM)
                 .findFirst()
                 .map(GetFormsResponse.Form::getServerRelativeUrl)
+                .map(url -> url.replace(" ", "%20"))
                 .orElse(null);
     }
 
