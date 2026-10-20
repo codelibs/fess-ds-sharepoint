@@ -30,6 +30,7 @@ import org.codelibs.fess.ds.sharepoint.SharePointCrawler;
 import org.codelibs.fess.ds.sharepoint.UnitDsTestCase;
 import org.codelibs.fess.ds.sharepoint.client.SharePointClient;
 import org.codelibs.fess.ds.sharepoint.client.exception.SharePointServerException;
+import org.codelibs.fess.ds.sharepoint.crawl.doclib.FolderCrawl;
 import org.codelibs.fess.ds.sharepoint.util.SharePointMockServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -137,6 +138,57 @@ public class SiteCrawlTest extends UnitDsTestCase {
             // Exactly one FolderCrawl for the library - the fallback must not add a second one
             // for a document library the listing above already found.
             assertEquals("the fallback must be skipped when the listing already found Shared Documents", 1, queued);
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_anExcludedDocumentLibraryIsNotCrawledAsAList() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 200, "application/json",
+                    "{\"value\": [{\"Name\": \"Library2\", \"ServerRelativeUrl\": \"/sites/test/Library2\"}]}");
+            // The same document library, as the lists endpoint reports it: a list titled like
+            // its root folder.
+            server.onPathStatus(LISTS_API, 200, "application/json",
+                    "{\"value\": [{\"Id\": \"44444444-4444-4444-4444-444444444444\", \"Title\": \"Library2\","
+                            + " \"EntityTypeName\": \"Library2\", \"BaseTemplate\": 101, \"NoCrawl\": false, \"Hidden\": false}]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                config.setExcludeFolder("Library2");
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, ConcurrentHashMap.newKeySet())
+                        .doCrawl(null, crawlingQueue);
+
+                // Only the "Shared Documents" fallback: neither a FolderCrawl nor a ListCrawl for
+                // the excluded library.
+                assertEquals("an excluded library must not come back through the lists listing", 1, crawlingQueue.size());
+                assertEquals("the only queued crawl is the fallback", FolderCrawl.class, crawlingQueue.peek().getClass());
+            }
+        }
+    }
+
+    @Test
+    @Timeout(value = 60, threadMode = ThreadMode.SEPARATE_THREAD)
+    public void test_theSharedDocumentsFallbackIsSkippedWhenTheFolderIsExcluded() throws Exception {
+        try (SharePointMockServer server = new SharePointMockServer()) {
+            server.onPathStatus(FOLDER_API, 200, "application/json",
+                    "{\"value\": [{\"Name\": \"Shared Documents\", \"ServerRelativeUrl\": \"/sites/test/Shared Documents\"}]}");
+            server.onPathStatus(LISTS_API, 200, "application/json", "{\"value\":[]}");
+            server.start();
+
+            try (SharePointClient client = SharePointClient.builder().setUrl(server.getBaseUrl()).setSite(SITE_NAME).build()) {
+                final SharePointCrawler.CrawlerConfig config = new SharePointCrawler.CrawlerConfig();
+                config.setSiteName(SITE_NAME);
+                config.setExcludeFolder("Shared Documents");
+                final Queue<SharePointCrawl> crawlingQueue = new ConcurrentLinkedQueue<>();
+                new SiteCrawl(client, config, new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), null, 0, ConcurrentHashMap.newKeySet())
+                        .doCrawl(null, crawlingQueue);
+
+                assertEquals("excluding Shared Documents must not be undone by the fallback", 0, crawlingQueue.size());
+            }
         }
     }
 
