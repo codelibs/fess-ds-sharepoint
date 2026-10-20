@@ -209,6 +209,8 @@ public class SiteCrawl extends SharePointCrawl {
         if (logger.isInfoEnabled()) {
             logger.info("[Crawling Site] [site:{}]", describeSite(client, config));
         }
+        // Every top-level folder the listing reports, excluded ones included: a document library
+        // is also a list, and the exclusion has to hold when the lists below are walked too.
         final Set<String> targetFolderName = new HashSet<>();
         final String siteFolderUrl = client.getSitePath();
         int foldersStart = 0;
@@ -225,8 +227,8 @@ public class SiteCrawl extends SharePointCrawl {
                 break;
             }
             foldersStart += PAGE_SIZE;
+            folders.forEach(folder -> targetFolderName.add(folder.getName()));
             folders.stream().filter(folder -> !isExcludeFolder(folder.getName())).forEach(folder -> {
-                targetFolderName.add(folder.getName());
                 crawlingQueue.offer(new FolderCrawl(client, folder.getServerRelativeUrl(), config.isSkipRole(), sharePointGroupCache,
                         formsCache, config.isIgnoreError(), config.getExtractorName(), config.getSupportedMimeTypes(),
                         config.getMaxContentLength(), urlFilter));
